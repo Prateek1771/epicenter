@@ -1,7 +1,7 @@
 # Epicenter: Low-Level Design
 
 How each part is built. Containers and runtime views are in [HLD.md](HLD.md); the full label/edge reference is in
-[docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md); endpoints are in [docs/API.md](docs/API.md).
+[docs/GRAPH_SCHEMA.md](GRAPH_SCHEMA.md); endpoints are in [docs/API.md](API.md).
 
 ---
 
@@ -285,7 +285,7 @@ class IncidentState(TypedDict):
     errors: Annotated[list[str], operator.add]
 ```
 
-State holds **ids only**. Content lives in the graph (P4 / [ADR 0007](docs/adr/0007-graph-as-shared-agent-state.md)).
+State holds **ids only**. Content lives in the graph (P4 / [ADR 0007](adr/0007-graph-as-shared-agent-state.md)).
 
 ### 5.2 Graph of steps
 
@@ -370,8 +370,8 @@ Tie-break: higher score, then earlier onset, then operation id. The weights vers
 ## 7. Fault Simulator
 
 "If this were the cause, what would we see?" For each hypothesis, predict the **symptom footprint** from the graph and
-compare it with what was observed. Why: [ADR 0011](docs/adr/0011-fault-simulator.md); research:
-[docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md).
+compare it with what was observed. Why: [ADR 0011](adr/0011-fault-simulator.md); research:
+[docs/TECH_RESEARCH.md](TECH_RESEARCH.md).
 
 ```mermaid
 flowchart LR

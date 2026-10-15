@@ -1,7 +1,7 @@
 # Epicenter: User Flows
 
 Who uses Epicenter, and what they do, step by step. Every step names the **screen**, the **API call** and the **graph work**
-behind it, so flows trace straight into [docs/API.md](docs/API.md) and [LLD.md](LLD.md).
+behind it, so flows trace straight into [docs/API.md](API.md) and [LLD.md](LLD.md).
 
 ---
 
@@ -158,7 +158,7 @@ flowchart LR
 | flip-commerce | kill Mongo primary, kill 2 Mongo nodes, stop Redis, CPU limit + k6 breakpoint, change `MONGO_CIRCUIT_*` | A real failover in your own system; config change found as the cause |
 | RCAEval | any RE2 case | Same engine on a public benchmark, with an accuracy number |
 
-Details: [docs/EXAMPLE_RUNS.md](docs/EXAMPLE_RUNS.md).
+Details: [docs/EXAMPLE_RUNS.md](EXAMPLE_RUNS.md).
 
 ---
 

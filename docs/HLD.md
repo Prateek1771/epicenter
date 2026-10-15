@@ -7,7 +7,7 @@ Module-level detail is in [LLD.md](LLD.md). Requirements (F1–F10, N1–N7) are
 
 ## 1. Architecture style
 
-**Modular monolith** ([ADR 0005](docs/adr/0005-modular-monolith.md)). A team of 1–3 people building for a hackathon gets
+**Modular monolith** ([ADR 0005](adr/0005-modular-monolith.md)). A team of 1–3 people building for a hackathon gets
 nothing from microservices. The API process holds four modules with clear boundaries: `ingest`, `search`, `agents`,
 `tools`. They talk through function calls, and **through the graph**. FalkorDB is the only stateful component.
 
@@ -115,7 +115,7 @@ used, so the UI highlights the path.
 
 ### 3.3 Memory recall
 
-The historian computes the incident's 64-dim signature ([ADR 0008](docs/adr/0008-deterministic-incident-signature.md)) and runs Q5
+The historian computes the incident's 64-dim signature ([ADR 0008](adr/0008-deterministic-incident-signature.md)) and runs Q5
 (vector index + graph overlap). It writes `SIMILAR_TO` edges. When an incident is resolved, `RESOLVED_BY` edges and the
 runbook step's success count update **procedural memory**.
 
@@ -144,7 +144,7 @@ flowchart LR
 | `kb:propagation` graph (`Rule`) | API startup seed from `seed/propagation_rules.yaml` | replaced on a new rules version | never |
 | `Simulation` (what-if) | `POST /simulate` with `save: true` | never | never (compared with later incidents) |
 
-Raw telemetry (spans, metric points, log lines) is **never** stored in FalkorDB ([ADR 0006](docs/adr/0006-operation-level-aggregation.md)).
+Raw telemetry (spans, metric points, log lines) is **never** stored in FalkorDB ([ADR 0006](adr/0006-operation-level-aggregation.md)).
 Evidence nodes keep a `ref` back to the source (trace id, PromQL, log file + line range).
 
 ### 4.1 What's stored where
@@ -198,7 +198,7 @@ memory leak that started at hour 1 ([LLD §3.2](LLD.md#32-detectors-detectpy)).
 
 | Host port | Container | Note |
 |---|---|---|
-| **6380** | `falkordb:6379` | 6379 is left free for flip-commerce's own Redis ([ADR 0009](docs/adr/0009-falkordb-via-docker.md)) |
+| **6380** | `falkordb:6379` | 6379 is left free for flip-commerce's own Redis ([ADR 0009](adr/0009-falkordb-via-docker.md)) |
 | **3002** | `falkordb:3000` (browser) | 3000 belongs to OpenConnector |
 | **8081** | `falkordb-mcp:8080` | 8080 belongs to the example environments |
 | 8000 | `api` | REST at `/api/v1`, MCP at `/mcp` |
@@ -275,7 +275,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 | NFR | Design response |
 |---|---|
 | N1 < 60 s diagnosis | Window snapshot instead of continuous anomaly detection; investigators in parallel; LLM calls only after the verdict |
-| N2 < 200 ms queries | Hop limit 6; operation-level graph ([ADR 0006](docs/adr/0006-operation-level-aggregation.md)); indexes on every lookup key; `Anomaly` filtered by `incident` index first |
+| N2 < 200 ms queries | Hop limit 6; operation-level graph ([ADR 0006](adr/0006-operation-level-aggregation.md)); indexes on every lookup key; `Anomaly` filtered by `incident` index first |
 | N3 determinism | Deterministic detectors, fixed weights, tie-break on id, sorted iteration; LLM output never read by the scorer |
 | N4 production safety | Adapters use read-only APIs; responder actions are posted as proposals |
 | N5 laptop footprint | FalkorDB < 1 GB; one API process; OTel Demo is the only heavy part and is optional |
@@ -321,7 +321,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 | Agent overreach | LLM agents call typed tools only; free-form Cypher goes through `falkordb-mcp` with `FALKORDB_DEFAULT_READONLY=true` + `MCP_API_KEY` |
 | Prompt injection via telemetry (log lines are untrusted text) | Log text reaches the LLM only inside evidence fields marked as data; tools are read-only; the verdict doesn't depend on the LLM |
 | Secrets | Never written to the graph; `.env` git-ignored; OpenConnector holds OAuth tokens |
-| Web | CORS restricted to the web origin; no auth for the local demo, API key header if deployed ([docs/API.md](docs/API.md)) |
+| Web | CORS restricted to the web origin; no auth for the local demo, API key header if deployed ([docs/API.md](API.md)) |
 | Tenancy | One graph per environment; tool calls are bound to the incident's environment |
 
 ---
@@ -338,11 +338,11 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 
 | Concern | Choice | Why |
 |---|---|---|
-| Graph DB | FalkorDB | Native graph + vector + full-text, multi-graph, built-in algorithms, MCP server ([ADR 0001](docs/adr/0001-falkordb-primary-store.md)) |
+| Graph DB | FalkorDB | Native graph + vector + full-text, multi-graph, built-in algorithms, MCP server ([ADR 0001](adr/0001-falkordb-primary-store.md)) |
 | API | FastAPI | Async, SSE, typed models; matches the team's stack |
 | Agents | LangGraph | Fixed graph of steps with parallel fan-out; checkpoints for resume |
 | LLM access | OpenRouter (LLM + Jev) | One key, pinned model ids |
 | Delivery | OpenConnector | Slack / Linear OAuth handled for us |
 | Anomaly detection | numpy + `ruptures` (PELT) + Drain3 | Deterministic, light |
-| Fault Simulator | Rule propagation over `CALLS` (rules in `kb:propagation`) | Deterministic, graph-native, simpler first step towards a Causely-style causal codebook ([ADR 0011](docs/adr/0011-fault-simulator.md)) |
+| Fault Simulator | Rule propagation over `CALLS` (rules in `kb:propagation`) | Deterministic, graph-native, simpler first step towards a Causely-style causal codebook ([ADR 0011](adr/0011-fault-simulator.md)) |
 | UI | Next.js + Tailwind + shadcn + React Flow | Team's stack; React Flow handles a few hundred nodes |

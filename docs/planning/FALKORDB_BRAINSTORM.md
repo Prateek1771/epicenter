@@ -1,7 +1,7 @@
 # FalkorDB deep dive + brainstorm (Graph Hacks only)
 
 Focus: the FalkorDB "Graph Hacks: Context for AI Agents" hackathon. The first hackathon (RCAEval / "Diagnose the Outage")
-is no longer a constraint. Result of this brainstorm: [`graph-hacks/ARCHITECTURE.md`](../../ARCHITECTURE.md).
+is no longer a constraint. Result of this brainstorm: [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ## 1. FalkorDB in one page
 

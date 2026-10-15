@@ -1,7 +1,7 @@
 # FalkorDB on Docker: setup and integration plan (Graph Hacks)
 
 Focus: the FalkorDB "Graph Hacks: Context for AI Agents" hackathon only. Full system design:
-[`graph-hacks/ARCHITECTURE.md`](../../ARCHITECTURE.md). Product plan: [`GRAPH_HACKS_PLAN.md`](GRAPH_HACKS_PLAN.md).
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md). Product plan: [`GRAPH_HACKS_PLAN.md`](GRAPH_HACKS_PLAN.md).
 
 ## 1. Which image
 
@@ -45,7 +45,7 @@ docker exec falkordb sh -c 'ls -la /data /var/lib/falkordb/data 2>/dev/null'
 ## 4. Compose (the version we'll actually run)
 
 The full `docker-compose.yml` (FalkorDB + MCP server + api + web + OpenConnector) is in
-[`graph-hacks/ARCHITECTURE.md` §4](../../HLD.md#52-docker-composeyml). The FalkorDB part:
+[`docs/HLD.md` §5.2](../HLD.md#52-docker-composeyml). The FalkorDB part:
 
 ```yaml
 services:

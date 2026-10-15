@@ -24,7 +24,7 @@ Option 3, called the **Fault Simulator**.
 - **Negative answer:** if nothing explains at least 50% of symptoms and anomalies are weak, the incident ends `no_root_cause`.
 - **What-if:** the same simulation without an incident answers "what if X fails?" before a change.
 
-Detail: [LLD §7](../../LLD.md#7-fault-simulator).
+Detail: [LLD §7](../LLD.md#7-fault-simulator).
 
 ## Consequences
 - **Counters symptom anchoring:** a downstream victim predicts a small footprint that misses the deeper anomalies, so its coverage stays low.

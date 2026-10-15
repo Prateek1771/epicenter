@@ -2,7 +2,7 @@
 
 **Researched:** 2026-10-15 · **Purpose:** find one key feature to add to Epicenter.
 Market and pricing view: [COMPETITORS.md](COMPETITORS.md). Result: the **Fault Simulator**
-([ADR 0011](adr/0011-fault-simulator.md), [LLD §7](../LLD.md#7-fault-simulator)).
+([ADR 0011](adr/0011-fault-simulator.md), [LLD §7](LLD.md#7-fault-simulator)).
 
 Most sources are the vendors' own blogs or papers, so performance numbers are self-reported. Where a source didn't
 describe something, this doc says so rather than guessing.
@@ -76,11 +76,11 @@ Sources: [Lawrence Jones's blog](https://blog.lawrencejones.dev/2025/), [AI Engi
 | Idea | Who | Epicenter |
 |---|---|---|
 | Precomputed state, so the agent doesn't re-fetch telemetry | Causely, Traversal | Ingest builds the graph before agents run ([ADR 0006](adr/0006-operation-level-aggregation.md)) |
-| Prune by dependency structure + timing | Traversal | Q1 (upstream) + Q2 (onset order) ([LLD §2.2](../LLD.md#22-causal-search-queries)) |
-| Parallel hypotheses with validated / invalidated / inconclusive | Datadog | `supported` / `refuted` / `inconclusive` ([LLD §8](../LLD.md#8-state-machines)) |
+| Prune by dependency structure + timing | Traversal | Q1 (upstream) + Q2 (onset order) ([LLD §2.2](LLD.md#22-causal-search-queries)) |
+| Parallel hypotheses with validated / invalidated / inconclusive | Datadog | `supported` / `refuted` / `inconclusive` ([LLD §8](LLD.md#8-state-machines)) |
 | Safe, restricted query surface for agents | Resolve | Typed tools ([ADR 0003](adr/0003-typed-mcp-tools.md)) |
 | Memory of past incidents and fixes | Cleric | Q5 + `RESOLVED_BY` ([ADR 0008](adr/0008-deterministic-incident-signature.md)) |
-| Confidence on every answer | Cleric, Meta | Score-margin confidence ([LLD §6](../LLD.md#6-scoring-searchscorepy)) |
+| Confidence on every answer | Cleric, Meta | Score-margin confidence ([LLD §6](LLD.md#6-scoring-searchscorepy)) |
 
 ## 3. What was missing, and the feature that fills it
 

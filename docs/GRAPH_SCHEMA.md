@@ -1,6 +1,6 @@
 # Epicenter Graph Schema
 
-FalkorDB property graph. Queries that use it: [LLD §2](../LLD.md#2-graphpy). Why it's shaped this way:
+FalkorDB property graph. Queries that use it: [LLD §2](LLD.md#2-graphpy). Why it's shaped this way:
 [ADR 0001](adr/0001-falkordb-primary-store.md), [0006](adr/0006-operation-level-aggregation.md), [0007](adr/0007-graph-as-shared-agent-state.md).
 
 ---
@@ -87,7 +87,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `onset` | ts | ✓ | first change point |
 | `score` | float | ✓ | normalized 0..1 |
 | `self_ratio`, `child_ratio` | float | | latency anomalies only |
-| `detector` | str | ✓ | `short` (10-min baseline) · `slow_burn` (6-h trend, [LLD §3.2](../LLD.md#32-detectors-detectpy)) |
+| `detector` | str | ✓ | `short` (10-min baseline) · `slow_burn` (6-h trend, [LLD §3.2](LLD.md#32-detectors-detectpy)) |
 | `ref` | str | | source pointer (PromQL, trace id, log file:lines) |
 
 **`Signal`**: key `id`
@@ -141,7 +141,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 **`Explanation`**: `claims` str (JSON: `[{section, text, cites, support_p}]`) · `dropped` int · `verified` bool · `ai_calls` str (JSON: model, tokens, ms)
 **`Decision`**: `by` str · `text` str · `ts` ts. Human notes during an incident.
 **`Simulation`**: key `id` · `target` str (operation or service) · `kind` str · `ts` ts · `rules_version` str. A saved
-what-if run ([LLD §7.7](../LLD.md#77-what-if-mode-no-incident)).
+what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)).
 
 ### Knowledge base (`kb:propagation` graph only)
 

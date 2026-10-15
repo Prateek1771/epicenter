@@ -3,7 +3,7 @@
 Focus: only the FalkorDB "Graph Hacks: Context for AI Agents" hackathon. Same problem as EvidenceRCA
 (diagnose an outage: what broke, where, why, what to do), rebuilt so that FalkorDB is the core and not an add-on.
 
-**Full design:** [`graph-hacks/ARCHITECTURE.md`](../../ARCHITECTURE.md) · **FalkorDB Docker setup:** [`FALKORDB_PLAN.md`](FALKORDB_PLAN.md) ·
+**Full design:** [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) · **FalkorDB Docker setup:** [`FALKORDB_PLAN.md`](FALKORDB_PLAN.md) ·
 **Deep dive:** [`FALKORDB_BRAINSTORM.md`](FALKORDB_BRAINSTORM.md). Name: **Epicenter** (working name was GraphRCA).
 
 ## 0. Rules to check first (from a similar FalkorDB / WeMakeDevs hackathon; confirm for this one)
@@ -116,7 +116,7 @@ Next.js + Tailwind + shadcn · Docker Compose.
 **FalkorDB runs in Docker:** image `falkordb/falkordb` (server + browser UI), pinned tag in `.env`.
 Ports: server **6379**, browser UI **3002** (OpenConnector owns 3000), official MCP server **8081** (the OTel demo owns 8080),
 our `graph-mcp` 8090, API 8000, web 3001. Password and AOF via `REDIS_ARGS`, threads/timeouts via `FALKORDB_ARGS`,
-named volume for data. Full compose file: [`graph-hacks/ARCHITECTURE.md` §4](../../HLD.md#52-docker-composeyml).
+named volume for data. Full compose file: [`docs/HLD.md` §5.2](../HLD.md#52-docker-composeyml).
 
 ## 10. Why this wins (and the risks)
 - The graph does real work: causal search, pruning, memory, ownership and handoffs all live in it. Remove FalkorDB and nothing works, which is exactly what the rules ask for.

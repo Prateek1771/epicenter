@@ -31,7 +31,7 @@ Built for **Graph Hacks: Context for AI Agents** (FalkorDB). Tracks: 01 (main), 
 5. **Answer:** a deterministic score picks the root cause. Past similar incidents and their fixes are recalled, an AI
    explanation cites the evidence (unsupported claims are dropped), and the result goes to Slack / Linear.
 
-Details: [ARCHITECTURE](ARCHITECTURE.md).
+Details: [ARCHITECTURE](docs/ARCHITECTURE.md).
 
 ## Why Epicenter
 
@@ -45,7 +45,7 @@ How others do it: [competitors](docs/COMPETITORS.md) · [technical research](doc
 
 ## Docs
 
-[ARCHITECTURE](ARCHITECTURE.md) · [HLD](HLD.md) · [LLD](LLD.md) · [User flows](USER_FLOW.md) ·
+[ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
 [API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
 [ADRs 0001–0011](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
 [Planning notes](docs/planning/)
@@ -60,7 +60,7 @@ How others do it: [competitors](docs/COMPETITORS.md) · [technical research](doc
 | 8 GB RAM free (16 GB with the OTel Demo) | The OTel Demo alone needs about 6 GB |
 | OpenRouter API key | Explanations and Jev verification (optional: the verdict works without it) |
 | OpenConnector + Slack / Linear OAuth | Delivery (optional) |
-| Free ports: 6380, 3002, 8081, 8000, 3001, 3000 | See [HLD §5.1](HLD.md#51-ports) |
+| Free ports: 6380, 3002, 8081, 8000, 3001, 3000 | See [HLD §5.1](docs/HLD.md#51-ports) |
 
 ## 2. Configure
 
@@ -118,7 +118,7 @@ docker compose exec api python -m api.smoke_falkordb
 
 It checks the FalkorDB features the design depends on, on your pinned tag: variable-length paths with filters, the Q2
 query shape, `algo.pageRank`, vector index + `vecf32`, full-text index, and two parallel writers.
-If something fails, fix the query in [LLD §2](LLD.md#2-graphpy) before building on it.
+If something fails, fix the query in [LLD §2](docs/LLD.md#2-graphpy) before building on it.
 
 ## 6. Run an example
 

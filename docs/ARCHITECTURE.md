@@ -21,14 +21,14 @@ you can click, rerun and argue with.
 | [HLD.md](HLD.md) | Components, deployment, data flows, failure modes, scale, security |
 | [LLD.md](LLD.md) | Modules, function signatures, Cypher, scoring, agent state, state machines, tests |
 | [USER_FLOW.md](USER_FLOW.md) | What each user does, screen by screen |
-| [README.md](README.md) | Getting started with Docker |
-| [docs/API.md](docs/API.md) | REST + SSE reference |
-| [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md) | Every label, edge, property and index |
-| [docs/EXAMPLE_RUNS.md](docs/EXAMPLE_RUNS.md) | The three environments we demo on |
-| [docs/adr/](docs/adr/) | Decision records 0001–0011 |
-| [docs/COMPETITORS.md](docs/COMPETITORS.md) | Competitor landscape, pricing, gaps, positioning |
-| [docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md) | How competitors find root causes, and why we added the Fault Simulator |
-| [docs/planning/](docs/planning/) | Earlier planning notes: [GRAPH_HACKS_PLAN](docs/planning/GRAPH_HACKS_PLAN.md), [FALKORDB_PLAN](docs/planning/FALKORDB_PLAN.md), [FALKORDB_BRAINSTORM](docs/planning/FALKORDB_BRAINSTORM.md). Where they differ from the docs above (e.g. ports), the docs above win |
+| [README.md](../README.md) | Getting started with Docker |
+| [docs/API.md](API.md) | REST + SSE reference |
+| [docs/GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) | Every label, edge, property and index |
+| [docs/EXAMPLE_RUNS.md](EXAMPLE_RUNS.md) | The three environments we demo on |
+| [docs/adr/](adr/) | Decision records 0001–0011 |
+| [docs/COMPETITORS.md](COMPETITORS.md) | Competitor landscape, pricing, gaps, positioning |
+| [docs/TECH_RESEARCH.md](TECH_RESEARCH.md) | How competitors find root causes, and why we added the Fault Simulator |
+| [docs/planning/](planning/) | Earlier planning notes: [GRAPH_HACKS_PLAN](planning/GRAPH_HACKS_PLAN.md), [FALKORDB_PLAN](planning/FALKORDB_PLAN.md), [FALKORDB_BRAINSTORM](planning/FALKORDB_BRAINSTORM.md). Where they differ from the docs above (e.g. ports), the docs above win |
 
 ---
 
@@ -81,13 +81,13 @@ operations) and the OTel Demo's own RAM needs.
 
 | # | Principle | How it's enforced | ADR |
 |---|---|---|---|
-| P1 | **The graph is the reasoning** | Candidate generation, pruning, blast radius, memory and handoffs are graph queries. Remove FalkorDB and nothing works | [0001](docs/adr/0001-falkordb-primary-store.md) |
-| P2 | **Deterministic ingestion and scoring** | Topology, anomalies and scores come from plain Python + Cypher. The LLM never ranks | [0002](docs/adr/0002-deterministic-ingestion-and-scoring.md) |
-| P3 | **Agents use typed tools** | LLM agents call fixed, parameterized graph tools; free Cypher only through the read-only official MCP server | [0003](docs/adr/0003-typed-mcp-tools.md) |
-| P4 | **The graph is the shared agent state** | Agents pass an `incident_id`, not blobs; they read and write the incident subgraph | [0007](docs/adr/0007-graph-as-shared-agent-state.md) |
-| P5 | **Every answer is a path** | API responses carry node/edge ids; the UI highlights them; uncited claims are dropped | [0002](docs/adr/0002-deterministic-ingestion-and-scoring.md) |
-| P6 | **One graph per environment** | `env:<name>` per environment, `scratch:<incident>` for algorithm projections | [0001](docs/adr/0001-falkordb-primary-store.md) |
-| P7 | **Simple to run** | Modular monolith: one API process, FalkorDB in Docker with pinned tags | [0005](docs/adr/0005-modular-monolith.md), [0009](docs/adr/0009-falkordb-via-docker.md) |
+| P1 | **The graph is the reasoning** | Candidate generation, pruning, blast radius, memory and handoffs are graph queries. Remove FalkorDB and nothing works | [0001](adr/0001-falkordb-primary-store.md) |
+| P2 | **Deterministic ingestion and scoring** | Topology, anomalies and scores come from plain Python + Cypher. The LLM never ranks | [0002](adr/0002-deterministic-ingestion-and-scoring.md) |
+| P3 | **Agents use typed tools** | LLM agents call fixed, parameterized graph tools; free Cypher only through the read-only official MCP server | [0003](adr/0003-typed-mcp-tools.md) |
+| P4 | **The graph is the shared agent state** | Agents pass an `incident_id`, not blobs; they read and write the incident subgraph | [0007](adr/0007-graph-as-shared-agent-state.md) |
+| P5 | **Every answer is a path** | API responses carry node/edge ids; the UI highlights them; uncited claims are dropped | [0002](adr/0002-deterministic-ingestion-and-scoring.md) |
+| P6 | **One graph per environment** | `env:<name>` per environment, `scratch:<incident>` for algorithm projections | [0001](adr/0001-falkordb-primary-store.md) |
+| P7 | **Simple to run** | Modular monolith: one API process, FalkorDB in Docker with pinned tags | [0005](adr/0005-modular-monolith.md), [0009](adr/0009-falkordb-via-docker.md) |
 
 ---
 
@@ -157,24 +157,24 @@ flowchart TB
 
 | ADR | Decision |
 |---|---|
-| [0001](docs/adr/0001-falkordb-primary-store.md) | FalkorDB is the primary store; one graph per environment |
-| [0002](docs/adr/0002-deterministic-ingestion-and-scoring.md) | Ingestion and scoring are deterministic; the LLM explains and picks tools |
-| [0003](docs/adr/0003-typed-mcp-tools.md) | Typed MCP tools for agents; official FalkorDB MCP only read-only |
-| [0004](docs/adr/0004-no-graphiti.md) | No Graphiti: an LLM must not decide what enters the graph |
-| [0005](docs/adr/0005-modular-monolith.md) | Modular monolith: ingest, agents, tools and API in one process |
-| [0006](docs/adr/0006-operation-level-aggregation.md) | Aggregate spans to operations; never store span nodes |
-| [0007](docs/adr/0007-graph-as-shared-agent-state.md) | Agents coordinate through the incident subgraph |
-| [0008](docs/adr/0008-deterministic-incident-signature.md) | Incident memory uses a deterministic 64-dim signature vector |
-| [0009](docs/adr/0009-falkordb-via-docker.md) | FalkorDB via Docker, pinned tag, host port 6380 |
-| [0010](docs/adr/0010-example-environments.md) | Demo on OTel Demo (primary), flip-commerce (secondary), RCAEval (offline eval) |
-| [0011](docs/adr/0011-fault-simulator.md) | **Fault Simulator:** predict each hypothesis's symptom footprint from propagation rules in `kb:propagation` and match it against what was observed |
+| [0001](adr/0001-falkordb-primary-store.md) | FalkorDB is the primary store; one graph per environment |
+| [0002](adr/0002-deterministic-ingestion-and-scoring.md) | Ingestion and scoring are deterministic; the LLM explains and picks tools |
+| [0003](adr/0003-typed-mcp-tools.md) | Typed MCP tools for agents; official FalkorDB MCP only read-only |
+| [0004](adr/0004-no-graphiti.md) | No Graphiti: an LLM must not decide what enters the graph |
+| [0005](adr/0005-modular-monolith.md) | Modular monolith: ingest, agents, tools and API in one process |
+| [0006](adr/0006-operation-level-aggregation.md) | Aggregate spans to operations; never store span nodes |
+| [0007](adr/0007-graph-as-shared-agent-state.md) | Agents coordinate through the incident subgraph |
+| [0008](adr/0008-deterministic-incident-signature.md) | Incident memory uses a deterministic 64-dim signature vector |
+| [0009](adr/0009-falkordb-via-docker.md) | FalkorDB via Docker, pinned tag, host port 6380 |
+| [0010](adr/0010-example-environments.md) | Demo on OTel Demo (primary), flip-commerce (secondary), RCAEval (offline eval) |
+| [0011](adr/0011-fault-simulator.md) | **Fault Simulator:** predict each hypothesis's symptom footprint from propagation rules in `kb:propagation` and match it against what was observed |
 
 ### Key feature: the Fault Simulator
 
 Competitors check whether a suspect is upstream and went bad first. Epicenter also asks **"if this were the cause, what
 would we expect to see?"** It propagates the fault through the call graph using a small rule set, then compares the
 prediction with what actually broke ("explains 6 of 7 symptoms"). One graph-native, deterministic mechanism gives four
-things ([ADR 0011](docs/adr/0011-fault-simulator.md), [LLD §7](LLD.md#7-fault-simulator)):
+things ([ADR 0011](adr/0011-fault-simulator.md), [LLD §7](LLD.md#7-fault-simulator)):
 
 | Payoff | Why it matters |
 |---|---|
@@ -183,7 +183,7 @@ things ([ADR 0011](docs/adr/0011-fault-simulator.md), [LLD §7](LLD.md#7-fault-s
 | `no_root_cause` answer | Doesn't invent a cause; Causely saw false positives fall from 67% to 0% with this |
 | What-if before a change | Blast radius with probabilities, order and owners, not just reachability |
 
-Research behind it: [docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md).
+Research behind it: [docs/TECH_RESEARCH.md](TECH_RESEARCH.md).
 
 ---
 
@@ -196,7 +196,7 @@ Research behind it: [docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md).
 | Availability (demo) | LLM / Jev / OpenConnector failures degrade gracefully; FalkorDB is the only hard dependency | [HLD §7](HLD.md) |
 | Performance | Hop limit 6, operation-level aggregation, indexes on lookup keys, scratch graphs for algorithms | [HLD §8](HLD.md) |
 | Security | Password, parameterized Cypher, read-only MCP with API key, typed tools, no secrets in the graph | [HLD §9](HLD.md) |
-| Tenancy | One graph per environment; nothing queries across `env:*` graphs | [GRAPH_SCHEMA](docs/GRAPH_SCHEMA.md) |
+| Tenancy | One graph per environment; nothing queries across `env:*` graphs | [GRAPH_SCHEMA](GRAPH_SCHEMA.md) |
 
 ---
 
@@ -204,7 +204,7 @@ Research behind it: [docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md).
 
 | Risk | Mitigation |
 |---|---|
-| FalkorDB Cypher differences (variable-length filters, `algo.pageRank` signature, vector index syntax) | Smoke-test script on the pinned tag before building ([README](README.md#5-smoke-test)) |
+| FalkorDB Cypher differences (variable-length filters, `algo.pageRank` signature, vector index syntax) | Smoke-test script on the pinned tag before building ([README](../README.md#5-smoke-test)) |
 | OTel Demo needs about 6 GB RAM | flip-commerce and RCAEval replay as lighter environments; recorded backup video |
 | flip-commerce is shallow (about 2 hops) | Use it for the "real Mongo failover" story, OTel Demo for multi-hop |
 | Port clashes (6379, 8080, 3000) | FalkorDB on host 6380, browser 3002, run one example environment at a time ([HLD §5](HLD.md)) |

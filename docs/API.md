@@ -2,7 +2,7 @@
 
 **Base URL:** `http://localhost:8000/api/v1` · **Format:** JSON (UTF-8) · **Time:** ISO-8601 UTC
 **Auth:** none for the local demo. If deployed, send `X-API-Key: <key>`; requests without it get `401`.
-**MCP:** the same typed tools are served over MCP at `http://localhost:8000/mcp` (see [LLD §2.3](../LLD.md#23-tool-queries)).
+**MCP:** the same typed tools are served over MCP at `http://localhost:8000/mcp` (see [LLD §2.3](LLD.md#23-tool-queries)).
 
 ---
 
@@ -94,7 +94,7 @@ Runs the agent flow, or resumes it after a crash. `202` → `{ "incident_id": "i
 `409 INCIDENT_STATE` if it's already `diagnosed` (send `?force=true` to rerun; the old hypotheses are kept and marked superseded).
 
 ### `GET /incidents/{id}/stream`
-Server-Sent Events. Supports `Last-Event-ID` for replay. Event types are listed in [LLD §9](../LLD.md#9-events-sse).
+Server-Sent Events. Supports `Last-Event-ID` for replay. Event types are listed in [LLD §9](LLD.md#9-events-sse).
 ```
 id: 12
 event: evidence.added
@@ -102,7 +102,7 @@ data: {"id":"E3","hypothesis_id":"h-7","kind":"propagation","verdict":"supports"
 ```
 
 ### `GET /incidents/{id}/hypotheses/{hid}/footprint`
-Fault Simulator result for one hypothesis ([LLD §7](../LLD.md#7-fault-simulator)): predicted vs. observed.
+Fault Simulator result for one hypothesis ([LLD §7](LLD.md#7-fault-simulator)): predicted vs. observed.
 ```json
 { "hypothesis_id": "h-7", "target": "payment/Charge", "cause_kind": "errors",
   "coverage": 0.86, "precision": 0.82, "order": 0.9, "footprint": 0.85,
@@ -124,7 +124,7 @@ Fault Simulator result for one hypothesis ([LLD §7](../LLD.md#7-fault-simulator
 `lost_on_score`, `is_root_cause`.
 
 ### `POST /incidents/{id}/notes`
-Human input during an incident ([USER_FLOW Flow 6](../USER_FLOW.md#flow-6-human-takeover-mid-incident)).
+Human input during an incident ([USER_FLOW Flow 6](USER_FLOW.md#flow-6-human-takeover-mid-incident)).
 ```json
 { "by": "priya", "text": "currency deployed at 14:02", "change": { "service": "currency", "type": "deploy", "ts": "2026-10-16T14:02:00Z" } }
 ```
@@ -160,7 +160,7 @@ Query: `center` (node id), `hops` (1–3, default 2), `incident` (optional: incl
 ```
 
 ### `POST /simulate`
-What-if mode of the Fault Simulator ([LLD §7.7](../LLD.md#77-what-if-mode-no-incident)): "what breaks if X fails?",
+What-if mode of the Fault Simulator ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)): "what breaks if X fails?",
 no incident needed. Give either `operation` or `service`.
 ```json
 { "service": "redis", "kind": "down", "save": true }
