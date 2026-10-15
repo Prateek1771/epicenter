@@ -1,4 +1,4 @@
-# GraphRCA: High-Level Design
+# Epicenter: High-Level Design
 
 Scope: the containers, how they talk, how data moves and ages, how the system fails, scales and stays safe.
 Module-level detail is in [LLD.md](LLD.md). Requirements (F1–F10, N1–N7) are in [ARCHITECTURE.md §1](ARCHITECTURE.md#1-requirements).
@@ -165,7 +165,7 @@ The monitored system's own tools keep the raw data. FalkorDB keeps the **map**, 
 ```mermaid
 sequenceDiagram
     participant SRC as Prometheus · Jaeger · logs
-    participant ING as GraphRCA ingest
+    participant ING as Epicenter ingest
     participant G as FalkorDB
 
     Note over SRC,G: 0:00 – 3:00, everything healthy
@@ -326,7 +326,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 
 ---
 
-## 10. Observability of GraphRCA itself
+## 10. Observability of Epicenter itself
 
 - Structured JSON logs per agent step: `incident_id`, `agent`, `tool`, `query_id`, `duration_ms`, `rows`.
 - Query timings for Q1–Q5 are exported on `GET /api/v1/health` (last p50 / p95) so N2 is visible during the demo.

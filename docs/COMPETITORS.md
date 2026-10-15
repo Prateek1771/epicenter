@@ -7,7 +7,7 @@ number in a pitch. Anything unverified is marked `unknown`.
 **Assumed frame:** category = finding the root cause of production incidents (AI SRE); segment = mid-market to enterprise
 engineering teams; geography = global; purpose = positioning and pitch.
 
-**Short answer:** the space is crowded, and **several funded companies already use a graph of production**. GraphRCA's
+**Short answer:** the space is crowded, and **several funded companies already use a graph of production**. Epicenter's
 real opening is narrower: an **open, self-hostable, graph-native** tool that **publishes its accuracy**. That
 combination appears to be unclaimed.
 
@@ -96,7 +96,7 @@ self-serve pricing for the graph-native tools.
 
 ---
 
-## 5. Positioning for GraphRCA
+## 5. Positioning for Epicenter
 
 Don't pitch "AI SRE with a knowledge graph"; five funded companies already say that.
 

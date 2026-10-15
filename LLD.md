@@ -1,4 +1,4 @@
-# GraphRCA: Low-Level Design
+# Epicenter: Low-Level Design
 
 How each part is built. Containers and runtime views are in [HLD.md](HLD.md); the full label/edge reference is in
 [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md); endpoints are in [docs/API.md](docs/API.md).

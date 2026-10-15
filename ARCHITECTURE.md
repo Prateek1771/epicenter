@@ -1,4 +1,4 @@
-# GraphRCA: Architecture
+# Epicenter: Architecture
 
 > **Hackathon:** Graph Hacks: Context for AI Agents (powered by FalkorDB)
 > **Status:** design, pre-kickoff (no product code yet) · **Last reviewed:** 2026-10-15
@@ -7,7 +7,7 @@
 **what** broke, **where**, **why** and **what to do next**. AI SRE tools speed this up, but most ask an LLM to guess the
 cause and can't show how they got there.
 
-**Pitch.** *Traversal's causal search, open and explainable, on FalkorDB.* GraphRCA keeps a live graph of your production
+**Pitch.** *Traversal's causal search, open and explainable, on FalkorDB.* Epicenter keeps a live graph of your production
 system, searches it for causes the way an SRE would, remembers every incident, and every answer is a path in the graph
 you can click, rerun and argue with.
 
@@ -104,7 +104,7 @@ flowchart LR
         RCAE["RCAEval replay<br/>(files)"]
     end
 
-    GR["GraphRCA<br/>web · api · FalkorDB"]
+    GR["Epicenter<br/>web · api · FalkorDB"]
 
     OR["OpenRouter<br/>LLM + Jev"]
     OC["OpenConnector"]
@@ -171,7 +171,7 @@ flowchart TB
 
 ### Key feature: the Fault Simulator
 
-Competitors check whether a suspect is upstream and went bad first. GraphRCA also asks **"if this were the cause, what
+Competitors check whether a suspect is upstream and went bad first. Epicenter also asks **"if this were the cause, what
 would we expect to see?"** It propagates the fault through the call graph using a small rule set, then compares the
 prediction with what actually broke ("explains 6 of 7 symptoms"). One graph-native, deterministic mechanism gives four
 things ([ADR 0011](docs/adr/0011-fault-simulator.md), [LLD §7](LLD.md#7-fault-simulator)):

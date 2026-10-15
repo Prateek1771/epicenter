@@ -1,6 +1,6 @@
-# GraphRCA: User Flows
+# Epicenter: User Flows
 
-Who uses GraphRCA, and what they do, step by step. Every step names the **screen**, the **API call** and the **graph work**
+Who uses Epicenter, and what they do, step by step. Every step names the **screen**, the **API call** and the **graph work**
 behind it, so flows trace straight into [docs/API.md](docs/API.md) and [LLD.md](LLD.md).
 
 ---

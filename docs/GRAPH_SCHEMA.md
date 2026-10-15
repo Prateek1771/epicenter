@@ -1,4 +1,4 @@
-# GraphRCA Graph Schema
+# Epicenter Graph Schema
 
 FalkorDB property graph. Queries that use it: [LLD §2](../LLD.md#2-graphpy). Why it's shaped this way:
 [ADR 0001](adr/0001-falkordb-primary-store.md), [0006](adr/0006-operation-level-aggregation.md), [0007](adr/0007-graph-as-shared-agent-state.md).

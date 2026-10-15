@@ -4,7 +4,7 @@ Focus: only the FalkorDB "Graph Hacks: Context for AI Agents" hackathon. Same pr
 (diagnose an outage: what broke, where, why, what to do), rebuilt so that FalkorDB is the core and not an add-on.
 
 **Full design:** [`graph-hacks/ARCHITECTURE.md`](../../ARCHITECTURE.md) · **FalkorDB Docker setup:** [`FALKORDB_PLAN.md`](FALKORDB_PLAN.md) ·
-**Deep dive:** [`FALKORDB_BRAINSTORM.md`](FALKORDB_BRAINSTORM.md). Working name: **GraphRCA**.
+**Deep dive:** [`FALKORDB_BRAINSTORM.md`](FALKORDB_BRAINSTORM.md). Name: **Epicenter** (working name was GraphRCA).
 
 ## 0. Rules to check first (from a similar FalkorDB / WeMakeDevs hackathon; confirm for this one)
 - FalkorDB must be the **primary** database and central to the product. A graph used only for visualization does not

@@ -1,17 +1,54 @@
-# GraphRCA
+# Epicenter
 
-**Outage diagnosis where the graph does the reasoning.** GraphRCA keeps a live FalkorDB graph of your production
-system, searches it upstream from the alert for the root cause, lets several agents work the incident together through
-that graph, remembers every incident and its fix, and shows the graph path behind every answer.
+**Find where every outage started.**
+
+*An epicenter is the point where a quake starts and the shockwave spreads out from. When production breaks, Epicenter
+finds that point and shows how the failure spread.*
+
+Epicenter keeps a live FalkorDB graph of your production system. When an alert fires, it searches the graph upstream
+from the alert for the root cause. Several agents work the incident together through that same graph. Epicenter
+remembers every incident and what fixed it, and every answer comes with the graph path behind it.
+
+Its key feature is the **Fault Simulator**. For every suspect it asks: *"if this were the cause, what would we see?"*
+It predicts which operations should break and in what order, compares that with what actually broke, and scores the
+match ("explains 6 of 7 symptoms"). The same check finds a second, independent fault when there is one, and says
+"no root cause" when nothing in the graph explains the alert. It can also answer "what breaks if X fails?" before you
+ship a change.
 
 Built for **Graph Hacks: Context for AI Agents** (FalkorDB). Tracks: 01 (main), 02, 03 (light).
 
 > Status: design docs only. Code starts at hackathon kickoff. Commands below are the target workflow.
 
+## How it works
+
+1. **Map:** traces are rolled up every 30 s into a graph of services, operations and who calls whom. Deploys, flag flips
+   and config changes are added as they happen.
+2. **Alert:** Epicenter opens an incident and reads a short window of metrics, traces and logs from your existing tools
+   (plus a 6-hour lookback for slow leaks). Only the findings go into the graph.
+3. **Search:** every operation upstream of the alert that misbehaved becomes a suspect. Agents check each one in
+   parallel: did it go bad first, is it slow itself, did something change right before?
+4. **Simulate:** the Fault Simulator predicts each suspect's footprint and checks it against what actually broke.
+5. **Answer:** a deterministic score picks the root cause. Past similar incidents and their fixes are recalled, an AI
+   explanation cites the evidence (unsupported claims are dropped), and the result goes to Slack / Linear.
+
+Details: [ARCHITECTURE](ARCHITECTURE.md).
+
+## Why Epicenter
+
+- **The graph does the reasoning.** Suspects, evidence, memory and agent handoffs all live in FalkorDB, and the same
+  input always gives the same answer.
+- **It explains the whole pattern, not the loudest symptom.** Fixating on the most visible symptom is the most common way
+  AI SRE agents get it wrong.
+- **It doesn't invent a cause.** When nothing fits, it says so.
+
+How others do it: [competitors](docs/COMPETITORS.md) · [technical research](docs/TECH_RESEARCH.md).
+
 ## Docs
 
 [ARCHITECTURE](ARCHITECTURE.md) · [HLD](HLD.md) · [LLD](LLD.md) · [User flows](USER_FLOW.md) ·
-[API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) · [ADRs](docs/adr/)
+[API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
+[ADRs 0001–0011](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
+[Planning notes](docs/planning/)
 
 ---
 
@@ -55,7 +92,7 @@ docker compose up -d                                                    # falkor
 
 | URL | What |
 |---|---|
-| http://localhost:3001 | GraphRCA UI |
+| http://localhost:3001 | Epicenter UI |
 | http://localhost:8000/docs | API (Swagger) |
 | http://localhost:3002 | FalkorDB browser (connect to host `falkordb`, port 6379 from inside Docker, or `localhost:6380` from the host) |
 
@@ -99,14 +136,14 @@ Then open http://localhost:3001 and the new incident.
 ```bash
 docker compose exec api python -m api.eval --suite re2 --system tt
 ```
-Prints AC@1 / AC@3 and the ablations (no PageRank, no temporal rule, no mechanism rule).
+Prints AC@1 / AC@3 and the ablations (no PageRank, no temporal rule, no mechanism rule, no Fault Simulator footprint).
 
 ## 8. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | `bind: address already in use` on 6380 / 3002 / 8081 | Something else uses the port; change the host side in `docker-compose.yml` and in `.env` |
-| flip-commerce Redis won't start | It needs 6379; GraphRCA uses 6380 on the host, so check nothing else holds 6379 |
+| flip-commerce Redis won't start | It needs 6379; Epicenter uses 6380 on the host, so check nothing else holds 6379 |
 | OTel Demo and flip-commerce both fail on 8080 | Run only one example environment at a time |
 | Graph is empty after restart | Volume path wrong; see §4 |
 | `NOAUTH Authentication required` | Pass `-a "$FALKORDB_PASSWORD"` / set it in the browser login |

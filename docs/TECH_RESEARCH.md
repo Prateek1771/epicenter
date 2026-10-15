@@ -1,6 +1,6 @@
 # Technical research: how competitors find root causes
 
-**Researched:** 2026-10-15 · **Purpose:** find one key feature to add to GraphRCA.
+**Researched:** 2026-10-15 · **Purpose:** find one key feature to add to Epicenter.
 Market and pricing view: [COMPETITORS.md](COMPETITORS.md). Result: the **Fault Simulator**
 ([ADR 0011](adr/0011-fault-simulator.md), [LLD §7](../LLD.md#7-fault-simulator)).
 
@@ -71,9 +71,9 @@ Sources: [Lawrence Jones's blog](https://blog.lawrencejones.dev/2025/), [AI Engi
 
 ---
 
-## 2. What GraphRCA already matches
+## 2. What Epicenter already matches
 
-| Idea | Who | GraphRCA |
+| Idea | Who | Epicenter |
 |---|---|---|
 | Precomputed state, so the agent doesn't re-fetch telemetry | Causely, Traversal | Ingest builds the graph before agents run ([ADR 0006](adr/0006-operation-level-aggregation.md)) |
 | Prune by dependency structure + timing | Traversal | Q1 (upstream) + Q2 (onset order) ([LLD §2.2](../LLD.md#22-causal-search-queries)) |

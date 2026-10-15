@@ -1,6 +1,6 @@
 # Example Runs
 
-Three environments GraphRCA is demoed and tested on. Run **one at a time**: the OTel Demo and flip-commerce both use
+Three environments Epicenter is demoed and tested on. Run **one at a time**: the OTel Demo and flip-commerce both use
 host port 8080. Why these three: [ADR 0010](adr/0010-example-environments.md).
 
 | | OTel Demo | flip-commerce | RCAEval replay |
@@ -21,7 +21,7 @@ git clone https://github.com/open-telemetry/opentelemetry-demo
 cd opentelemetry-demo && docker compose up -d        # shop :8080, Jaeger :16686, Prometheus :9090 (check its .env)
 ```
 
-GraphRCA's `otel` adapter reads Jaeger (`/api/traces`), Prometheus (`query_range`), OpenSearch logs and flagd changes.
+Epicenter's `otel` adapter reads Jaeger (`/api/traces`), Prometheus (`query_range`), OpenSearch logs and flagd changes.
 
 | Scenario | How to trigger | Expected verdict |
 |---|---|---|
@@ -42,7 +42,7 @@ on screen.
 ## 2. flip-commerce (your system-design-journey)
 
 **Source:** `D:\vertical_scaling\system-design-journey\season-1\2.vertical-vs-horizontal-scaling\`.
-**Rule: that repo is never modified.** Everything GraphRCA needs lives in `graph-hacks/examples/flip-commerce/`
+**Rule: that repo is never modified.** Everything Epicenter needs lives in `graph-hacks/examples/flip-commerce/`
 (collector config, run scripts, fault scripts).
 
 ### 2.1 What's there
@@ -57,7 +57,7 @@ on screen.
 | Logs | winston (`logs/combined.log`, `logs/error.log`; JSON with `NODE_ENV=production`), nginx access log with `$upstream_addr $upstream_response_time` |
 | Telemetry | **No traces and no app `/metrics`.** Only k8s mode has kube-prometheus-stack (pod CPU / mem) |
 
-### 2.2 How GraphRCA gets telemetry without code changes
+### 2.2 How Epicenter gets telemetry without code changes
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
     N1 & N6 --> MG[("Mongo fk-rs")]
     N1 & N6 --> RD[("Redis :6379")]
     N1 & N6 -- "OTLP" --> COL["OTel Collector<br/>(examples/flip-commerce/collector.yaml)<br/>file exporter → JSON lines"]
-    COL --> GR["GraphRCA otel adapter"]
+    COL --> GR["Epicenter otel adapter"]
     LOGS["winston JSON + nginx access log"] --> GR
     FAULT["examples/flip-commerce/faults.py<br/>(writes Change, then acts)"] --> GR
 ```
@@ -104,11 +104,11 @@ the cause is a config change on the API, with Mongo refuted.
 
 Run k6 at normal load (100 VUs) with no fault, and fire a test alert on `flip-node/GET /products` by hand
 (`POST /api/v1/alerts`). Expected: weak, scattered anomalies at most, no hypothesis covers ≥ 50% → incident ends
-`no_root_cause` with "Nothing in the graph explains this alert". This shows GraphRCA doesn't invent causes.
+`no_root_cause` with "Nothing in the graph explains this alert". This shows Epicenter doesn't invent causes.
 
 ### 2.4 Ports
 
-flip-commerce uses 6379 (Redis), 8080 (nginx), 5001–5006, 27017–27019. GraphRCA uses 6380 for FalkorDB on the host, so
+flip-commerce uses 6379 (Redis), 8080 (nginx), 5001–5006, 27017–27019. Epicenter uses 6380 for FalkorDB on the host, so
 both run together. Stop the OTel Demo first (it also wants 8080).
 
 ### 2.5 Limits (be honest in the demo)

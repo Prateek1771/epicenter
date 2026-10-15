@@ -1,4 +1,4 @@
-# GraphRCA API Reference
+# Epicenter API Reference
 
 **Base URL:** `http://localhost:8000/api/v1` · **Format:** JSON (UTF-8) · **Time:** ISO-8601 UTC
 **Auth:** none for the local demo. If deployed, send `X-API-Key: <key>`; requests without it get `401`.

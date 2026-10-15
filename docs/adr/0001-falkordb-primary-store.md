@@ -3,7 +3,7 @@
 **Status:** Accepted · **Date:** 2026-10-15
 
 ## Context
-GraphRCA's core questions are about connections: what sits upstream of the symptom, which hops went bad in time order,
+Epicenter's core questions are about connections: what sits upstream of the symptom, which hops went bad in time order,
 what breaks if X goes down, who fixed this before. The hackathon also requires FalkorDB to be the primary database and
 central to the product. We need graph traversal, vector search for incident memory, and full-text search over log
 templates, ideally in one store.
