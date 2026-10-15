@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+!.env.openconnector.example
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+data/
+node_modules/

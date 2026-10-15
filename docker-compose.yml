@@ -1,0 +1,69 @@
+# HLD §5.2. Host ports: 6380 FalkorDB, 3002 browser, 8081 MCP, 8000 API, 3001 web, 3000 OpenConnector.
+services:
+  falkordb:
+    image: falkordb/falkordb:${FALKORDB_TAG}
+    ports: ["6380:6379", "3002:3000"]
+    environment:
+      REDIS_ARGS: "--requirepass ${FALKORDB_PASSWORD} --appendonly yes"
+      FALKORDB_ARGS: "THREAD_COUNT 4 TIMEOUT_MAX 30000"
+    volumes:
+      - falkordb_data:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${FALKORDB_PASSWORD}", "--no-auth-warning", "PING"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  falkordb-mcp:
+    image: falkordb/mcpserver:${FALKORDB_MCP_TAG}
+    ports: ["8081:8080"]
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: 6379
+      FALKORDB_PASSWORD: ${FALKORDB_PASSWORD}
+      FALKORDB_DEFAULT_READONLY: "true"
+      MCP_TRANSPORT: http
+      MCP_PORT: 8080
+      MCP_API_KEY: ${MCP_API_KEY}
+    depends_on: { falkordb: { condition: service_healthy } }
+    restart: unless-stopped
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    ports: ["8000:8000"]
+    env_file: .env
+    environment:
+      FALKORDB_URL: redis://:${FALKORDB_PASSWORD}@falkordb:6379
+      FALKORDB_MCP_URL: http://falkordb-mcp:8080/mcp
+      OPENCONNECTOR_URL: http://open-connector:3000
+    extra_hosts: ["host.docker.internal:host-gateway"]   # reach example environments on the host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      retries: 6
+    depends_on: { falkordb: { condition: service_healthy } }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args: { NEXT_PUBLIC_API_URL: "http://localhost:8000/api/v1" }   # inlined into the browser bundle at build
+    ports: ["3001:3000"]
+    depends_on: [api]
+    restart: unless-stopped
+
+  open-connector:
+    image: ${OPENCONNECTOR_IMAGE}
+    ports: ["3000:3000"]
+    env_file: .env.openconnector
+    volumes:
+      - open_connector_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      retries: 6
+    restart: unless-stopped
+
+volumes:
+  falkordb_data:
+  open_connector_data:

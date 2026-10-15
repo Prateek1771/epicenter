@@ -120,6 +120,6 @@ Gaps in the design docs, listed in the phase where they bite. Decide them there 
 | Q-a | `Evidence.id` is `E<n>` "unique per incident", but the graph is per environment, so `E3` collides across incidents. Store `<incident>:E<n>`, show `E<n>`? Same for `Hypothesis` (`h-7`) and `Action` (`a-1`) | 1 |
 | Q-b | `EvidenceOut.kind` in [LLD §4](../LLD.md#4-data-models-modelspy-excerpt) lacks `footprint`, which GRAPH_SCHEMA has | 3 |
 | Q-c | API `?force=true` marks old hypotheses "superseded", a status not in the state machine ([LLD §8](../LLD.md#8-state-machines)) or schema | 5 |
-| Q-d | `smoke_falkordb.py`, `eval.py`'s RCAEval loader and the `/runs` scenario runner aren't all in the [LLD §1](../LLD.md#1-package-layout) layout | 0, 9 |
+| Q-d | `eval.py`'s RCAEval loader and the `/runs` scenario runner aren't in the [LLD §1](../LLD.md#1-package-layout) layout (`smoke_falkordb.py` added in phase 0) | 9 |
 | Q-e | GRAPH_SCHEMA lists `Action` under the `kb:propagation` section; it belongs in `env:*` | 1 |
-| Q-f | `python -m api.…` commands assume the repo root is on `PYTHONPATH` inside the container; the Dockerfile must copy `api/` as a package, not as the work dir root | 0 |
+| ~~Q-f~~ | **Closed (phase 0):** build context is the repo root; `api/Dockerfile` copies `api/` to `/app/api` | 0 |

@@ -1,0 +1,7 @@
+{ "version": "2026-10-15.v2",
+  "w": { "onset_earliness": 0.25, "strength": 0.20, "mechanism_fit": 0.15, "pagerank": 0.10,
+         "change_match": 0.10, "footprint": 0.20 },
+  "k": 8.0, "skew_s": 15, "lookback_s": 600, "max_hops": 6,
+  "simulator": { "rules_version": "2026-10-15", "min_p": 0.3, "refute_below_coverage": 0.2,
+                 "no_root_cause": { "max_coverage": 0.5, "max_anomaly": 0.6 },
+                 "second_cause": { "min_unexplained_ops": 2, "strong_anomaly": 0.8 } } }

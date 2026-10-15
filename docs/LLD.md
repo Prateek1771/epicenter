@@ -42,6 +42,7 @@ graph-hacks/
     deliver/
       openconnector.py
     eval.py               # RCAEval replay + metrics
+    smoke_falkordb.py     # FalkorDB feature check on the pinned tag (README §5)
   web/                    # Next.js app
   seed/  owners.yaml  runbooks.yaml  propagation_rules.yaml
   examples/
@@ -56,6 +57,12 @@ Dependency rule: `agents → tools → search → graph`, `ingest → graph`. No
 ---
 
 ## 2. `graph.py`
+
+> **Smoke results on the pinned tag** (`falkordb/falkordb:v4.22.1`, graph module 42201, Redis 8.10.2; run 2026-10-16,
+> 6/6 PASS): Q1 and Q2 run verbatim. `algo.pageRank('Operation', 'BLAME') YIELD node, score` works; **no weighted form**
+> (`algo.pageRank(label, rel, 'w')` and `{weightAttribute}` both fail), so Q4b is unweighted and `BLAME.w` is unused unless
+> the networkx fallback is chosen. `db.idx.vector.queryNodes` returns cosine **distance** as `score` (lower = nearer),
+> so Q5 sorts ascending. Full-text index and two parallel writers work.
 
 ```python
 class Graph:
@@ -167,8 +174,9 @@ MATCH (past)-[:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(cause)
 OPTIONAL MATCH (past)-[:RESOLVED_BY]->(act:Action)
 RETURN past.id AS incident, score, labels(cause)[0] AS cause_type,
        coalesce(cause.id, cause.name) AS cause, collect(act.name) AS fixes
-ORDER BY score DESC, incident
+ORDER BY score, incident
 ```
+`score` is cosine distance (0 = identical); show similarity as `1 - score`.
 
 **Q6 `simulate`** (Fault Simulator, §7): every operation that depends on the candidate through calls that carried traffic.
 ```cypher

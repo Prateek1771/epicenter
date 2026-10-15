@@ -27,23 +27,23 @@ tests/conftest.py
 
 ## Tasks
 
-- [ ] `docker-compose.yml` exactly as [HLD §5.2](../HLD.md#52-docker-composeyml): host ports 6380 / 3002 / 8081 / 8000 / 3001 / 3000, health check, `service_healthy` dependencies, named volume, `extra_hosts: host.docker.internal`.
-- [ ] `.env.example` with every variable from [README §2](../../README.md#2-configure) and [LLD §11](../LLD.md#11-configuration). `.env` and `.env.openconnector` git-ignored.
-- [ ] Pull `falkordb/falkordb` and `falkordb/mcpserver`, pin both tags in `.env.example` (never `latest` for the demo).
-- [ ] Run the persistence check from [README §4](../../README.md#4-check-persistence-first-run-only); fix the volume path (`/data` vs `/var/lib/falkordb/data`) in compose and note the answer in HLD §5.2.
-- [ ] `api/config.py`: one `Settings(BaseSettings)` class, every env var typed with the LLD §11 default. No other module reads `os.environ`.
-- [ ] `api/main.py`: FastAPI app, router at `/api/v1`, `GET /health` returning `{"status":"ok","falkordb":…}` (FalkorDB `PING`). Startup hook placeholder for the seed step (phase 1).
-- [ ] `api/smoke_falkordb.py` (`python -m api.smoke_falkordb`), six checks on a throwaway graph, each printing PASS/FAIL, exit code ≠ 0 on any failure:
+- [x] `docker-compose.yml` exactly as [HLD §5.2](../HLD.md#52-docker-composeyml): host ports 6380 / 3002 / 8081 / 8000 / 3001 / 3000, health check, `service_healthy` dependencies, named volume, `extra_hosts: host.docker.internal`.
+- [x] `.env.example` with every variable from [README §2](../../README.md#2-configure) and [LLD §11](../LLD.md#11-configuration). `.env` and `.env.openconnector` git-ignored.
+- [x] Pull `falkordb/falkordb` and `falkordb/mcpserver`, pin both tags in `.env.example` (never `latest` for the demo).
+- [x] Run the persistence check from [README §4](../../README.md#4-check-persistence-first-run-only); fix the volume path (`/data` vs `/var/lib/falkordb/data`) in compose and note the answer in HLD §5.2.
+- [x] `api/config.py`: one `Settings(BaseSettings)` class, every env var typed with the LLD §11 default. No other module reads `os.environ`.
+- [x] `api/main.py`: FastAPI app, router at `/api/v1`, `GET /health` returning `{"status":"ok","falkordb":…}` (FalkorDB `PING`). Startup hook placeholder for the seed step (phase 1).
+- [x] `api/smoke_falkordb.py` (`python -m api.smoke_falkordb`), six checks on a throwaway graph, each printing PASS/FAIL, exit code ≠ 0 on any failure:
   1. `[:CALLS*1..6]` with a filter on the end node
   2. Q2 shape: `UNWIND` over `nodes(p)` + `OPTIONAL MATCH` per node ([LLD §2.2](../LLD.md#22-causal-search-queries))
   3. `CALL algo.pageRank(...)`: record the real signature and whether weights are supported
   4. vector index create + `db.idx.vector.queryNodes` with `vecf32`
   5. full-text index create + query
   6. two writers in parallel on one graph (threads), both writes present after
-- [ ] Record the smoke results (tag, PageRank signature, weighted yes/no) at the top of [LLD §2](../LLD.md#2-graphpy).
-- [ ] Dockerfile: Python 3.12 slim, copy `api/` **as a package** under `/app/api` so `python -m api.…` works (open question Q-f).
-- [ ] `web/`: Next.js App Router scaffold, Tailwind, shadcn, dark-first; `NEXT_PUBLIC_API_URL` from env.
-- [ ] CI: ruff + pytest on push; a FalkorDB service container for integration tests (pinned tag).
+- [x] Record the smoke results (tag, PageRank signature, weighted yes/no) at the top of [LLD §2](../LLD.md#2-graphpy).
+- [x] Dockerfile: Python 3.12 slim, copy `api/` **as a package** under `/app/api` so `python -m api.…` works (open question Q-f).
+- [x] `web/`: Next.js App Router scaffold, Tailwind, shadcn, dark-first; `NEXT_PUBLIC_API_URL` from env.
+- [ ] CI: ruff + pytest on push; a FalkorDB service container for integration tests (pinned tag). *Workflow written and the same steps pass locally; tick after the first green run on GitHub.*
 
 ## Acceptance
 
@@ -67,8 +67,8 @@ docker compose restart falkordb && <rerun persistence check>  # data survives
 ## Risks / open questions
 
 - Port clashes on 6379 / 8080 / 3000: see [README §8](../../README.md#8-troubleshooting).
-- If `algo.pageRank` has no weighted form on the pinned tag, phase 3 uses unweighted rank or the networkx fallback; decide here.
-- Q-d: `smoke_falkordb.py` isn't in the LLD layout; add it to [LLD §1](../LLD.md#1-package-layout).
+- ~~If `algo.pageRank` has no weighted form on the pinned tag, decide here.~~ **Decided:** v4.22.1 has no weighted form; phase 3 uses unweighted `algo.pageRank`, networkx (weighted) only if the eval shows it helps. See [LLD §2](../LLD.md#2-graphpy).
+- ~~Q-d (smoke part):~~ `smoke_falkordb.py` added to [LLD §1](../LLD.md#1-package-layout).
 
 ## Done when
 

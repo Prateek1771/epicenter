@@ -218,7 +218,7 @@ services:
       REDIS_ARGS: "--requirepass ${FALKORDB_PASSWORD} --appendonly yes"
       FALKORDB_ARGS: "THREAD_COUNT 4 TIMEOUT_MAX 30000"
     volumes:
-      - falkordb_data:/var/lib/falkordb/data   # docs also mention /data; verify on first run (README §4)
+      - falkordb_data:/var/lib/falkordb/data   # verified on v4.22.1: /data/data is a symlink to this path
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${FALKORDB_PASSWORD}", "PING"]
       interval: 5s
@@ -239,7 +239,7 @@ services:
     depends_on: { falkordb: { condition: service_healthy } }
 
   api:
-    build: ./api
+    build: { context: ., dockerfile: api/Dockerfile }   # repo root, so api/ is a package under /app
     ports: ["8000:8000"]
     env_file: .env
     environment:
@@ -257,13 +257,18 @@ services:
     depends_on: [api]
 
   open-connector:
-    image: ${OPENCONNECTOR_IMAGE}
+    image: ${OPENCONNECTOR_IMAGE}            # ghcr.io/oomol-lab/open-connector:<release>
     ports: ["3000:3000"]
-    env_file: .env.openconnector
+    env_file: .env.openconnector             # OOMOL_CONNECT_ORIGIN / _ENCRYPTION_KEY / _ADMIN_TOKEN
+    volumes:
+      - open_connector_data:/app/data
 
 volumes:
   falkordb_data:
+  open_connector_data:
 ```
+
+The real [docker-compose.yml](../docker-compose.yml) adds health checks for `api` and `open-connector` and `restart: unless-stopped`.
 
 **Startup order:** `falkordb` (healthy) → `falkordb-mcp`, `api` → `web`. `api` runs the seed step (indexes, runbooks,
 owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX` guarded).
