@@ -58,13 +58,16 @@ Query: `status`, `cause` (service name), `limit`, `cursor`.
 ```json
 {
   "id": "inc-42", "env": "astronomy-shop", "status": "diagnosed", "symptom": "checkout/PlaceOrder",
-  "alert_count": 3, "gaps": [], "weights_version": "2026-10-15",
+  "alert_count": 3, "gaps": [], "weights_version": "2026-10-15.v2",
   "verdict": {
     "root_cause": { "id": "h-7", "target": "payment/Charge", "target_type": "Operation", "status": "confirmed",
                     "score": 0.83, "hops": 2, "onset": "2026-10-16T14:03:40Z",
                     "score_parts": { "onset_earliness": 1.0, "strength": 0.9, "mechanism_fit": 1.0,
-                                     "pagerank": 0.71, "change_match": 1.0, "refuted": 0 } },
+                                     "pagerank": 0.71, "change_match": 1.0, "footprint": 0.85, "refuted": 0 } },
     "confidence": 0.91,
+    "footprint": { "coverage": 0.86, "precision": 0.82, "order": 0.9, "summary": "explains 6 of 7 symptoms",
+                   "unexplained": ["ad/GetAds"] },
+    "second_root_cause": null,
     "runner_up": { "id": "h-3", "target": "cart/GetCart", "status": "pruned", "score": 0.41 },
     "path": ["checkout/PlaceOrder", "payment/Charge"],
     "evidence": [
@@ -82,16 +85,33 @@ Query: `status`, `cause` (service name), `limit`, `cursor`.
 }
 ```
 
+When nothing explains the alert, `status` is `no_root_cause`, `verdict` is `null`, and the response has
+`"no_root_cause": { "summary": "Nothing in the graph explains this alert", "checked": ["h-1", "h-2"], "max_coverage": 0.31 }`.
+When a second, independent fault is found, `verdict.second_root_cause` holds a hypothesis in the same shape as `root_cause`.
+
 ### `POST /incidents/{id}/diagnose`
 Runs the agent flow, or resumes it after a crash. `202` → `{ "incident_id": "inc-42", "status": "diagnosing" }`.
 `409 INCIDENT_STATE` if it's already `diagnosed` (send `?force=true` to rerun; the old hypotheses are kept and marked superseded).
 
 ### `GET /incidents/{id}/stream`
-Server-Sent Events. Supports `Last-Event-ID` for replay. Event types are listed in [LLD §8](../LLD.md#8-events-sse).
+Server-Sent Events. Supports `Last-Event-ID` for replay. Event types are listed in [LLD §9](../LLD.md#9-events-sse).
 ```
 id: 12
 event: evidence.added
 data: {"id":"E3","hypothesis_id":"h-7","kind":"propagation","verdict":"supports","path":["checkout/PlaceOrder","payment/Charge"]}
+```
+
+### `GET /incidents/{id}/hypotheses/{hid}/footprint`
+Fault Simulator result for one hypothesis ([LLD §7](../LLD.md#7-fault-simulator)): predicted vs. observed.
+```json
+{ "hypothesis_id": "h-7", "target": "payment/Charge", "cause_kind": "errors",
+  "coverage": 0.86, "precision": 0.82, "order": 0.9, "footprint": 0.85,
+  "predicted": [ { "op": "checkout/PlaceOrder", "kind": "errors", "p": 0.8, "hops": 1, "onset_window_s": [0, 30] },
+                 { "op": "frontend/POST /cart/checkout", "kind": "errors", "p": 0.62, "hops": 2, "onset_window_s": [0, 60] } ],
+  "matched": ["payment/Charge", "checkout/PlaceOrder", "frontend/POST /cart/checkout"],
+  "missed": ["frontend-proxy/POST /api/checkout"],
+  "unexplained": ["ad/GetAds"],
+  "summary": "explains 6 of 7 symptoms" }
 ```
 
 ### `GET /incidents/{id}/why-not/{service}`
@@ -100,7 +120,8 @@ data: {"id":"E3","hypothesis_id":"h-7","kind":"propagation","verdict":"supports"
   "summary": "frontend is slow because it waits on cart: child time ×6.1, self time ×1.0",
   "evidence": [ { "id": "E9", "kind": "victim", "verdict": "refutes", "path": ["frontend/GET /", "cart/GetCart"] } ] }
 ```
-`answer` ∈ `victim`, `later_onset`, `no_anomaly`, `not_upstream`, `lost_on_score`, `is_root_cause`.
+`answer` ∈ `victim`, `later_onset`, `no_anomaly`, `not_upstream`, `small_footprint` (explains too few symptoms),
+`lost_on_score`, `is_root_cause`.
 
 ### `POST /incidents/{id}/notes`
 Human input during an incident ([USER_FLOW Flow 6](../USER_FLOW.md#flow-6-human-takeover-mid-incident)).
@@ -137,6 +158,22 @@ Query: `center` (node id), `hops` (1–3, default 2), `incident` (optional: incl
 { "service": "redis", "affected": [ { "service": "cart", "operation": "cart/GetCart", "hops": 1, "owner": "team-cart" } ],
   "counts": { "services": 3, "operations": 9 }, "past_incidents": ["inc-11"] }
 ```
+
+### `POST /simulate`
+What-if mode of the Fault Simulator ([LLD §7.7](../LLD.md#77-what-if-mode-no-incident)): "what breaks if X fails?",
+no incident needed. Give either `operation` or `service`.
+```json
+{ "service": "redis", "kind": "down", "save": true }
+```
+```json
+{ "simulation_id": "sim-12", "target": "redis", "kind": "down", "rules_version": "2026-10-15",
+  "predicted": [
+    { "op": "cart/GetCart", "service": "cart", "kind": "errors", "p": 0.95, "hops": 1, "expected_delay_s": 15, "owner": "team-cart" },
+    { "op": "checkout/PlaceOrder", "service": "checkout", "kind": "errors", "p": 0.61, "hops": 2, "expected_delay_s": 45, "owner": "team-payments" } ],
+  "counts": { "services": 3, "operations": 9 } }
+```
+`kind` ∈ `errors`, `latency`, `cpu`, `mem`, `saturation`, `down`. `save: true` writes a `Simulation` node, so a later
+incident can be compared with this prediction.
 
 ### `POST /ask`
 ```json

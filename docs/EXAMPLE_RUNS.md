@@ -31,6 +31,12 @@ GraphRCA's `otel` adapter reads Jaeger (`/api/traces`), Prometheus (`query_range
 
 Check the flag names in the demo's flagd config file before the demo; they change between releases.
 
+**Fault Simulator demo moment (`paymentFailure`):** fire the alert on `frontend` (the loudest symptom), so `frontend`
+itself is hypothesis 0. Its predicted footprint covers only frontend and its own callers, and `checkout` and `payment`
+show red as *unexplained*. Then click
+`payment/Charge`: the whole chain lights up green, "explains 6 of 7 symptoms". This is symptom anchoring being avoided,
+on screen.
+
 ---
 
 ## 2. flip-commerce (your system-design-journey)
@@ -85,6 +91,20 @@ flowchart LR
 
 `circuit-misconfig` is the best one for judges: Mongo looks guilty at first glance, and the skeptic plus Q3 show that
 the cause is a config change on the API, with Mongo refuted.
+
+### 2.3b Expected Fault Simulator footprints
+
+| Scenario | Hypothesis | Predicted footprint | Observed | Result |
+|---|---|---|---|---|
+| `mongo-primary-down` | `mongodb` (down) | every `flip-node/*` route that reads Mongo → `errors` (p ≈ 0.95), nginx `/products` → `errors` (p ≈ 0.8) | same, plus a short election gap | coverage ≈ 1.0, **confirmed** |
+| `circuit-misconfig` | `mongodb` (latency, if a slow query shows up) | Mongo operations slow, then API routes slow | Mongo only mildly slow; API routes return `503` **errors** almost at once | wrong symptom kind and timing → low coverage → **refuted**. If Mongo shows no anomaly at all, it isn't a hypothesis, and "why not mongodb?" answers `no_anomaly` |
+| `circuit-misconfig` | `flip-node/*` + config change | API routes `errors`, nginx `errors`; no Mongo symptoms | matches | **confirmed** |
+
+### 2.3c Healthy-baseline run (expects `no_root_cause`)
+
+Run k6 at normal load (100 VUs) with no fault, and fire a test alert on `flip-node/GET /products` by hand
+(`POST /api/v1/alerts`). Expected: weak, scattered anomalies at most, no hypothesis covers ≥ 50% → incident ends
+`no_root_cause` with "Nothing in the graph explains this alert". This shows GraphRCA doesn't invent causes.
 
 ### 2.4 Ports
 

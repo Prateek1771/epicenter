@@ -29,6 +29,7 @@ graph-hacks/
       causal.py           # hypotheses from Q1, checks Q2/Q3, projection + Q4
       score.py            # deterministic scoring + confidence
       signature.py        # 64-dim incident signature
+      simulate.py         # Fault Simulator: Q6 + rules → predicted footprint, match vs observed (§7)
     agents/
       flow.py             # LangGraph wiring
       triage.py  investigator.py  skeptic.py  historian.py  narrator.py  responder.py  ask.py
@@ -42,7 +43,7 @@ graph-hacks/
       openconnector.py
     eval.py               # RCAEval replay + metrics
   web/                    # Next.js app
-  seed/  owners.yaml  runbooks.yaml
+  seed/  owners.yaml  runbooks.yaml  propagation_rules.yaml
   examples/
     flip-commerce/        # collector config + run scripts for the user's system-design-journey
     otel-demo/            # notes + fault script
@@ -168,6 +169,15 @@ RETURN past.id AS incident, score, labels(cause)[0] AS cause_type,
 ORDER BY score DESC, incident
 ```
 
+**Q6 `simulate`** (Fault Simulator, §7): every operation that depends on the candidate through calls that carried traffic.
+```cypher
+MATCH p = (caller:Operation)-[:CALLS*1..6]->(c:Operation {id: $cand})
+WHERE all(r IN relationships(p) WHERE r.rps > 0)
+RETURN caller.id AS op, length(p) AS hops,
+       [n IN nodes(p) | n.id] AS path, [r IN relationships(p) | r.rps] AS rps
+ORDER BY hops, op
+```
+
 ### 2.3 Tool queries
 
 | Tool | Query |
@@ -246,6 +256,8 @@ class IncidentState(TypedDict):
     alert_ts: datetime
     hypothesis_ids: list[str]            # set by triage
     verdict_id: str | None               # set by scorer
+    second_cause_id: str | None          # set if the Fault Simulator finds unexplained symptoms (§7.5)
+    no_root_cause: bool                  # typed negative answer (§7.6)
     skeptic_rounds: int                  # max 2
     explanation_id: str | None
     action_ids: list[str]
@@ -264,7 +276,11 @@ flowchart TD
     INV --> SC[scorer]
     SC --> SK[skeptic]
     SK -->|"refuted and rounds < 2"| SC
-    SK -->|"stands"| HI[historian]
+    SK -->|"stands"| MF{"unexplained symptoms?<br/>(§7.5)"}
+    MF -->|"yes, round 0"| TRI2["triage again,<br/>seeded from unexplained"] --> FAN
+    MF -->|"no"| NR{"no hypothesis explains ≥ 50%<br/>and anomalies weak? (§7.6)"}
+    NR -->|"yes"| NRC["Incident: no_root_cause"] --> E
+    NR -->|"no"| HI[historian]
     HI --> NA[narrator]
     NA --> JV[jev_gate]
     JV --> RE[responder]
@@ -279,9 +295,9 @@ LangGraph `Send` handles the fan-out; a checkpointer (SQLite, `./data/checkpoint
 | Agent | LLM | Input | Output (graph writes) |
 |---|---|---|---|
 | triage | no | alert | `Incident {status:'diagnosing'}`, `TRIGGERED_BY`, `Hypothesis` per Q1 row + symptom |
-| investigator | **optional**: may call extra tools (`recent_changes`, `who_knows`) for context; never sets status | hypothesis id | `Evidence` + `SUPPORTED_BY`/`REFUTED_BY`; status from rules in §2.2 only |
+| investigator | **optional**: may call extra tools (`recent_changes`, `who_knows`) for context; never sets status | hypothesis id | Q2, Q3 and the **Fault Simulator** (Q6 + match, §7) → `Evidence` (incl. `footprint`) + `SUPPORTED_BY`/`REFUTED_BY`; status from rules in §2.2 and §7 only |
 | scorer | no | hypothesis ids | Q4, `score`, `score_parts`, `Incident -[:ROOT_CAUSE]->` top hypothesis |
-| skeptic | yes: picks which alternative to test and which tool to use | top-2 | `Evidence` (refutes) **only via deterministic tools**; the LLM chooses, the tools decide |
+| skeptic | yes: picks which alternative to test and which tool to use | top-2 + the winner's `unexplained` symptoms | `Evidence` (refutes) **only via deterministic tools**; the LLM chooses, the tools decide. Leads with "what doesn't the winner explain?" |
 | historian | no | incident | signature, `SIMILAR_TO` edges |
 | narrator | yes | verdict + evidence (as JSON data) | `Explanation {claims:[{text, cites[]}]}` |
 | jev_gate | Jev Noul | each claim + its cited evidence | `support_p` per claim; drop < 0.7 or uncited |
@@ -303,6 +319,7 @@ Narrator prompt contract (system message, fixed): output JSON `{"what":[claim], 
 | `mechanism_fit` | 1 if self-caused (`self_ratio ≥ child_ratio`) or kind ∈ {cpu, mem, down, errors}; 0.5 if mixed; 0 if victim |
 | `pagerank` | Q4 score |
 | `change_match` | 1 if a `Change` in the lookback, else 0 |
+| `footprint` | Fault Simulator match score (§7.4) |
 | `refuted` | 1 if any `REFUTED_BY` evidence |
 
 ### 6.2 Formula
@@ -315,16 +332,133 @@ confidence = 1 / (1 + exp(−k · (score₁ − score₂)))
 ### 6.3 `weights.json`
 
 ```json
-{ "version": "2026-10-15",
-  "w": { "onset_earliness": 0.30, "strength": 0.25, "mechanism_fit": 0.20, "pagerank": 0.15, "change_match": 0.10 },
-  "k": 8.0, "skew_s": 15, "lookback_s": 600, "max_hops": 6 }
+{ "version": "2026-10-15.v2",
+  "w": { "onset_earliness": 0.25, "strength": 0.20, "mechanism_fit": 0.15, "pagerank": 0.10,
+         "change_match": 0.10, "footprint": 0.20 },
+  "k": 8.0, "skew_s": 15, "lookback_s": 600, "max_hops": 6,
+  "simulator": { "rules_version": "2026-10-15", "min_p": 0.3, "refute_below_coverage": 0.2,
+                 "no_root_cause": { "max_coverage": 0.5, "max_anomaly": 0.6 },
+                 "second_cause": { "min_unexplained_ops": 2, "strong_anomaly": 0.8 } } }
 ```
+v1 (before the Fault Simulator) had no `footprint` term. Both versions are kept so the ablation table can compare them.
 
 Tie-break: higher score, then earlier onset, then operation id. The weights version is stored on the `Incident`.
 
 ---
 
-## 7. State machines
+## 7. Fault Simulator
+
+"If this were the cause, what would we see?" For each hypothesis, predict the **symptom footprint** from the graph and
+compare it with what was observed. Why: [ADR 0011](docs/adr/0011-fault-simulator.md); research:
+[docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md).
+
+```mermaid
+flowchart LR
+    H["Hypothesis<br/>op + anomaly kind"] --> Q6["Q6: dependents with traffic<br/>(≤ 6 hops)"]
+    KB[("kb:propagation<br/>Rule nodes")] --> PR["apply rules hop by hop<br/>p × dependency share"]
+    Q6 --> PR --> P["Predicted footprint<br/>{op, kind, p, hops}"]
+    O["Observed anomalies<br/>(this incident)"] --> M["match"]
+    P --> M --> F["coverage · precision · order<br/>→ footprint score"]
+    M --> U["unexplained symptoms"]
+    F --> E["Evidence {kind:'footprint'}"]
+```
+
+### 7.1 Propagation rules (`kb:propagation`)
+
+Environment-agnostic knowledge, kept in its own FalkorDB graph and seeded from `seed/propagation_rules.yaml`:
+
+```yaml
+version: 2026-10-15
+rules:   # cause_kind on the candidate → symptom_kind on a dependent (upstream) or on itself (self)
+  - { cause: [errors, down],               symptom: errors,  direction: upstream, p: 0.80, delay_s_max: 30 }
+  - { cause: [errors, down],               symptom: latency, direction: upstream, p: 0.30, delay_s_max: 30 }
+  - { cause: [latency, cpu, saturation],   symptom: latency, direction: upstream, p: 0.90, delay_s_max: 20 }
+  - { cause: [latency, cpu, saturation],   symptom: errors,  direction: upstream, p: 0.25, delay_s_max: 60 }   # timeouts
+  - { cause: [mem],                        symptom: latency, direction: self,     p: 0.60, delay_s_max: 120 }
+  - { cause: [mem],                        symptom: down,    direction: self,     p: 0.40, delay_s_max: 300 }
+  - { cause: [down], kind_of_service: datastore, symptom: errors, direction: upstream, p: 0.95, delay_s_max: 15 }
+```
+
+```cypher
+// seed (MERGE per rule)
+MERGE (r:Rule {id: $id})
+SET r.cause_kinds = $cause, r.symptom_kind = $symptom, r.direction = $direction,
+    r.p = $p, r.delay_s_max = $delay_s_max, r.service_kind = $kind_of_service, r.version = $version
+```
+
+Probabilities start from the values above and are tuned on RCAEval (grid search, then frozen with `rules_version`).
+Hop 1 applies the rules for the *candidate's* cause kind. Each further hop treats the previous hop's symptom as the new
+cause and applies the same table (so `errors` keeps propagating as `errors` at p 0.8 per hop, `latency` as `latency` at
+0.9), which keeps the rule table small.
+
+### 7.2 Simulation (`search/simulate.py`)
+
+```python
+def simulate(env: EnvGraph, cand_op: str, cause_kind: str, rules: list[Rule], min_p=0.3) -> list[Prediction]:
+    """Predicted footprint of a fault on cand_op. Deterministic; sorted by (hops, op)."""
+```
+1. Self predictions: `direction: self` rules on `cand_op` (plus the cause itself, `p = 1`).
+2. Q6 rows → for each dependent, walk its path from the candidate outwards. At each hop
+   `p_hop = rule.p × share`, with `share = min(1, call.rps / caller_total_in_rps)`: the fraction of the caller's work that
+   depends on this call. The caller's incoming rps is the sum of `CALLS.rps` into it, or its own `rps` for entry points.
+3. `p = Π p_hop` along the best path (max over paths); keep `p ≥ min_p`.
+4. Expected onset window per prediction: `[t_cause, t_cause + hops × delay_s_max]`.
+
+`Prediction = {op, kind, p, hops, path, onset_window}`.
+
+### 7.3 Observed set
+
+`O` = operations with an `Anomaly` in this incident, each with its strongest kind and earliest onset. Datastore and
+proxy operations are included; the symptom operation always is.
+
+### 7.4 Match and footprint score
+
+```
+matched     = {o ∈ O : ∃ prediction with same op and kind, onset inside its window}
+missed      = predictions not observed                    (predicted, didn't happen)
+unexplained = O \ matched                                 (happened, not predicted)
+
+coverage  = |matched| / |O|
+precision = Σ p(matched predictions) / Σ p(all predictions)
+order     = Spearman(hops, onset) over matched, mapped from [-1, 1] to [0, 1]   (0.5 if < 3 matched)
+footprint = 0.5 · coverage + 0.3 · precision + 0.2 · order
+```
+
+Written as `Evidence {kind:'footprint', summary:'explains 6 of 7 symptoms', value:{coverage, precision, order, matched,
+missed, unexplained}}`: `SUPPORTED_BY` if `coverage ≥ 0.2`, else `REFUTED_BY` (it can't explain the incident).
+
+**Why it beats symptom anchoring:** a downstream victim (e.g. `frontend`) predicts a footprint of its own callers only, and
+the deeper anomalies (`cart`, `valkey`) land in `unexplained`, so coverage stays low. The true cause predicts the whole
+chain.
+
+### 7.5 Second root cause (multi-fault)
+
+After the skeptic, take the winner's `unexplained` set `U`. If `|U| ≥ 2`, or any op in `U` has anomaly score ≥ 0.8,
+run triage once more seeded from the earliest-onset op in `U` (Q1 from that op), investigate, score, and write a second
+`(Incident)-[:ROOT_CAUSE {rank: 2}]->(Hypothesis)`. One extra round at most.
+
+### 7.6 Typed negative answer: `no_root_cause`
+
+If **no** hypothesis has `coverage ≥ 0.5` **and** the strongest anomaly score in the incident is `< 0.6`, the incident ends
+in status `no_root_cause` with summary "Nothing in the graph explains this alert", listing what was checked. No root cause
+is invented, and the responder proposes "check the alert threshold" from the runbook instead.
+
+### 7.7 What-if mode (no incident)
+
+`POST /api/v1/simulate {operation | service, kind}` runs §7.2 on the current topology with no matching:
+- returns predicted operations with `p`, hops, expected delay and owners (`OWNED_BY`);
+- if `service` is given, simulates every operation of that service and merges, keeping max `p`;
+- writes `(:Simulation {id, target, kind, ts, rules_version})-[:PREDICTS {p, hops, kind}]->(:Operation)` so a later
+  incident can be compared against the prediction made before the change ("we predicted 9, 8 happened").
+
+### 7.8 Canvas overlay
+
+Observed = filled node, predicted = dashed outline. Matched → green, missed (predicted, didn't happen) → amber,
+unexplained (happened, not predicted) → red. The legend shows `explains 6 / 7 · precision 0.82 · order 0.9`.
+
+---
+
+## 8. State machines
 
 ```mermaid
 stateDiagram-v2
@@ -333,7 +467,9 @@ stateDiagram-v2
         [*] --> open
         open --> diagnosing: diagnose
         diagnosing --> diagnosed: verdict
+        diagnosing --> no_root_cause: nothing explains the alert (§7.6)
         diagnosing --> diagnosing: resume after crash
+        no_root_cause --> resolved: marked handled
         diagnosed --> delivered: posted to Slack / Linear
         diagnosed --> resolved: marked fixed
         delivered --> resolved: marked fixed
@@ -355,7 +491,7 @@ stateDiagram-v2
 
 ---
 
-## 8. Events (SSE)
+## 9. Events (SSE)
 
 `GET /api/v1/incidents/{id}/stream`, `text/event-stream`. One event per graph write.
 
@@ -364,8 +500,10 @@ stateDiagram-v2
 | `incident.status` | `{status}` |
 | `hypothesis.created` | `{id, target, hops, onset}` |
 | `evidence.added` | `{id, hypothesis_id, kind, verdict, path}` |
+| `footprint` | `{hypothesis_id, coverage, precision, order, matched[], missed[], unexplained[]}` (drives the canvas overlay) |
 | `hypothesis.status` | `{id, status, score?}` |
-| `verdict` | `Verdict` |
+| `verdict` | `Verdict` (incl. `second_root_cause` when found) |
+| `no_root_cause` | `{summary, checked: [hypothesis ids], max_coverage}` |
 | `memory.similar` | `[{incident, score, cause, fixes}]` |
 | `explanation` | `{claims, dropped}` |
 | `action` | `{id, name, delivery}` |
@@ -376,7 +514,7 @@ sends `Last-Event-ID` and gets the replay from the graph.
 
 ---
 
-## 9. External calls: timeouts and retries
+## 10. External calls: timeouts and retries
 
 | Call | Timeout | Retries | On final failure |
 |---|---|---|---|
@@ -388,7 +526,7 @@ sends `Last-Event-ID` and gets the replay from the graph.
 
 ---
 
-## 10. Configuration
+## 11. Configuration
 
 | Env var | Default | Used by |
 |---|---|---|
@@ -403,14 +541,18 @@ sends `Last-Event-ID` and gets the replay from the graph.
 
 ---
 
-## 11. Test plan
+## 12. Test plan
 
 | Test | How |
 |---|---|
 | Query unit tests | `tests/fixtures/mini_graph.cypher` (8 ops, a known root cause) loaded into `env:test`; assert Q1–Q5 rows |
 | Rule tests | victim rule, onset-order rule, change lookback: table-driven with hand-made rows |
+| Fault Simulator | `mini_graph` with a known cause: the true cause's footprint has coverage ≥ 0.8 and beats the loudest victim; hand-computed `p` for a 2-hop path matches |
+| Multi-fault | fixture with two independent faults → second `ROOT_CAUSE {rank: 2}` |
+| Healthy baseline | fixture with weak, unrelated anomalies → status `no_root_cause`, no `ROOT_CAUSE` edge |
+| What-if | `POST /simulate` on `redis` returns the same ops as reverse `CALLS*` with traffic, sorted, with owners |
 | Determinism | diagnose one RCAEval case twice → identical `score_parts` JSON |
 | Agent contract | narrator output validated against the JSON schema; uncited claim is dropped |
 | Smoke (pinned FalkorDB) | `api/smoke_falkordb.py`: variable-length filter, Q2 shape, `algo.pageRank`, vector index, full-text, two parallel writers |
-| Eval | `python -m api.eval --suite re2 --system tt` → AC@1, AC@3, ablations (no PageRank / no temporal / no mechanism) |
+| Eval | `python -m api.eval --suite re2 --system tt` → AC@1, AC@3, ablations (no PageRank / no temporal / no mechanism / **no footprint**, i.e. weights v1 vs v2) |
 | End-to-end | flip-commerce: stop the Mongo primary → incident → verdict names `mongodb` with a `docker stop` change |

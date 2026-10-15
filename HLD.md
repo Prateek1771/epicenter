@@ -96,6 +96,17 @@ sequenceDiagram
     AG->>OC: Slack card + Linear issue
 ```
 
+Inside the investigator step, each hypothesis also runs the **Fault Simulator** (Q6 + rules from `kb:propagation`,
+[LLD §7](LLD.md#7-fault-simulator)). Its `footprint` events drive the predicted-vs-observed overlay on the canvas. After
+the skeptic, unexplained symptoms can trigger one search for a second root cause, or the incident ends `no_root_cause`.
+
+### 3.1b What-if (no incident)
+
+`POST /api/v1/simulate {service | operation, kind}` → `search/simulate.py` reads the current topology and the rules,
+returns the predicted footprint with probabilities, order and owners, and optionally saves a `Simulation` node. It's
+read-only towards everything except that node. Typical use: before restarting Redis or shipping a risky change
+([USER_FLOW Flow 8](USER_FLOW.md#flow-8-what-if-before-a-change)).
+
 ### 3.2 Ask box
 
 `POST /api/v1/ask` → ask agent (OpenRouter LLM) with two tool sets: the typed tools (preferred) and
@@ -130,6 +141,8 @@ flowchart LR
 | `Anomaly`, `Signal` | when an incident window opens | never | with the incident (manual purge only) |
 | `Incident` subgraph | on alert | during diagnosis and resolution | kept as memory |
 | `scratch:<incident>` graph | scoring step | — | right after scoring |
+| `kb:propagation` graph (`Rule`) | API startup seed from `seed/propagation_rules.yaml` | replaced on a new rules version | never |
+| `Simulation` (what-if) | `POST /simulate` with `save: true` | never | never (compared with later incidents) |
 
 Raw telemetry (spans, metric points, log lines) is **never** stored in FalkorDB ([ADR 0006](docs/adr/0006-operation-level-aggregation.md)).
 Evidence nodes keep a `ref` back to the source (trace id, PromQL, log file + line range).
@@ -225,6 +238,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 | N5 laptop footprint | FalkorDB < 1 GB; one API process; OTel Demo is the only heavy part and is optional |
 | N6 explainability | `Explanation.cites` must reference `Evidence` ids; Jev gate drops claims under 0.7 |
 | N7 LLM-free verdict | Verdict = scorer output; narrator has a template fallback |
+| N1 (Fault Simulator cost) | One Q6 per hypothesis (≤ 50 × ~10 ms) + in-process matching; well inside the 60 s budget |
 
 ---
 
@@ -287,4 +301,5 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 | LLM access | OpenRouter (LLM + Jev) | One key, pinned model ids |
 | Delivery | OpenConnector | Slack / Linear OAuth handled for us |
 | Anomaly detection | numpy + `ruptures` (PELT) + Drain3 | Deterministic, light |
+| Fault Simulator | Rule propagation over `CALLS` (rules in `kb:propagation`) | Deterministic, graph-native, simpler first step towards a Causely-style causal codebook ([ADR 0011](docs/adr/0011-fault-simulator.md)) |
 | UI | Next.js + Tailwind + shadcn + React Flow | Team's stack; React Flow handles a few hundred nodes |

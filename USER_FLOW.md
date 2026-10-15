@@ -19,7 +19,8 @@ behind it, so flows trace straight into [docs/API.md](docs/API.md) and [LLD.md](
 |---|---|---|
 | Incidents list | `/` | Open and past incidents, environment switcher |
 | Incident | `/incident/[id]` | Live graph canvas, verdict card, evidence, explanation, why-not box, memory panel, deliver |
-| Blast radius | `/blast-radius` | Pick a service → what breaks, who owns it |
+| Blast radius | `/blast-radius` | Pick a service → what's reachable, who owns it |
+| What-if | `/simulate` | Pick a service and a failure kind → predicted impact with probability and order (Fault Simulator) |
 | Ask | `/ask` | Question → answer + highlighted path |
 | Example runs | `/runs` | Start a scripted fault on an example environment, or replay an RCAEval case |
 | Eval | `/eval` | RCAEval accuracy table |
@@ -37,6 +38,7 @@ journey
     section Watch
       Hypotheses branch out on the canvas: 5: Priya
       Branches turn red / green as evidence lands: 5: Priya
+      Predicted vs observed overlay shows what each suspect explains: 5: Priya
       Winning path glows, verdict card fills in: 5: Priya
     section Check
       Asks "why not cart?": 5: Priya
@@ -53,7 +55,8 @@ journey
 | 2 | Opens the link | Incident | `GET /incidents/{id}`, `GET /incidents/{id}/stream` | read incident subgraph |
 | 3 | Watches hypotheses appear | Incident: canvas | SSE `hypothesis.created` | triage: blast radius, **Q1** |
 | 4 | Watches branches turn red / green | Incident: canvas | SSE `evidence.added`, `hypothesis.status` | investigators: **Q2**, **Q3** |
-| 5 | Reads the verdict | Incident: verdict card | SSE `verdict` | **Q4** + scorer, `ROOT_CAUSE` |
+| 4b | Clicks a hypothesis; sees dashed "predicted" nodes over filled "observed" ones, coloured matched / missed / unexplained, and "explains 6 of 7 symptoms" | Incident: canvas overlay | SSE `footprint`, `GET /incidents/{id}/hypotheses/{hid}/footprint` | **Fault Simulator**: **Q6** + rules from `kb:propagation`, match |
+| 5 | Reads the verdict (and a second root cause, if the simulator found symptoms the winner can't explain) | Incident: verdict card | SSE `verdict` | **Q4** + scorer, `ROOT_CAUSE {rank}` |
 | 6 | Types "cart" into why-not | Incident: why-not box | `GET /incidents/{id}/why-not/cart` | refuting `Evidence` + path, or "not upstream" |
 | 7 | Clicks `[E3]` in the explanation | Incident: explanation | — | highlights that evidence's path on the canvas |
 | 8 | Reads "seen before" | Incident: memory panel | SSE `memory.similar` | **Q5**, `SIMILAR_TO` |
@@ -64,6 +67,9 @@ journey
 - Second alert for the same symptom within 10 min → joins the open incident (alert count goes up), no new incident.
 - LLM down → verdict still shows; explanation shows "AI explanation unavailable" and a template summary.
 - A source is down → banner "Traces unavailable for this window"; hypotheses that needed it end `inconclusive` (grey).
+- Nothing explains the alert (no suspect covers ≥ 50% of symptoms, anomalies weak) → status `no_root_cause`: "Nothing in
+  the graph explains this alert", with the list of what was checked and a "check the alert threshold" suggestion.
+  No cause is invented.
 
 ---
 
@@ -99,6 +105,7 @@ Arjun wants to restart Redis during business hours.
 | 2 | Sees 3 services / 9 operations affected, grouped by hops | Blast radius | — | — |
 | 3 | Sees owners for each affected service | Blast radius | — | `OWNED_BY` |
 | 4 | Clicks "past incidents involving redis" | Blast radius | `GET /incidents?cause=redis` | `ROOT_CAUSE → BLAMES → redis ops` |
+| 5 | Clicks "simulate a failure" to see *how likely* each breaks, not just *whether* it's reachable | → What-if (Flow 8) | — | — |
 
 ---
 
@@ -152,3 +159,33 @@ flowchart LR
 | RCAEval | any RE2 case | Same engine on a public benchmark, with an accuracy number |
 
 Details: [docs/EXAMPLE_RUNS.md](docs/EXAMPLE_RUNS.md).
+
+---
+
+## Flow 8: What-if before a change
+
+Arjun plans to restart Redis at 3 pm and wants to know what will actually break.
+
+```mermaid
+sequenceDiagram
+    actor A as Arjun
+    participant W as What-if page
+    participant API as API
+    participant G as FalkorDB
+    A->>W: pick service "redis", failure "down"
+    W->>API: POST /simulate {service:"redis", kind:"down", save:true}
+    API->>G: kb:propagation rules + Q6 for every redis operation
+    G-->>API: dependents with traffic, hops, call rps
+    API->>G: CREATE Simulation -[:PREDICTS]-> Operation
+    API-->>W: 9 operations in 3 services, with p, order, owners
+    W-->>A: graph with predicted impact, ranked by probability
+    Note over A,W: Later, if an incident hits redis, the incident page shows<br/>"predicted 9, observed 8" against this saved simulation
+```
+
+| # | User does | Screen | API | Graph work |
+|---|---|---|---|---|
+| 1 | Picks `redis` and failure kind `down` | What-if | `POST /simulate` | Q6 per redis operation + propagation rules |
+| 2 | Sees "cart/GetCart errors p 0.95 within 15 s; checkout/PlaceOrder errors p 0.61 within 45 s; …" | What-if | — | — |
+| 3 | Sees owners per affected service and pings them | What-if | — | `OWNED_BY` |
+| 4 | Saves the simulation and links it in the change ticket | What-if | `save: true` | `Simulation -[:PREDICTS]->` |
+| 5 | After the restart, opens the incident (if any): prediction vs. reality side by side | Incident | `GET /incidents/{id}` | compares footprint with the saved `Simulation` |

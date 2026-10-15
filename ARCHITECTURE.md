@@ -25,8 +25,9 @@ you can click, rerun and argue with.
 | [docs/API.md](docs/API.md) | REST + SSE reference |
 | [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md) | Every label, edge, property and index |
 | [docs/EXAMPLE_RUNS.md](docs/EXAMPLE_RUNS.md) | The three environments we demo on |
-| [docs/adr/](docs/adr/) | Decision records 0001–0010 |
+| [docs/adr/](docs/adr/) | Decision records 0001–0011 |
 | [docs/COMPETITORS.md](docs/COMPETITORS.md) | Competitor landscape, pricing, gaps, positioning |
+| [docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md) | How competitors find root causes, and why we added the Fault Simulator |
 | [docs/planning/](docs/planning/) | Earlier planning notes: [GRAPH_HACKS_PLAN](docs/planning/GRAPH_HACKS_PLAN.md), [FALKORDB_PLAN](docs/planning/FALKORDB_PLAN.md), [FALKORDB_BRAINSTORM](docs/planning/FALKORDB_BRAINSTORM.md). Where they differ from the docs above (e.g. ports), the docs above win |
 
 ---
@@ -47,6 +48,8 @@ you can click, rerun and argue with.
 | F8 | Answer "who should I page / who fixed this before?" with sources | 03 |
 | F9 | Natural-language questions answered with the graph path behind the answer | 01 |
 | F10 | Post the diagnosis to Slack / Linear | 01 |
+| **F11** | **Fault Simulator:** for every hypothesis, predict which operations should break (and in what order) and score how well that matches what broke; detect a second fault; answer "no root cause" when nothing explains the alert | 01 |
+| **F12** | **What-if:** "if X fails, what breaks, how likely, who owns it?", before a change, with no incident | 01 / 03 |
 
 ### 1.2 Non-functional
 
@@ -143,8 +146,8 @@ flowchart TB
 
 **How a diagnosis works, in five steps** (detail in [LLD.md §5–§7](LLD.md)):
 1. **Triage** opens an `Incident`, measures the blast radius, and runs **Q1** to turn every anomalous upstream operation into a `Hypothesis`.
-2. **Investigators** (one per hypothesis, in parallel) run **Q2** (did each hop go bad in time order?) and **Q3** (is it slow itself, did something change right before?) and write `Evidence` with `SUPPORTED_BY` / `REFUTED_BY` edges.
-3. The **scorer** adds PageRank over the anomalous part of the call graph, copied to a scratch graph (**Q4**) and computes a deterministic score; the **skeptic** tries to refute the winner.
+2. **Investigators** (one per hypothesis, in parallel) run **Q2** (did each hop go bad in time order?), **Q3** (is it slow itself, did something change right before?) and the **Fault Simulator** (**Q6**: if this were the cause, which operations should break, and did they?). They write `Evidence` with `SUPPORTED_BY` / `REFUTED_BY` edges.
+3. The **scorer** adds PageRank over the anomalous part of the call graph, copied to a scratch graph (**Q4**) and computes a deterministic score; the **skeptic** tries to refute the winner, starting from the symptoms it *doesn't* explain. Unexplained symptoms trigger one search for a second root cause; if nothing explains the alert, the incident ends as `no_root_cause` instead of a forced guess.
 4. The **historian** recalls similar past incidents (**Q5**); the **narrator** explains the winning path, citing evidence; **Jev** drops unsupported claims.
 5. The **responder** picks actions from the runbook (preferring fixes that worked before) and posts to Slack / Linear.
 
@@ -164,6 +167,23 @@ flowchart TB
 | [0008](docs/adr/0008-deterministic-incident-signature.md) | Incident memory uses a deterministic 64-dim signature vector |
 | [0009](docs/adr/0009-falkordb-via-docker.md) | FalkorDB via Docker, pinned tag, host port 6380 |
 | [0010](docs/adr/0010-example-environments.md) | Demo on OTel Demo (primary), flip-commerce (secondary), RCAEval (offline eval) |
+| [0011](docs/adr/0011-fault-simulator.md) | **Fault Simulator:** predict each hypothesis's symptom footprint from propagation rules in `kb:propagation` and match it against what was observed |
+
+### Key feature: the Fault Simulator
+
+Competitors check whether a suspect is upstream and went bad first. GraphRCA also asks **"if this were the cause, what
+would we expect to see?"** It propagates the fault through the call graph using a small rule set, then compares the
+prediction with what actually broke ("explains 6 of 7 symptoms"). One graph-native, deterministic mechanism gives four
+things ([ADR 0011](docs/adr/0011-fault-simulator.md), [LLD §7](LLD.md#7-fault-simulator)):
+
+| Payoff | Why it matters |
+|---|---|
+| Footprint score in the ranking | Stops anchoring on the loudest downstream symptom, the #1 failure in ORCA-Bench |
+| Second root cause | Symptoms the winner can't explain point to another, independent fault |
+| `no_root_cause` answer | Doesn't invent a cause; Causely saw false positives fall from 67% to 0% with this |
+| What-if before a change | Blast radius with probabilities, order and owners, not just reachability |
+
+Research behind it: [docs/TECH_RESEARCH.md](docs/TECH_RESEARCH.md).
 
 ---
 
@@ -171,8 +191,8 @@ flowchart TB
 
 | Attribute | Mechanism | Detail |
 |---|---|---|
-| Explainability | Hypotheses, evidence and refutations are nodes; every answer returns a path | [LLD §6](LLD.md) |
-| Determinism | Deterministic ingest + fixed weights + id tie-break; LLM output never feeds the score | [LLD §6.3](LLD.md) |
+| Explainability | Hypotheses, evidence and refutations are nodes; every answer returns a path; the Fault Simulator shows predicted vs. observed | [LLD §6–§7](LLD.md) |
+| Determinism | Deterministic ingest + fixed weights + versioned rules + id tie-break; LLM output never feeds the score | [LLD §6.3](LLD.md) |
 | Availability (demo) | LLM / Jev / OpenConnector failures degrade gracefully; FalkorDB is the only hard dependency | [HLD §7](HLD.md) |
 | Performance | Hop limit 6, operation-level aggregation, indexes on lookup keys, scratch graphs for algorithms | [HLD §8](HLD.md) |
 | Security | Password, parameterized Cypher, read-only MCP with API key, typed tools, no secrets in the graph | [HLD §9](HLD.md) |

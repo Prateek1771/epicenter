@@ -11,9 +11,11 @@ FalkorDB property graph. Queries that use it: [LLD §2](../LLD.md#2-graphpy). Wh
 |---|---|---|
 | `env:<name>` (e.g. `env:astronomy-shop`, `env:flip-commerce`, `env:rcaeval-tt`) | Topology, changes, owners, runbooks, incidents and their investigations | Permanent |
 | `scratch:<incident_id>` | Projection for PageRank (`Operation`, `BLAME`) | Deleted right after scoring |
+| `kb:propagation` | Fault Simulator rules (`Rule`), environment-agnostic, shared by every `env:*` graph ([ADR 0011](adr/0011-fault-simulator.md)) | Permanent, versioned |
 | `env:test` | Test fixture | Recreated per test run |
 
-Nothing queries across `env:*` graphs. That's the tenant boundary.
+Nothing queries across `env:*` graphs. That's the tenant boundary. `kb:propagation` holds no customer data, so every
+environment may read it.
 
 ---
 
@@ -46,7 +48,10 @@ flowchart LR
     S -->|OWNED_BY| T[Team]
     PE -->|MEMBER_OF| T
     PE -->|FIXED| I
+    SIM[Simulation] -->|PREDICTS| O
 ```
+
+In `kb:propagation` (separate graph): standalone `Rule` nodes, no edges.
 
 ---
 
@@ -106,7 +111,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 **`Incident`**: key `id`
 | Property | Type | Req | Notes |
 |---|---|---|---|
-| `status` | str | ✓ | `open` · `diagnosing` · `diagnosed` · `delivered` · `resolved` |
+| `status` | str | ✓ | `open` · `diagnosing` · `diagnosed` · `no_root_cause` · `delivered` · `resolved` |
 | `symptom` | str | ✓ | operation id |
 | `opened_at` | ts | ✓ | |
 | `signature` | vecf32[64] | after diagnosis | [ADR 0008](adr/0008-deterministic-incident-signature.md) (vector-indexed) |
@@ -126,14 +131,29 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 **`Evidence`**: key `id` (`E<n>`, unique per incident)
 | Property | Type | Req | Notes |
 |---|---|---|---|
-| `kind` | str | ✓ | `propagation` · `mechanism` · `change` · `victim` · `pagerank` · `log` · `history` |
+| `kind` | str | ✓ | `propagation` · `mechanism` · `change` · `victim` · `pagerank` · `footprint` · `log` · `history` |
 | `summary` | str | ✓ | one sentence, generated from a template (not LLM) |
 | `path` | list<str> | | node ids of the supporting path |
-| `value` | str (JSON) | | numbers behind it (onsets, ratios) |
+| `value` | str (JSON) | | numbers behind it (onsets, ratios; for `footprint`: coverage, precision, order, matched, missed, unexplained) |
 | `ref` | str | | source pointer |
 
 **`Explanation`**: `claims` str (JSON: `[{section, text, cites, support_p}]`) · `dropped` int · `verified` bool · `ai_calls` str (JSON: model, tokens, ms)
 **`Decision`**: `by` str · `text` str · `ts` ts. Human notes during an incident.
+**`Simulation`**: key `id` · `target` str (operation or service) · `kind` str · `ts` ts · `rules_version` str. A saved
+what-if run ([LLD §7.7](../LLD.md#77-what-if-mode-no-incident)).
+
+### Knowledge base (`kb:propagation` graph only)
+
+**`Rule`**: key `id`
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `cause_kinds` | list<str> | ✓ | anomaly kinds on the candidate, e.g. `["errors","down"]` |
+| `symptom_kind` | str | ✓ | kind predicted on the dependent (or on itself) |
+| `direction` | str | ✓ | `upstream` (callers) · `self` |
+| `p` | float | ✓ | per-hop probability before traffic share |
+| `delay_s_max` | int | ✓ | max delay per hop |
+| `service_kind` | str | | restricts the rule, e.g. `datastore` |
+| `version` | str | ✓ | rules version, recorded on every footprint |
 **`Action`**: key `id` · `name` str · `status` (`proposed` · `done`) · `delivery` str (JSON per target)
 
 ### People and knowledge
@@ -161,7 +181,8 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `BLAMES` | Hypothesis → Operation \| Change | | |
 | `SUPPORTED_BY` / `REFUTED_BY` | Hypothesis → Evidence | `by` (agent name) | |
 | `ABOUT` | Evidence → Anomaly \| Change | | |
-| `ROOT_CAUSE` | Incident → Hypothesis | | exactly one after diagnosis |
+| `ROOT_CAUSE` | Incident → Hypothesis | `rank` int | `rank: 1` after diagnosis; `rank: 2` if the Fault Simulator finds a second, independent fault; none when `no_root_cause` |
+| `PREDICTS` | Simulation → Operation | `p` float, `hops` int, `kind` str | what-if prediction |
 | `HAS_EXPLANATION` | Incident → Explanation | | |
 | `HAS_DECISION` | Incident → Decision | | |
 | `SIMILAR_TO` | Incident → Incident | `score` float | written by the historian |
@@ -185,6 +206,9 @@ CREATE INDEX FOR (c:Change) ON (c.ts)
 CREATE INDEX FOR (i:Incident) ON (i.id)
 CREATE INDEX FOR (h:Hypothesis) ON (h.id)
 CREATE INDEX FOR (p:Person) ON (p.handle)
+CREATE INDEX FOR (s:Simulation) ON (s.id)
+// on kb:propagation
+CREATE INDEX FOR (r:Rule) ON (r.id)
 CALL db.idx.fulltext.createNodeIndex('Signal', 'text')
 CREATE VECTOR INDEX FOR (i:Incident) ON (i.signature) OPTIONS {dimension: 64, similarityFunction: 'cosine'}
 ```
@@ -226,4 +250,6 @@ CALL db.idx.fulltext.queryNodes('Signal', 'ECONNREFUSED') YIELD node RETURN node
 | Topology | never deleted; `last_seen` shows staleness; UI hides operations unseen for 24 h |
 | Anomalies, signals, investigation nodes | kept with the incident (they are the memory) |
 | Scratch graphs | deleted after scoring (`finally` block) |
+| `Simulation` nodes | kept, so predictions can be compared with later incidents |
+| `kb:propagation` | replaced as a whole when the rules version changes (old version kept in git as YAML) |
 | Manual purge | `DELETE /incidents/{id}` is **not** exposed; use `GRAPH.DELETE env:<name>` to reset an environment |
