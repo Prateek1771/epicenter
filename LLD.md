@@ -89,7 +89,8 @@ SET c.rps = $rps, c.p95_ms = $p95_ms, c.err_rate = $err_rate, c.last_seen = $ts,
 -- U2 write_anomaly
 MATCH (o:Operation {id: $op})
 CREATE (a:Anomaly {id: $id, incident: $incident, kind: $kind, onset: $onset, score: $score,
-                   self_ratio: $self_ratio, child_ratio: $child_ratio, ref: $ref})-[:ON]->(o)
+                   self_ratio: $self_ratio, child_ratio: $child_ratio, ref: $ref,
+                   detector: $detector})-[:ON]->(o)
 
 -- U3 write_change
 MATCH (s:Service {name: $service})
@@ -222,6 +223,26 @@ class Adapter(Protocol):
   from an operation that had traffic in the baseline).
 
 All detectors sort inputs by key before processing so the output order is stable (N3).
+
+#### Slow-burn pass (problems that build over hours)
+
+The short baseline only looks back 10 minutes. A memory leak that started 3 hours ago already looks "normal" by then and
+would be missed. So for kinds in `SLOW_BURN_KINDS` (default `mem`, `saturation`, `cpu`; plus disk and queue-length
+metrics when present), a second pass runs:
+
+1. **Fetch:** the same series at a 1-minute step over `[t_alert − SLOW_BURN_LOOKBACK_S, t_alert]` (default 6 h) via
+   Prometheus `query_range`. This is read from the source, not stored.
+2. **Trend test:** Mann-Kendall for a monotonic increase (p < 0.01) plus the Theil-Sen slope.
+3. **Anomaly if** the trend is significant **and** either the value at `t_alert` is ≥ 1.5× the value at the start of
+   the lookback, or it crosses 80% of a known limit (e.g. `container_spec_memory_limit_bytes`).
+4. **Onset** = first change point from PELT on the 1-minute series, i.e. when the climb started, not the alert time.
+5. Written as `Anomaly {…, detector: 'slow_burn'}`; the existing pass writes `detector: 'short'`. If both fire on the
+   same operation and kind, keep one node with the earlier onset and the higher score.
+
+How it fits the rest:
+- **Q2 (onset order):** slow-burn onsets are earlier, so the true cause naturally sits at the start of the chain.
+- **Fault Simulator:** `mem` rules already predict self `latency`, then `down` (§7.1).
+- **Cost:** one extra `query_range` per (operation, slow-burn kind), about 360 points each, only when an incident opens.
 
 ---
 
@@ -538,6 +559,10 @@ sends `Last-Event-ID` and gets the replay from the graph.
 | `JAEGER_URL`, `PROMETHEUS_URL`, `OPENSEARCH_URL` | host.docker.internal ports | `ingest/otel.py` |
 | `FLIP_OTEL_FILE`, `FLIP_LOG_DIR`, `FLIP_NGINX_LOG` | — | flip-commerce adapter |
 | `RCAEVAL_DIR` | `./data/rcaeval` | `ingest/rcaeval.py` |
+| `BASELINE_S` | `480` (t − 10 min … t − 2 min) | `ingest/detect.py` short pass |
+| `WINDOW_AFTER_S` | `300` | incident window end (t + 5 min) |
+| `SLOW_BURN_LOOKBACK_S` | `21600` (6 h) | `ingest/detect.py` slow-burn pass |
+| `SLOW_BURN_KINDS` | `mem,saturation,cpu` | slow-burn pass |
 
 ---
 
@@ -547,6 +572,7 @@ sends `Last-Event-ID` and gets the replay from the graph.
 |---|---|
 | Query unit tests | `tests/fixtures/mini_graph.cypher` (8 ops, a known root cause) loaded into `env:test`; assert Q1–Q5 rows |
 | Rule tests | victim rule, onset-order rule, change lookback: table-driven with hand-made rows |
+| Slow burn | synthetic memory series climbing linearly for 3 h before the alert: short pass alone → **missed**; with the slow-burn pass → detected, onset within 5 min of the climb's start |
 | Fault Simulator | `mini_graph` with a known cause: the true cause's footprint has coverage ≥ 0.8 and beats the loudest victim; hand-computed `p` for a 2-hop path matches |
 | Multi-fault | fixture with two independent faults → second `ROOT_CAUSE {rank: 2}` |
 | Healthy baseline | fixture with weak, unrelated anomalies → status `no_root_cause`, no `ROOT_CAUSE` edge |

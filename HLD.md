@@ -147,6 +147,49 @@ flowchart LR
 Raw telemetry (spans, metric points, log lines) is **never** stored in FalkorDB ([ADR 0006](docs/adr/0006-operation-level-aggregation.md)).
 Evidence nodes keep a `ref` back to the source (trace id, PromQL, log file + line range).
 
+### 4.1 What's stored where
+
+The monitored system's own tools keep the raw data. FalkorDB keeps the **map**, the **changes** and the **findings**.
+
+| Data | Lives in | Stored in FalkorDB? | How it grows |
+|---|---|---|---|
+| Request traces (spans) | Jaeger / OTel Collector | No: aggregated into `CALLS` stats only | With traffic; expires by the source's retention |
+| Metrics (CPU, latency, errors …) | Prometheus | No: read only for an incident window | With time; Prometheus keeps 15 days by default |
+| Log lines | OpenSearch / log files | No: only templates of unusual logs, as `Signal` | With traffic; source retention |
+| Service / operation map (`Service`, `Operation`, `CALLS`) | **FalkorDB** | Yes, **updated in place** every 30 s | Fixed size: a few hundred nodes whether it's run 3 minutes or 3 months |
+| Changes (deploys, flags, config, `docker stop`) | **FalkorDB** | Yes, one small node each | Slowly, one per change |
+| Incident findings (`Anomaly`, `Hypothesis`, `Evidence`, …) | **FalkorDB** | Yes, kept as memory | ~100–300 nodes per incident |
+
+**Example: 3 healthy hours, then a break**
+
+```mermaid
+sequenceDiagram
+    participant SRC as Prometheus · Jaeger · logs
+    participant ING as GraphRCA ingest
+    participant G as FalkorDB
+
+    Note over SRC,G: 0:00 – 3:00, everything healthy
+    loop every 30 s
+        ING->>SRC: read last 30 s of traces
+        ING->>G: update CALLS stats in place (graph size unchanged)
+    end
+    ING->>G: Change node per deploy / flag flip (if any)
+    Note over SRC: raw spans, metrics and logs pile up here, not in the graph
+
+    Note over SRC,G: 3:01, alert fires
+    ING->>SRC: short window: 2:51 – 3:06 (baseline 2:51 – 2:59, incident 2:59 – 3:06)
+    ING->>SRC: slow-burn lookback: 6 h of mem / saturation / cpu at 1-min step
+    ING->>ING: compare in memory, find what changed
+    ING->>G: write only Anomaly findings, each with a ref to the raw data
+    Note over SRC,G: after the incident
+    Note over G: incident subgraph kept as memory
+    Note over SRC: raw data expires on the source's own schedule
+```
+
+Nothing is lost by not copying raw data: every `Evidence` / `Anomaly` keeps a `ref` (trace id, PromQL query, log file +
+lines), so the UI can open the original. The slow-burn lookback catches problems that built up over hours, such as a
+memory leak that started at hour 1 ([LLD §3.2](LLD.md#32-detectors-detectpy)).
+
 ---
 
 ## 5. Deployment

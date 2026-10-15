@@ -87,6 +87,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `onset` | ts | ✓ | first change point |
 | `score` | float | ✓ | normalized 0..1 |
 | `self_ratio`, `child_ratio` | float | | latency anomalies only |
+| `detector` | str | ✓ | `short` (10-min baseline) · `slow_burn` (6-h trend, [LLD §3.2](../LLD.md#32-detectors-detectpy)) |
 | `ref` | str | | source pointer (PromQL, trace id, log file:lines) |
 
 **`Signal`**: key `id`
