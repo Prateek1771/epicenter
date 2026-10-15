@@ -45,7 +45,7 @@ How others do it: [competitors](docs/COMPETITORS.md) · [technical research](doc
 
 ## Docs
 
-[ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
+[Implementation phases](docs/phases/) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
 [API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
 [ADRs 0001–0011](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
 [Planning notes](docs/planning/)
