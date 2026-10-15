@@ -26,6 +26,7 @@ you can click, rerun and argue with.
 | [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md) | Every label, edge, property and index |
 | [docs/EXAMPLE_RUNS.md](docs/EXAMPLE_RUNS.md) | The three environments we demo on |
 | [docs/adr/](docs/adr/) | Decision records 0001–0010 |
+| [docs/COMPETITORS.md](docs/COMPETITORS.md) | Competitor landscape, pricing, gaps, positioning |
 | [docs/planning/](docs/planning/) | Earlier planning notes: [GRAPH_HACKS_PLAN](docs/planning/GRAPH_HACKS_PLAN.md), [FALKORDB_PLAN](docs/planning/FALKORDB_PLAN.md), [FALKORDB_BRAINSTORM](docs/planning/FALKORDB_BRAINSTORM.md). Where they differ from the docs above (e.g. ports), the docs above win |
 
 ---
