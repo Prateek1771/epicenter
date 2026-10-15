@@ -1,0 +1,229 @@
+# GraphRCA Graph Schema
+
+FalkorDB property graph. Queries that use it: [LLD §2](../LLD.md#2-graphpy). Why it's shaped this way:
+[ADR 0001](adr/0001-falkordb-primary-store.md), [0006](adr/0006-operation-level-aggregation.md), [0007](adr/0007-graph-as-shared-agent-state.md).
+
+---
+
+## 1. Graphs
+
+| Graph key | Holds | Lifetime |
+|---|---|---|
+| `env:<name>` (e.g. `env:astronomy-shop`, `env:flip-commerce`, `env:rcaeval-tt`) | Topology, changes, owners, runbooks, incidents and their investigations | Permanent |
+| `scratch:<incident_id>` | Projection for PageRank (`Operation`, `BLAME`) | Deleted right after scoring |
+| `env:test` | Test fixture | Recreated per test run |
+
+Nothing queries across `env:*` graphs. That's the tenant boundary.
+
+---
+
+## 2. Overview
+
+```mermaid
+flowchart LR
+    S[Service] -->|HAS_OP| O[Operation]
+    O -->|CALLS| O
+    S -->|RUNS_ON| P[Pod] -->|ON_NODE| N[Node]
+    CH[Change] -->|CHANGED| S
+    PE[Person] -->|AUTHORED| CH
+    A[Anomaly] -->|ON| O
+    A -->|IN_SIGNAL| SG[Signal]
+    I[Incident] -->|TRIGGERED_BY| AL[Alert] -->|FIRED_ON| O
+    I -->|HAS_HYPOTHESIS| H[Hypothesis]
+    H -->|BLAMES| O
+    H -->|BLAMES| CH
+    H -->|SUPPORTED_BY| E[Evidence]
+    H -->|REFUTED_BY| E
+    E -->|ABOUT| A
+    E -->|ABOUT| CH
+    I -->|ROOT_CAUSE| H
+    I -->|HAS_EXPLANATION| X[Explanation]
+    I -->|HAS_DECISION| D[Decision]
+    I -->|SIMILAR_TO| I
+    I -->|RESOLVED_BY| AC[Action]
+    AC -->|FROM| RB[Runbook]
+    RB -->|FOR| S
+    S -->|OWNED_BY| T[Team]
+    PE -->|MEMBER_OF| T
+    PE -->|FIXED| I
+```
+
+---
+
+## 3. Node labels
+
+Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, `vecf32`. **Key** = the property used in `MERGE`.
+
+### Topology
+
+**`Service`**: key `name`
+| Property | Type | Req | Notes | Writer |
+|---|---|---|---|---|
+| `name` | str | ✓ | `payment`, `flip-node`, `mongodb` | ingest |
+| `kind` | str | ✓ | `app` · `datastore` · `proxy` · `external` | ingest |
+| `last_seen` | ts | ✓ | | ingest |
+
+**`Operation`**: key `id` = `<service>/<operation>`
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `id` | str | ✓ | `checkout/PlaceOrder`, `flip-node/GET /products`, `mongodb/find products` |
+| `name` | str | ✓ | operation part only |
+| `last_seen` | ts | ✓ | |
+
+**`Pod`** (key `id`), **`Node`** (key `name`): k8s placement when available (OTel Demo on k8s); omitted on Docker-only runs.
+
+### Signals
+
+**`Anomaly`**: key `id` (`an-<incident>-<n>`)
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `incident` | str | ✓ | incident id (indexed) |
+| `kind` | str | ✓ | `latency` · `errors` · `cpu` · `mem` · `saturation` · `log_burst` · `new_template` · `down` |
+| `onset` | ts | ✓ | first change point |
+| `score` | float | ✓ | normalized 0..1 |
+| `self_ratio`, `child_ratio` | float | | latency anomalies only |
+| `ref` | str | | source pointer (PromQL, trace id, log file:lines) |
+
+**`Signal`**: key `id`
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `type` | str | ✓ | `metric` · `log_template` |
+| `text` | str | ✓ | metric name or Drain3 template (full-text indexed) |
+
+### Changes
+
+**`Change`**: key `id`
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `type` | str | ✓ | `deploy` · `flag` · `config` · `infra` (e.g. `docker stop`, scale) · `manual` |
+| `ts` | ts | ✓ | when it happened (indexed) |
+| `summary` | str | ✓ | `flag paymentFailure → on`, `docker stop mongo1` |
+| `ref` | str | | flagd event id, commit sha, journal line |
+
+### Investigation
+
+**`Alert`**: key `id` (source alert id) · `starts_at` ts · `labels` str (JSON) · `count` int
+**`Incident`**: key `id`
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `status` | str | ✓ | `open` · `diagnosing` · `diagnosed` · `delivered` · `resolved` |
+| `symptom` | str | ✓ | operation id |
+| `opened_at` | ts | ✓ | |
+| `signature` | vecf32[64] | after diagnosis | [ADR 0008](adr/0008-deterministic-incident-signature.md) (vector-indexed) |
+| `confidence` | float | after diagnosis | |
+| `weights_version` | str | ✓ | from `weights.json` |
+| `gaps` | list<str> | | sources that were unavailable |
+
+**`Hypothesis`**: key `id`
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `status` | str | ✓ | `open` · `supported` · `refuted` · `inconclusive` · `confirmed` · `pruned` |
+| `hops` | int | ✓ | distance from the symptom (0 = symptom itself) |
+| `onset` | ts | | earliest anomaly onset on the target |
+| `score` | float | after scoring | |
+| `score_parts` | str (JSON) | after scoring | feature values, `pagerank_impl` |
+
+**`Evidence`**: key `id` (`E<n>`, unique per incident)
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `kind` | str | ✓ | `propagation` · `mechanism` · `change` · `victim` · `pagerank` · `log` · `history` |
+| `summary` | str | ✓ | one sentence, generated from a template (not LLM) |
+| `path` | list<str> | | node ids of the supporting path |
+| `value` | str (JSON) | | numbers behind it (onsets, ratios) |
+| `ref` | str | | source pointer |
+
+**`Explanation`**: `claims` str (JSON: `[{section, text, cites, support_p}]`) · `dropped` int · `verified` bool · `ai_calls` str (JSON: model, tokens, ms)
+**`Decision`**: `by` str · `text` str · `ts` ts. Human notes during an incident.
+**`Action`**: key `id` · `name` str · `status` (`proposed` · `done`) · `delivery` str (JSON per target)
+
+### People and knowledge
+
+**`Team`** (key `name`), **`Person`** (key `handle`, `name`): from `seed/owners.yaml` and git authors.
+**`Runbook`**: key `id` · `kind` (anomaly kind it applies to) · `steps` list<str> · `success` str (JSON: step → count)
+
+---
+
+## 4. Relationships
+
+| Type | From → To | Properties | Notes |
+|---|---|---|---|
+| `HAS_OP` | Service → Operation | | |
+| `CALLS` | Operation → Operation | `rps` float, `p95_ms` float, `err_rate` float, `last_seen` ts | rolling 30 s aggregate ([ADR 0006](adr/0006-operation-level-aggregation.md)) |
+| `RUNS_ON` | Service → Pod | | |
+| `ON_NODE` | Pod → Node | | |
+| `CHANGED` | Change → Service | `ts` | |
+| `AUTHORED` | Person → Change | | |
+| `ON` | Anomaly → Operation | | |
+| `IN_SIGNAL` | Anomaly → Signal | | |
+| `TRIGGERED_BY` | Incident → Alert | | |
+| `FIRED_ON` | Alert → Operation | | |
+| `HAS_HYPOTHESIS` | Incident → Hypothesis | | |
+| `BLAMES` | Hypothesis → Operation \| Change | | |
+| `SUPPORTED_BY` / `REFUTED_BY` | Hypothesis → Evidence | `by` (agent name) | |
+| `ABOUT` | Evidence → Anomaly \| Change | | |
+| `ROOT_CAUSE` | Incident → Hypothesis | | exactly one after diagnosis |
+| `HAS_EXPLANATION` | Incident → Explanation | | |
+| `HAS_DECISION` | Incident → Decision | | |
+| `SIMILAR_TO` | Incident → Incident | `score` float | written by the historian |
+| `RESOLVED_BY` | Incident → Action | | |
+| `FROM` | Action → Runbook | `step` int | |
+| `FOR` | Runbook → Service | | |
+| `OWNED_BY` | Service → Team | | |
+| `MEMBER_OF` | Person → Team | | |
+| `FIXED` | Person → Incident | | |
+| `BLAME` | Operation → Operation | `w` float | **only in `scratch:*`** |
+
+---
+
+## 5. Indexes
+
+```cypher
+CREATE INDEX FOR (s:Service) ON (s.name)
+CREATE INDEX FOR (o:Operation) ON (o.id)
+CREATE INDEX FOR (a:Anomaly) ON (a.incident)
+CREATE INDEX FOR (c:Change) ON (c.ts)
+CREATE INDEX FOR (i:Incident) ON (i.id)
+CREATE INDEX FOR (h:Hypothesis) ON (h.id)
+CREATE INDEX FOR (p:Person) ON (p.handle)
+CALL db.idx.fulltext.createNodeIndex('Signal', 'text')
+CREATE VECTOR INDEX FOR (i:Incident) ON (i.signature) OPTIONS {dimension: 64, similarityFunction: 'cosine'}
+```
+
+Seeded on API startup; "index already exists" errors are ignored. Check the exact syntax on the pinned FalkorDB version
+with the smoke test ([README §5](../README.md#5-smoke-test)).
+
+---
+
+## 6. Example queries
+
+```cypher
+// Everything that calls into payment, within 3 hops, with owners
+MATCH (:Service {name:'payment'})-[:HAS_OP]->(o)
+MATCH p = (c:Operation)-[:CALLS*1..3]->(o)
+MATCH (cs:Service)-[:HAS_OP]->(c)
+OPTIONAL MATCH (cs)-[:OWNED_BY]->(t:Team)
+RETURN DISTINCT cs.name, t.name, min(length(p)) AS hops ORDER BY hops
+
+// The investigation of one incident, as the canvas draws it
+MATCH (i:Incident {id:$inc})-[:HAS_HYPOTHESIS]->(h)-[r:SUPPORTED_BY|REFUTED_BY]->(e)
+OPTIONAL MATCH (h)-[:BLAMES]->(t)
+RETURN h.id, h.status, t, type(r), e.kind, e.summary
+
+// Who fixed incidents on this service before
+MATCH (p:Person)-[:FIXED]->(i:Incident)-[:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(o:Operation)<-[:HAS_OP]-(:Service {name:$svc})
+RETURN p.name, count(i) AS fixes ORDER BY fixes DESC
+
+// Log templates mentioning a word (full-text)
+CALL db.idx.fulltext.queryNodes('Signal', 'ECONNREFUSED') YIELD node RETURN node.text
+```
+
+---
+
+## 7. Retention
+
+| Data | Rule |
+|---|---|
+| Topology | never deleted; `last_seen` shows staleness; UI hides operations unseen for 24 h |
+| Anomalies, signals, investigation nodes | kept with the incident (they are the memory) |
+| Scratch graphs | deleted after scoring (`finally` block) |
+| Manual purge | `DELETE /incidents/{id}` is **not** exposed; use `GRAPH.DELETE env:<name>` to reset an environment |
