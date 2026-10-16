@@ -7,9 +7,10 @@ from api.search import causal
 
 def triage(state: dict, r: causal.Run) -> dict:
     hyps = causal.triage(r)
-    publish(r.incident, "incident.status", {"status": "diagnosing", "run": r.run})
+    publish(r.env.key, r.incident, "incident.status", {"status": "diagnosing", "run": r.run})
     for h in hyps:
         publish(
+            r.env.key,
             r.incident,
             "hypothesis.created",
             {"id": local_id(h["id"]), "target": h["op"], "hops": h["hops"], "onset": h["onset"], "round": 1},

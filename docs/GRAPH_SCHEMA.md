@@ -122,6 +122,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `weights_version` | str | ✓ | from `weights.json` |
 | `gaps` | list<str> | | sources that were unavailable |
 | `summary` | str | | set for `no_root_cause`: what was checked and why nothing explains the alert |
+| `resolved_at` | ts | when resolved | `POST /resolve` |
 
 **`Hypothesis`**: key `id` (`<incident>:r<run>:h-<n>`, e.g. `inc-1:r2:h-3`; the API shows `h-3`)
 | Property | Type | Req | Notes |
@@ -150,7 +151,8 @@ the API shows `E3.1`; the skeptic's is `E<n>.s`). Incidents share the env graph,
 | `ref` | str | | source pointer |
 
 **`Explanation`**: `claims` str (JSON: `[{section, text, cites, support_p}]`) · `dropped` int · `verified` bool · `ai_calls` str (JSON: model, tokens, ms)
-**`Decision`**: `by` str · `text` str · `ts` ts. Human notes during an incident.
+**`Decision`**: key `id` (`<incident>:d-<n>`; the API shows `d-<n>`) · `by` str · `text` str · `ts` ts. Human notes
+during an incident (`POST /notes`); a note's optional change is a `Change {id: 'chg-manual-<incident>-<n>'}`.
 **`Simulation`**: key `id` · `target` str (operation or service) · `kind` str · `ts` ts · `rules_version` str. A saved
 what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)).
 
@@ -224,6 +226,8 @@ CREATE INDEX FOR (c:Change) ON (c.ts)
 CREATE INDEX FOR (c:Change) ON (c.id)
 CREATE INDEX FOR (e:Evidence) ON (e.id)
 CREATE INDEX FOR (i:Incident) ON (i.id)
+CREATE INDEX FOR (i:Incident) ON (i.symptom)   // alert join window
+CREATE INDEX FOR (a:Alert) ON (a.id)
 CREATE INDEX FOR (h:Hypothesis) ON (h.id)
 CREATE INDEX FOR (p:Person) ON (p.handle)
 CREATE INDEX FOR (s:Simulation) ON (s.id)

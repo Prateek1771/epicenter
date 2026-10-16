@@ -14,6 +14,7 @@ def investigate(r: causal.Run, hypothesis_id: str) -> dict:
     hid = local_id(hypothesis_id)
     for e in out["evidence"]:
         publish(
+            r.env.key,
             r.incident,
             "evidence.added",
             {
@@ -27,10 +28,11 @@ def investigate(r: causal.Run, hypothesis_id: str) -> dict:
     if out["footprint"] is not None:
         fp = out["footprint"]
         publish(
+            r.env.key,
             r.incident,
             "footprint",
             {"hypothesis_id": hid}
             | {k: fp[k] for k in ("coverage", "precision", "order", "matched", "missed", "unexplained")},
         )
-    publish(r.incident, "hypothesis.status", {"id": hid, "status": out["status"]})
+    publish(r.env.key, r.incident, "hypothesis.status", {"id": hid, "status": out["status"]})
     return {}

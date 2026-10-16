@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     env_name: str = "astronomy-shop"
     web_origin: str = "http://localhost:3001"
+    api_key: str | None = None  # deployed mode: X-API-Key required on /api/v1 (API.md)
 
     jaeger_url: str = "http://host.docker.internal:16686"
     prometheus_url: str = "http://host.docker.internal:9090"

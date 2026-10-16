@@ -261,7 +261,11 @@ def footprint_evidence(h: dict, sim: Simulator, observed: dict[str, dict], cfg: 
         "summary": f"{m['explains']} (precision {m['precision']:.2f}, order {m['order']:.2f})",
         "path": [h["op"]],
         "value": json.dumps(
-            m | {"rules_version": sim.rules_version, "predictions": [[p.op, p.kind, p.p, p.hops] for p in preds]},
+            m
+            | {
+                "rules_version": sim.rules_version,
+                "predictions": [[p.op, p.kind, p.p, p.hops, list(p.onset_window)] for p in preds],
+            },
             sort_keys=True,
         ),
         "anomalies": sorted(a for op in m["matched"] for a in observed[op]["anomalies"]),

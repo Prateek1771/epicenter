@@ -15,7 +15,8 @@ graph-hacks/
     config.py             # Settings (pydantic-settings) from env
     graph.py              # FalkorDB client wrapper + query catalogue (Q1–Q5, upserts)
     models.py             # Pydantic models shared by REST, tools and agents
-    events.py             # in-process event bus for SSE
+    events.py             # incident event bus for SSE (Redis Streams in FalkorDB's Redis, §9)
+    routes/               # REST endpoints by resource: alerts, incidents (+ SSE), graph_views, health; deps
     ingest/
       base.py             # Adapter protocol
       otel.py             # Jaeger / OTLP spans → operations + CALLS
@@ -356,7 +357,7 @@ flowchart TD
 ```
 
 LangGraph `Send` handles the fan-out; a checkpointer (SQLite, `./data/checkpoints.db`, thread id
-`<incident>:r<run>`) lets `POST /incidents/{id}/diagnose` resume after a crash: finished steps are not redone, and a
+`<env>:<incident>:r<run>`) lets `POST /incidents/{id}/diagnose` resume after a crash: finished steps are not redone, and a
 step that was cut off re-runs and `MERGE`s onto what it already wrote (hypothesis, evidence, `ABOUT` and
 `ROOT_CAUSE` writes all merge on ids).
 
@@ -373,7 +374,7 @@ does not explain it, the skeptic writes `REFUTED_BY {kind:'footprint', by:'skept
 most 2 challenges). The LLM that picks *which* alternative / tool to test arrives with the OpenRouter client in
 phase 7; everything it can pick is deterministic, so the verdict is identical with or without a model (N7).
 
-**Events:** nodes publish the §9 events through `api/events.py` (`EventBus` interface, in-process implementation with
+**Events:** nodes publish the §9 events through `api/events.py` (`EventBus` interface; phase 5 had an in-process implementation with
 a per-incident `seq` and a bounded history for replay).
 
 ### 5.3 Agent contracts
@@ -626,8 +627,19 @@ hypothesis is refuted there is no `ROOT_CAUSE` and the incident stays `diagnosin
 | `action` | `{id, name, delivery}` |
 | `error` | `{code, message}` |
 
-The bus is an `asyncio.Queue` per subscriber; events carry a monotonically increasing `seq` so a reconnecting client
-sends `Last-Event-ID` and gets the replay from the graph.
+**Storage (phase 6):** each incident's events go to a Redis Stream in FalkorDB's own Redis,
+`events:env:<name>:<incident>` (streams are per environment, like the graphs). One Lua script does `INCR
+seq:env:<name>:<incident>` and `XADD … MAXLEN ~ 10000 0-<seq>`, so `seq` is gap-free, monotonic across API restarts, and
+is both the stream entry id and the SSE `id`. `GET /stream` replays `XRANGE (0-<Last-Event-ID> +` and then tails with
+`XREAD BLOCK 2000` (a `: keepalive` comment when nothing arrives). Any API replica can serve any subscriber.
+Only `api/graph.py` touches Redis (`Graph.publish_event` / `Graph.read_events`).
+
+Why not replay from the incident subgraph: rebuilding events from hypotheses and evidence can't reproduce the exact
+seq of live events (statuses are overwritten, rounds interleave), and a stream is one write per event with no Cypher.
+The graph stays the source of truth for the incident itself (`GET /incidents/{id}`); the stream is its change log.
+
+ponytail: the SSE tail is one blocking read per subscriber in the threadpool; move to `redis.asyncio` if subscriber
+count grows past the pool.
 
 ---
 
@@ -648,7 +660,9 @@ sends `Last-Event-ID` and gets the replay from the graph.
 | Env var | Default | Used by |
 |---|---|---|
 | `FALKORDB_URL` | `redis://:pw@falkordb:6379` | `graph.py` |
-| `FALKORDB_MCP_URL`, `MCP_API_KEY` | — | ask agent |
+| `FALKORDB_MCP_URL`, `MCP_API_KEY` | — | ask agent, `/health` |
+| `API_KEY` | unset | deployed mode: `X-API-Key` required on `/api/v1` (not `/health`) |
+| `WEB_ORIGIN` | `http://localhost:3001` | CORS |
 | `OPENROUTER_API_KEY`, `LLM_MODEL`, `JEV_MODEL` | pinned ids | `ai/` |
 | `OPENCONNECTOR_URL`, `OPENCONNECTOR_API_KEY` | — | `deliver/` |
 | `ENV_NAME` | `astronomy-shop` | ingest |

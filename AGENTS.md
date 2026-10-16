@@ -82,9 +82,9 @@ Breaking one of these breaks the product's core promise. Each has an ADR.
 Build for the laptop demo, but don't paint the code into a corner. Prefer seams that already exist in the design over
 new infrastructure. When you take a shortcut with a known ceiling, say so in a comment with the upgrade path.
 
-- **Keep the API stateless.** Shared state belongs in FalkorDB. The two allowed in-process pieces are the SSE event
-  bus and the LangGraph SQLite checkpointer; both sit behind an interface so they can move to Redis Streams / a
-  server-backed checkpointer when there is more than one API replica.
+- **Keep the API stateless.** Shared state belongs in FalkorDB (the SSE event log is a Redis Stream there). The allowed
+  in-process pieces are the LangGraph SQLite checkpointer and the "diagnosis already running" set; each sits behind an
+  interface so it can move to a server-backed checkpointer / a Redis lock when there is more than one API replica.
 - **Extend through the existing seams:** a new telemetry source is a new `Adapter`; a new failure mode is a new rule in
   `seed/propagation_rules.yaml` + version bump; a new agent capability is a new typed tool; a new query is a new
   `QUERIES` entry with an index for its lookup key.

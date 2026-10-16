@@ -28,6 +28,8 @@ ENV_INDEXES = [
     "idx_signal",
     "idx_signal_text",
     "idx_incident_signature",
+    "idx_alert",
+    "idx_incident_symptom",
 ]
 
 

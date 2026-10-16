@@ -17,6 +17,7 @@ def challenge(r: causal.Run, winner_id: str) -> bool:
     refuted = causal.skeptic(r, winner)
     if refuted:
         publish(
+            r.env.key,
             r.incident,
             "evidence.added",
             {
@@ -27,5 +28,5 @@ def challenge(r: causal.Run, winner_id: str) -> bool:
                 "path": [h["op"], r.symptom],
             },
         )
-        publish(r.incident, "hypothesis.status", {"id": local_id(winner_id), "status": "refuted"})
+        publish(r.env.key, r.incident, "hypothesis.status", {"id": local_id(winner_id), "status": "refuted"})
     return refuted

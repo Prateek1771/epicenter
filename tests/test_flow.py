@@ -108,10 +108,10 @@ def test_resume_after_a_crash_finishes_without_duplicates(graph, env, monkeypatc
 
 def test_events_are_ordered_and_cover_the_run(graph, env):
     env("mini_graph.cypher")
-    before = bus.history("inc-1")
+    before = bus.history("env:test-flow", "inc-1")
     last = before[-1]["seq"] if before else 0
     flow.run("inc-1", "test-flow", db_path=env.db)
-    ev = bus.history("inc-1", after_seq=last)
+    ev = bus.history("env:test-flow", "inc-1", after_seq=last)
     seqs = [e["seq"] for e in ev]
     assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
     kinds = [e["event"] for e in ev]

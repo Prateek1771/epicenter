@@ -32,7 +32,7 @@ flowchart LR
         SRCH["search<br/>Q1–Q5 · scorer"]
         TOOLS["tools<br/>typed, also MCP at /mcp"]
         ING["ingest<br/>adapters + detectors"]
-        BUS["in-process event bus"]
+        BUS["event bus<br/>(Redis Streams in FalkorDB)"]
         REST --> AGT --> TOOLS & SRCH
         AGT --> BUS --> REST
     end
@@ -52,7 +52,7 @@ flowchart LR
 |---|---|---|---|
 | `falkordb` | `falkordb/falkordb:<pinned>` | Graph storage and queries; browser UI | **All persistent state** (named volume) |
 | `falkordb-mcp` | `falkordb/mcpserver:<pinned>` | Read-only Cypher + schema tools for the ask box | none |
-| `api` | built from `./api` | Ingest, causal search, agents, typed tools (REST + MCP), SSE | none (in-memory event bus only) |
+| `api` | built from `./api` | Ingest, causal search, agents, typed tools (REST + MCP), SSE | none (events live in FalkorDB's Redis Streams; LangGraph checkpoints in `./data`) |
 | `web` | built from `./web` | UI | none |
 | `open-connector` | OpenConnector self-host image | Slack / Linear delivery with OAuth | its own config |
 

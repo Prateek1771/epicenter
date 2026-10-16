@@ -8,12 +8,15 @@ import json
 import logging
 import time
 from collections import defaultdict, deque
+from functools import lru_cache
 from pathlib import Path
 
 from falkordb import FalkorDB
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+
+from api.config import get_settings
 
 log = logging.getLogger("epicenter.graph")
 
@@ -39,7 +42,8 @@ QUERIES: dict[str, str] = {
     "U3": """
         MATCH (s:Service {name: $service})
         MERGE (c:Change {id: $id}) ON CREATE SET c.type = $type, c.ts = $ts, c.summary = $summary, c.ref = $ref
-        MERGE (c)-[:CHANGED {ts: $ts}]->(s)""",
+        MERGE (c)-[:CHANGED {ts: $ts}]->(s)
+        RETURN c.id AS id""",
     # Batched forms for ingest (one round trip per tick; rows sorted by the caller)
     "U1_batch": """
         UNWIND $rows AS r
@@ -173,7 +177,7 @@ QUERIES: dict[str, str] = {
         MATCH (h:Hypothesis {id: $id})-[:BLAMES]->(o:Operation)
         RETURN h.id AS id, o.id AS op, h.run AS run, h.round AS round, h.hops AS hops, h.onset AS onset,
                h.kinds AS kinds, h.strength AS strength, h.seed AS seed, h.scope AS scope, h.status AS status,
-               h.facts AS facts""",
+               h.facts AS facts, h.score AS score, h.score_parts AS score_parts""",
     "round_hypotheses": """
         MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
         WHERE h.run = $run AND h.round = $round
@@ -310,8 +314,10 @@ QUERIES: dict[str, str] = {
     "incident_signature": "MATCH (i:Incident {id: $inc}) RETURN i.signature AS signature",
     "incident": """
         MATCH (i:Incident {id: $inc})
+        OPTIONAL MATCH (i)-[:TRIGGERED_BY]->(al:Alert)
         RETURN i.status AS status, i.summary AS summary, i.run AS run, i.ingest AS ingest,
-               i.confidence AS confidence, i.symptom AS symptom, i.opened_at AS opened_at""",
+               i.confidence AS confidence, i.symptom AS symptom, i.opened_at AS opened_at, i.gaps AS gaps,
+               i.weights_version AS weights_version, coalesce(sum(al.count), 0) AS alert_count""",
     "root_causes": """
         MATCH (i:Incident {id: $inc})-[r:ROOT_CAUSE]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
         WHERE r.run = i.run
@@ -364,6 +370,111 @@ QUERIES: dict[str, str] = {
         UNWIND members + fixers + authors AS p
         RETURN p.handle AS handle, p.name AS name, count(*) AS score
         ORDER BY score DESC, handle""",
+    # --- REST API (phase 6, API.md) ---
+    # An alert re-sent with the same id lands on the incident it already opened
+    "alert_incident": """
+        MATCH (i:Incident)-[:TRIGGERED_BY]->(:Alert {id: $id})
+        RETURN i.id AS id, i.status AS status""",
+    # Join window: an unresolved incident on the same symptom opened within ±$window_s of the alert
+    "alert_find_open": """
+        MATCH (i:Incident {symptom: $symptom})
+        WHERE i.status <> 'resolved' AND i.opened_at >= $ts - $window_s AND i.opened_at <= $ts + $window_s
+        RETURN i.id AS id, i.status AS status
+        ORDER BY i.opened_at DESC, id
+        LIMIT 1""",
+    "alert_open_incident": """
+        MERGE (i:Incident {id: $id})
+        ON CREATE SET i.status = 'open', i.symptom = $symptom, i.opened_at = $opened_at, i.gaps = [],
+                      i.weights_version = $weights_version
+        RETURN i.status AS status""",
+    "alert_upsert": """
+        MATCH (i:Incident {id: $inc})
+        MERGE (a:Alert {id: $id})
+        ON CREATE SET a.starts_at = $starts_at, a.labels = $labels, a.count = 0
+        SET a.count = a.count + 1
+        MERGE (i)-[:TRIGGERED_BY]->(a)
+        WITH i, a
+        OPTIONAL MATCH (o:Operation {id: $symptom})
+        FOREACH (_ IN CASE WHEN o IS NULL THEN [] ELSE [1] END | MERGE (a)-[:FIRED_ON]->(o))
+        WITH DISTINCT i
+        MATCH (i)-[:TRIGGERED_BY]->(x:Alert)
+        RETURN sum(x.count) AS alert_count""",
+    # Cursor = (opened_at, id) of the last row, newest first; $limit is page size + 1 to know if there is a next page
+    "incidents_page": """
+        MATCH (i:Incident)
+        WITH i, coalesce(i.opened_at, 0) AS opened_at
+        WHERE ($status IS NULL OR i.status = $status)
+          AND ($c_ts IS NULL OR opened_at < $c_ts OR (opened_at = $c_ts AND i.id < $c_id))
+        OPTIONAL MATCH (i)-[rc:ROOT_CAUSE {rank: 1}]->(:Hypothesis)-[:BLAMES]->(o:Operation)<-[:HAS_OP]-(s:Service)
+        WHERE rc.run = i.run
+        WITH i, opened_at, rc, o, s
+        WHERE $cause IS NULL OR s.name = $cause
+        RETURN i.id AS id, i.status AS status, i.symptom AS symptom, o.id AS root_cause, rc.confidence AS confidence,
+               opened_at
+        ORDER BY opened_at DESC, id DESC
+        LIMIT $limit""",
+    "hypothesis_evidence": """
+        MATCH (h:Hypothesis {id: $id})-[r:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+        OPTIONAL MATCH (e)-[:ABOUT]->(a:Anomaly)
+        WITH r, e, collect(a.ref) AS refs
+        RETURN e.id AS id, e.kind AS kind, type(r) AS rel, e.summary AS summary, e.path AS path, e.value AS value,
+               head(refs) AS ref
+        ORDER BY id""",
+    # Numbered in the same write as the count, and FalkorDB serializes writes per graph: no duplicate ids
+    "decision_add": """
+        MATCH (i:Incident {id: $inc})
+        OPTIONAL MATCH (i)-[:HAS_DECISION]->(d:Decision)
+        WITH i, count(d) + 1 AS n
+        CREATE (i)-[:HAS_DECISION]->(x:Decision {id: $inc + ':d-' + toString(n), by: $by, text: $text, ts: $ts})
+        RETURN x.id AS id, n""",
+    "incident_resolve": """
+        MATCH (i:Incident {id: $inc})
+        SET i.status = 'resolved', i.resolved_at = $ts
+        MERGE (p:Person {handle: $by})
+        MERGE (p)-[:FIXED]->(i)""",
+    # Action ids are incident-scoped (`<incident>:a-<n>`), so the id alone finds the incident's action
+    "action": """
+        MATCH (a:Action {id: $id})
+        OPTIONAL MATCH (a)-[f:FROM]->(rb:Runbook)
+        RETURN a.id AS id, f.step AS step, rb.id AS runbook, rb.success AS success""",
+    "action_resolve": """
+        MATCH (i:Incident {id: $inc}), (a:Action {id: $id})
+        SET a.status = 'done'
+        MERGE (i)-[:RESOLVED_BY]->(a)""",
+    "runbook_success": "MATCH (r:Runbook {id: $id}) SET r.success = $success",
+    "service_exists": "MATCH (s:Service {name: $svc}) RETURN s.name AS name",
+    # Undirected CALLS neighbourhood of the start operations, bounded at 3 hops, with the calls among the result
+    "subgraph": """
+        UNWIND $starts AS sid
+        MATCH (s:Operation {id: sid})
+        MATCH p = (s)-[:CALLS*0..3]-(n:Operation)
+        WHERE length(p) <= $hops
+        WITH collect(DISTINCT n) AS ns
+        UNWIND ns AS x
+        MATCH (sv:Service)-[:HAS_OP]->(x)
+        OPTIONAL MATCH (x)-[c:CALLS]->(y:Operation)
+        WHERE y IN ns
+        WITH x, sv, c, y ORDER BY y.id
+        RETURN x.id AS id, sv.name AS service, sv.kind AS service_kind,
+               [z IN collect(CASE WHEN y IS NULL THEN NULL
+                                  ELSE {to: y.id, rps: c.rps, p95_ms: c.p95_ms, err_rate: c.err_rate} END)
+                WHERE z IS NOT NULL] AS calls
+        ORDER BY id""",
+    "subgraph_anomalies": """
+        UNWIND $ops AS x
+        MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation {id: x})
+        RETURN a.id AS id, o.id AS op, a.kind AS kind, a.onset AS onset, a.score AS score
+        ORDER BY id""",
+    "subgraph_hypotheses": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE h.run = i.run AND o.id IN $ops
+        RETURN h.id AS id, o.id AS op, h.status AS status, h.score AS score
+        ORDER BY id""",
+    "service_past_incidents": """
+        MATCH (i:Incident)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(:Operation)<-[:HAS_OP]-(:Service {name: $svc})
+        WHERE rc.run = i.run
+        RETURN DISTINCT i.id AS id
+        ORDER BY id""",
     # --- Seed (GRAPH_SCHEMA §5, LLD §7.1) ---
     "idx_service": "CREATE INDEX FOR (s:Service) ON (s.name)",
     "idx_operation": "CREATE INDEX FOR (o:Operation) ON (o.id)",
@@ -380,6 +491,8 @@ QUERIES: dict[str, str] = {
     "idx_incident_signature": "CREATE VECTOR INDEX FOR (i:Incident) ON (i.signature) "
     "OPTIONS {dimension: 64, similarityFunction: 'cosine'}",
     "idx_rule": "CREATE INDEX FOR (r:Rule) ON (r.id)",
+    "idx_alert": "CREATE INDEX FOR (a:Alert) ON (a.id)",
+    "idx_incident_symptom": "CREATE INDEX FOR (i:Incident) ON (i.symptom)",
     "rules_version": "MATCH (r:Rule) RETURN DISTINCT r.version AS version",
     "seed_rule": """
         MERGE (r:Rule {id: $id})
@@ -404,6 +517,19 @@ QUERIES: dict[str, str] = {
     "count_nodes": "MATCH (n) RETURN count(n) AS n",
     "list_indexes": "CALL db.indexes() YIELD label, properties RETURN label, properties ORDER BY label",
 }
+
+
+# Incident event streams (LLD §9): one Redis Stream per `<graph key>:<incident>` in FalkorDB's own Redis. INCR and XADD
+# run in one script, so `seq` is gap-free, monotonic across API restarts, and doubles as the stream id `0-<seq>`.
+_PUBLISH_EVENT = """
+local seq = redis.call('INCR', KEYS[1])
+redis.call('XADD', KEYS[2], 'MAXLEN', '~', ARGV[3], '0-' .. seq, 'event', ARGV[1], 'data', ARGV[2])
+return seq"""
+EVENTS_KEEP = 10000  # per incident; older events are trimmed (a full run is ~600)
+
+
+def _s(x) -> str:
+    return x.decode() if isinstance(x, bytes) else x
 
 
 class GraphUnavailable(Exception):
@@ -512,8 +638,44 @@ class Graph:
         except (RedisConnectionError, RedisTimeoutError) as e:
             raise GraphUnavailable(str(e)) from e
 
+    def _redis(self, fn):
+        try:
+            return fn(self._db.connection)
+        except (RedisConnectionError, RedisTimeoutError) as e:
+            raise GraphUnavailable(str(e)) from e
+
+    def publish_event(self, key: str, event: str, data: str) -> int:
+        """Append one event to the stream of `key` (`env:<name>:<incident>`); returns its seq."""
+        return int(
+            self._redis(lambda c: c.eval(_PUBLISH_EVENT, 2, f"seq:{key}", f"events:{key}", event, data, EVENTS_KEEP))
+        )
+
+    def read_events(self, key: str, after_seq: int = 0, block_ms: int = 0) -> list[dict]:
+        """Events of `key` after `after_seq`, oldest first. With `block_ms`, waits up to that long for new ones
+        (keep it under the socket timeout, query_timeout_s)."""
+        stream = f"events:{key}"
+
+        def read(c):
+            if block_ms:
+                res = c.xread({stream: f"0-{after_seq}"}, block=block_ms)
+                return res[0][1] if res else []
+            return c.xrange(stream, min=f"(0-{after_seq}")
+
+        out = []
+        for i, f in self._redis(read):
+            f = {_s(k): _s(v) for k, v in f.items()}
+            out.append({"seq": int(_s(i).split("-")[1]), "event": f["event"], "data": json.loads(f["data"])})
+        return out
+
     def ping(self) -> bool:
         try:
             return bool(self._db.connection.ping())
         except Exception:
             return False
+
+
+@lru_cache
+def get_graph() -> Graph:
+    """The process-wide client (agents, tools, events)."""
+    s = get_settings()
+    return Graph(s.falkordb_url, s.query_timeout_s)

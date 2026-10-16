@@ -96,7 +96,12 @@ def n_scorer(state: dict) -> dict:
     r = _run(state)
     ordered = causal.score_round(r, 1)
     for h in ordered:
-        publish(r.incident, "hypothesis.status", {"id": local_id(h["id"]), "status": h["status"], "score": h["score"]})
+        publish(
+            r.env.key,
+            r.incident,
+            "hypothesis.status",
+            {"id": local_id(h["id"]), "status": h["status"], "score": h["score"]},
+        )
     top = causal.pick(ordered)
     return {"verdict_id": top["id"] if top else None}
 
@@ -125,6 +130,7 @@ def n_decide(state: dict) -> dict:
         round2 = causal.triage(r, 2, d["second_seed"], d["second_scope"], exclude=winner_op)
         for h in round2:
             publish(
+                r.env.key,
                 r.incident,
                 "hypothesis.created",
                 {"id": local_id(h["id"]), "target": h["op"], "hops": h["hops"], "onset": h["onset"], "round": 2},
@@ -143,15 +149,17 @@ def n_scorer2(state: dict) -> dict:
 def n_finalize(state: dict) -> dict:
     r = _run(state)
     for hid in causal.finalize(r):
-        publish(r.incident, "hypothesis.status", {"id": local_id(hid), "status": "pruned"})
+        publish(r.env.key, r.incident, "hypothesis.status", {"id": local_id(hid), "status": "pruned"})
     v = causal.read_verdict(r)
     if v["status"] == "no_root_cause":
         checked = [h["id"] for h in v["ranking"]]
         best = max((h["coverage"] for h in v["ranking"]), default=0.0)
-        publish(r.incident, "no_root_cause", {"summary": v["summary"], "checked": checked, "max_coverage": best})
+        publish(
+            r.env.key, r.incident, "no_root_cause", {"summary": v["summary"], "checked": checked, "max_coverage": best}
+        )
     else:
-        publish(r.incident, "verdict", v)
-    publish(r.incident, "incident.status", {"status": v["status"], "run": r.run})
+        publish(r.env.key, r.incident, "verdict", v)
+    publish(r.env.key, r.incident, "incident.status", {"status": v["status"], "run": r.run})
     return {}
 
 
@@ -190,8 +198,9 @@ def _checkpointer(db_path: str | None) -> SqliteSaver:
     return SqliteSaver(sqlite3.connect(str(path), check_same_thread=False))
 
 
-def _thread(incident_id: str, run: int) -> dict:
-    return {"configurable": {"thread_id": f"{incident_id}:r{run}"}}
+def _thread(env: str, incident_id: str, run: int) -> dict:
+    # env in the id: environments share one checkpoint DB, and incident ids are only unique within an env
+    return {"configurable": {"thread_id": f"{env}:{incident_id}:r{run}"}}
 
 
 def run(incident_id: str, env: str | None = None, weights_path: str | None = None, db_path: str | None = None) -> dict:
@@ -208,7 +217,7 @@ def run(incident_id: str, env: str | None = None, weights_path: str | None = Non
         "errors": [],
         "action_ids": [],
     }
-    build(_checkpointer(db_path)).invoke(state, _thread(incident_id, r.run))
+    build(_checkpointer(db_path)).invoke(state, _thread(env, incident_id, r.run))
     return causal.read_verdict(causal.open_run(get_graph(), env, incident_id, weights_path))
 
 
@@ -220,7 +229,7 @@ def resume(
     env = env or get_settings().env_name
     r = causal.open_run(get_graph(), env, incident_id, weights_path)
     app = build(_checkpointer(db_path))
-    cfg = _thread(incident_id, r.run)
+    cfg = _thread(env, incident_id, r.run)
     if app.get_state(cfg).next:
         app.invoke(None, cfg)
     return causal.read_verdict(causal.open_run(get_graph(), env, incident_id, weights_path))

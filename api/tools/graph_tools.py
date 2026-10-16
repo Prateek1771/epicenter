@@ -5,22 +5,15 @@ catalogue id in graph.py. `mcp_server.py` exposes exactly this `TOOLS` list.
 
 import json
 import time
-from functools import lru_cache
 from typing import Literal
 
 from pydantic import BaseModel
 
 from api.config import get_settings
-from api.graph import EnvGraph, Graph
+from api.graph import EnvGraph, get_graph
 from api.models import local_id
 from api.search import score as sc
 from api.search import simulate as simulator
-
-
-@lru_cache
-def get_graph() -> Graph:
-    s = get_settings()
-    return Graph(s.falkordb_url, s.query_timeout_s)
 
 
 def _env(env: str | None) -> EnvGraph:

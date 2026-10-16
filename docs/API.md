@@ -21,12 +21,13 @@ Every error uses one shape:
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Bad body or query parameter |
 | 401 | `UNAUTHORIZED` | Missing / wrong API key (deployed mode only) |
-| 404 | `INCIDENT_NOT_FOUND`, `SERVICE_NOT_FOUND`, `ENV_NOT_FOUND` | Unknown id |
+| 404 | `INCIDENT_NOT_FOUND`, `SERVICE_NOT_FOUND`, `ENV_NOT_FOUND`, `HYPOTHESIS_NOT_FOUND`, `ACTION_NOT_FOUND` | Unknown id |
 | 409 | `INCIDENT_STATE` | Action not allowed in the current state (e.g. resolve an `open` incident) |
 | 502 | `UPSTREAM_ERROR` | OpenConnector or a telemetry source returned an error |
 | 503 | `GRAPH_UNAVAILABLE` | FalkorDB unreachable |
 
 Pagination (list endpoints): `?limit=20&cursor=<opaque>` → response has `next_cursor` (null at the end).
+Every response carries an `X-Request-ID` header; errors repeat it as `request_id`.
 
 All endpoints take an optional `?env=<name>`; default is `ENV_NAME`.
 
@@ -43,8 +44,12 @@ Alertmanager-style webhook. Opens an incident or joins an open one (same symptom
 ```
 `202 Accepted`
 ```json
-{ "incident_id": "inc-42", "status": "diagnosing", "joined_existing": false, "stream": "/api/v1/incidents/inc-42/stream" }
+{ "incident_id": "inc-42", "status": "diagnosing", "joined_existing": false, "stream": "/api/v1/incidents/inc-42/stream?env=astronomy-shop" }
 ```
+A new incident's id is `inc-<alert_id>`. The same `alert_id` sent again lands on its incident (the alert's `count` +1);
+otherwise an unresolved incident on the same `symptom` opened within ±10 min is joined. `auto_diagnose` starts a
+diagnosis only for an incident that is still `open`; a joined one keeps its status. The env comes from the body, then
+`?env`, then `ENV_NAME`.
 
 ### `GET /incidents`
 Query: `status`, `cause` (service name), `limit`, `cursor`.
@@ -94,7 +99,9 @@ Runs the agent flow, or resumes it after a crash. `202` → `{ "incident_id": "i
 `409 INCIDENT_STATE` if it's already `diagnosed` (send `?force=true` to rerun: a new run; earlier runs and their hypotheses stay in the graph as history, LLD §8).
 
 ### `GET /incidents/{id}/stream`
-Server-Sent Events. Supports `Last-Event-ID` for replay. Event types are listed in [LLD §9](LLD.md#9-events-sse).
+Server-Sent Events. Supports `Last-Event-ID` for replay (or `?after=<seq>` for clients that can't set headers);
+`?follow=false` replays and closes. `seq` is per incident and survives API restarts (Redis Streams, [LLD §9](LLD.md#9-events-sse)).
+A `: keepalive` comment is sent every ~2 s without events. Event types are listed in [LLD §9](LLD.md#9-events-sse).
 ```
 id: 12
 event: evidence.added
@@ -128,7 +135,8 @@ Human input during an incident ([USER_FLOW Flow 6](USER_FLOW.md#flow-6-human-tak
 ```json
 { "by": "priya", "text": "currency deployed at 14:02", "change": { "service": "currency", "type": "deploy", "ts": "2026-10-16T14:02:00Z" } }
 ```
-`201` → `{ "decision_id": "d-4", "change_id": "chg-manual-4" }` (`change` is optional).
+`201` → `{ "decision_id": "d-4", "change_id": "chg-manual-inc-42-4" }` (`change` is optional; its service must exist,
+else `404 SERVICE_NOT_FOUND`). The change is a normal `Change` node, so the next diagnosis run's change lookup sees it.
 
 ### `POST /incidents/{id}/deliver`
 ```json
@@ -220,3 +228,6 @@ incident can be compared with this prediction.
 { "status": "ok", "falkordb": "ok", "falkordb_mcp": "ok", "openrouter": "ok", "openconnector": "degraded",
   "query_ms": { "Q1": { "p50": 9, "p95": 31 }, "Q2": { "p50": 14, "p95": 48 } } }
 ```
+`status` follows FalkorDB only (the verdict needs nothing else). `falkordb_mcp` / `openconnector`: `ok` · `down` ·
+`not_configured`; `openrouter`: `configured` · `not_configured` (no paid call per health check; checked live from
+phase 7). Not behind `X-API-Key`.

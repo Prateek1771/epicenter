@@ -1,15 +1,15 @@
-"""Incident event bus (LLD §9). Agents publish one event per graph write; phase 6 streams them over SSE.
+"""Incident event bus (LLD §9). Agents publish one event per graph write; `GET /incidents/{id}/stream` serves them.
 
-`EventBus` is the interface; `InProcessBus` is the one implementation.
-ponytail: in-process, so it holds for one API process. With more replicas, put Redis Streams (FalkorDB already runs
-Redis) behind the same interface; `seq` stays the per-incident ordering key a reconnecting client resumes from.
+`EventBus` is the interface; `RedisStreamBus` keeps each incident's events in a Redis Stream in FalkorDB's own Redis
+(`events:env:<name>:<incident>`), with a per-incident `seq` from `INCR`. The seq is the SSE `id`: it survives API
+restarts, and any replica can replay from it, so a reconnecting client sends `Last-Event-ID` and misses nothing.
 """
 
 import json
 import logging
-import threading
-from collections import defaultdict, deque
 from typing import Protocol
+
+from api.graph import get_graph
 
 log = logging.getLogger("epicenter.events")
 
@@ -29,36 +29,28 @@ EVENTS = {
 
 
 class EventBus(Protocol):
-    def publish(self, incident_id: str, event: str, data: dict) -> int: ...
+    def publish(self, env_key: str, incident_id: str, event: str, data: dict) -> int: ...
 
-    def history(self, incident_id: str, after_seq: int = 0) -> list[dict]: ...
+    def history(self, env_key: str, incident_id: str, after_seq: int = 0, block_ms: int = 0) -> list[dict]: ...
 
 
-class InProcessBus:
-    """Per-incident monotonically increasing `seq` and a bounded history for replay after a reconnect."""
+class RedisStreamBus:
+    """`env_key` is the env graph key (`env:<name>`), so streams stay per environment like the graphs."""
 
-    def __init__(self, keep: int = 5000):
-        self._lock = threading.Lock()  # investigators publish from worker threads
-        self._seq: dict[str, int] = defaultdict(int)
-        self._history: dict[str, deque] = defaultdict(lambda: deque(maxlen=keep))
-
-    def publish(self, incident_id: str, event: str, data: dict) -> int:
+    def publish(self, env_key: str, incident_id: str, event: str, data: dict) -> int:
         if event not in EVENTS:
             raise ValueError(f"unknown event {event!r}")
-        with self._lock:
-            self._seq[incident_id] += 1
-            seq = self._seq[incident_id]
-            self._history[incident_id].append({"seq": seq, "event": event, "data": data})
+        seq = get_graph().publish_event(f"{env_key}:{incident_id}", event, json.dumps(data, default=str))
         log.info(json.dumps({"incident_id": incident_id, "event": event, "seq": seq}))
         return seq
 
-    def history(self, incident_id: str, after_seq: int = 0) -> list[dict]:
-        with self._lock:
-            return [e for e in self._history[incident_id] if e["seq"] > after_seq]
+    def history(self, env_key: str, incident_id: str, after_seq: int = 0, block_ms: int = 0) -> list[dict]:
+        """Events after `after_seq`, oldest first; with `block_ms`, waits that long for the next ones (live tail)."""
+        return get_graph().read_events(f"{env_key}:{incident_id}", after_seq, block_ms)
 
 
-bus: EventBus = InProcessBus()
+bus: EventBus = RedisStreamBus()
 
 
-def publish(incident_id: str, event: str, data: dict) -> int:
-    return bus.publish(incident_id, event, data)
+def publish(env_key: str, incident_id: str, event: str, data: dict) -> int:
+    return bus.publish(env_key, incident_id, event, data)
