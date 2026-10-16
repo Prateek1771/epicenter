@@ -1,0 +1,22 @@
+# OTLP in, one JSON export per line out (Epicenter's otel adapter, flip mode, reads /out/spans.jsonl).
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+
+processors:
+  batch: { timeout: 1s }
+
+exporters:
+  file:
+    path: /out/spans.jsonl
+    flush_interval: 1s
+    rotation: { max_megabytes: 200, max_backups: 2 }
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file]

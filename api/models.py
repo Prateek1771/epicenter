@@ -395,3 +395,54 @@ class Health(BaseModel):
     jev: str
     openconnector: str
     query_ms: dict[str, dict[str, float]]
+
+
+# --- example runs (phase 9) ---
+
+
+class ScenarioOut(BaseModel):
+    env: str
+    id: str
+    title: str
+    expected: str
+    kind: Literal["fault", "load", "baseline", "replay"]
+    ready: bool  # live: its example environment is up (fault runner health); replay: the case is on disk
+
+
+class Scenarios(BaseModel):
+    items: list[ScenarioOut]
+    runner: bool  # the host fault runner answered
+
+
+class RunIn(BaseModel):
+    env: str
+    scenario: str
+
+
+class RunAccepted(BaseModel):
+    run_id: str
+    incident_id: str
+    alert_at: datetime  # when the alert fires (fault + settle time); the diagnosis starts then
+    change_id: str | None = None
+
+
+class RunUndone(BaseModel):
+    run_id: str
+    status: str
+
+
+class RunOut(BaseModel):
+    run_id: str
+    env: str
+    scenario: str
+    title: str
+    kind: Literal["fault", "load", "baseline", "replay"]
+    status: str  # started · fault_failed · undone
+    incident_id: str
+    started_at: datetime
+    alert_at: datetime
+    detail: str | None = None
+
+
+class Runs(BaseModel):
+    items: list[RunOut]

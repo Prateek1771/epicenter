@@ -1,0 +1,9 @@
+{
+  "name": "epicenter-flip-otel",
+  "private": true,
+  "description": "OpenTelemetry auto-instrumentation for flip-commerce's 01-node, loaded with --import (the repo stays untouched)",
+  "dependencies": {
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "0.80.0"
+  }
+}

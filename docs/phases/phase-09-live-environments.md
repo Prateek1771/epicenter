@@ -27,15 +27,15 @@ examples/flip-commerce/      collector.yaml, run scripts (auto-instrumented star
 
 ## Tasks
 
-- [ ] `otel` adapter, OTel Demo mode: Jaeger → `CallAgg` per 30 s tick, Prometheus `query_range` → `Series`, OpenSearch → `LogLine`, flagd flag changes → `ChangeEvent`. All reads 5 s timeout, 2 retries; failures go to `Incident.gaps`.
-- [ ] Check the flagd flag names in the demo's current config before wiring scenarios (`paymentFailure`, `adHighCpu`, `emailMemoryLeak`).
-- [ ] `otel` adapter, flip-commerce mode: tail the collector's JSON-lines file, winston JSON logs (`NODE_ENV=production`), nginx access log with upstream timings.
-- [ ] `examples/flip-commerce/`: collector config; start scripts that run `01-node` with `--require @opentelemetry/auto-instrumentations-node/register` and `06-fastapi` with `opentelemetry-instrument`; **never modify the source repo**. Go server skipped.
-- [ ] `faults.py`: writes the `Change` node **before** acting; scenarios `mongo-primary-down`, `mongo-majority-lost`, `redis-down`, `cpu-saturation`, `circuit-misconfig`; each one reversible (`--undo`).
-- [ ] Scenario registry: id, env, title, how to trigger, how to undo, expected verdict (from EXAMPLE_RUNS tables). `POST /runs` writes the `Change`, triggers the fault, fires the alert, returns `incident_id`.
-- [ ] RCAEval scenarios listed from `RCAEVAL_DIR`.
-- [ ] Healthy-baseline run: k6 normal load, hand-fired alert, expect `no_root_cause`.
-- [ ] Fault Simulator demo moment: alert fired on `frontend` for `paymentFailure`, so the victim's small footprint is visible next to `payment/Charge`'s full one.
+- [x] `otel` adapter, OTel Demo mode: Jaeger → `CallAgg` per 30 s tick, Prometheus `query_range` → `Series`, OpenSearch → `LogLine`, flagd flag changes → `ChangeEvent`. All reads 5 s timeout, 2 retries; failures go to `Incident.gaps`.
+- [x] Check the flagd flag names in the demo's current config before wiring scenarios (`paymentFailure`, `adHighCpu`, `emailMemoryLeak`).
+- [x] `otel` adapter, flip-commerce mode: tail the collector's JSON-lines file, winston JSON logs (`NODE_ENV=production`), nginx access log with upstream timings.
+- [x] `examples/flip-commerce/`: collector config; start scripts that run `01-node` with `--import @opentelemetry/auto-instrumentations-node/register`; **never modify the source repo**. Go server skipped. `06-fastapi` skipped too: one app keeps the laptop free for faults, and nginx's `/fastapi/` route is wired for when it's needed.
+- [x] `faults.py`: writes the `Change` node **before** acting; scenarios `mongo-primary-down`, `mongo-majority-lost`, `redis-down`, `cpu-saturation`, `circuit-misconfig`; each one reversible (`--undo`).
+- [x] Scenario registry: id, env, title, how to trigger, how to undo, expected verdict (from EXAMPLE_RUNS tables). `POST /runs` writes the `Change`, triggers the fault, fires the alert, returns `incident_id`.
+- [x] RCAEval scenarios listed from `RCAEVAL_DIR`.
+- [x] Healthy-baseline run: k6 normal load, hand-fired alert, expect `no_root_cause`.
+- [x] Fault Simulator demo moment: alert fired on `frontend` for `paymentFailure`, so the victim's small footprint is visible next to `payment/Charge`'s full one.
 
 ## Acceptance
 
@@ -44,6 +44,33 @@ examples/flip-commerce/      collector.yaml, run scripts (auto-instrumented star
 - OTel `paymentFailure` → `payment/Charge`, change = flag on; footprint "explains N of M".
 - Healthy baseline → `no_root_cause`.
 - Each scenario's `--undo` returns the env to healthy.
+
+## Results (2026-10-16)
+
+Every scenario was started from `/runs` in Chrome and undone afterwards. The verdicts are re-diagnosed against the final
+code; reruns are kept as numbered runs.
+
+| Env | Scenario | Expected | Verdict |
+|---|---|---|---|
+| flip-commerce | `mongo-primary-down` | `no_root_cause` (failover < 1 s, reads stay up) | `no_root_cause` |
+| flip-commerce | `mongo-majority-lost` | `mongodb`, kind `down` | `mongodb/findAndModify $cmd`, 0.80 |
+| flip-commerce | `redis-down` | `redis`, kind `down` | `redis/GET`, 1.00 |
+| flip-commerce | `circuit-misconfig` | `flip-node/*`, change config | `flip-node/GET /products`, 0.62 (Mongo runner-up) |
+| flip-commerce | `cpu-saturation` | `flip-node/*`, saturation | `flip-node/GET /products`, 0.60 |
+| flip-commerce | `healthy-baseline` | `no_root_cause` | `no_root_cause` |
+| astronomy-shop | `paymentFailure` | `payment/Charge`, change = flag | `payment/oteldemo.PaymentService/Charge`, 0.83 |
+| astronomy-shop | `adHighCpu` | `ad/*`, cpu | `ad/oteldemo.AdService/GetAds`, 1.00 |
+| astronomy-shop | `emailMemoryLeak` | `no_root_cause` at demo traffic | `no_root_cause` |
+| rcaeval-tt | cpu_1 / cpu_2 / delay_1 | unchanged | 0.60 / 0.58 / 0.53, same targets as phase 8 |
+
+Acceptance notes:
+- The LLD §12 "Mongo primary down → `mongodb`" check doesn't hold on this system, and that is the correct answer: the
+  replica set fails over in under a second and reads stay up (`primaryPreferred`). Losing the majority is the outage
+  that names `mongodb`. EXAMPLE_RUNS §2 has the details.
+- `emailMemoryLeak` changed from "`email/*`, kind `mem`" to `no_root_cause`. At demo traffic the leak adds ~10% memory in
+  the window and then plateaus.
+- Bugs that only live data showed are listed in EXAMPLE_RUNS §1 and §2: end-time buckets, the cpu counter, weak
+  self-blame, ingest-once by counter, a cp1252 crash in the fault runner, and the Jaeger base path.
 
 ## Scalability
 
@@ -59,7 +86,7 @@ examples/flip-commerce/      collector.yaml, run scripts (auto-instrumented star
 - OTel Demo needs ~6 GB RAM; record a backup video ([ARCHITECTURE §7](../ARCHITECTURE.md#7-risks-and-open-questions)).
 - Port 8080 is shared by both environments: one at a time.
 - flip-commerce is shallow (~2 hops); use it for the "real failure" story, not multi-hop.
-- **Q-d:** add `api/runs.py` (and the 30 s roll-up loop over `write.write_topology`) to [LLD §1](../LLD.md#1-package-layout).
+- ~~**Q-d:** add `api/runs.py` (and the 30 s roll-up loop over `write.write_topology`) to [LLD §1](../LLD.md#1-package-layout).~~ Done.
 
 ## Done when
 

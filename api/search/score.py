@@ -58,7 +58,8 @@ def mechanism_fit(kinds: list[str], victim: bool, self_caused: bool | None) -> f
 def features(hyps: list[dict]) -> list[dict]:
     """hyps: dicts with onset, strength, kinds, victim, self_caused, change, pagerank, footprint, refuted."""
     earliness = rank_normalize([-h["onset"] if h["onset"] is not None else None for h in hyps])
-    strength = rank_normalize([h["strength"] for h in hyps])
+    # 2 decimals: anomaly scores carry no meaning past that, and ranking would turn 0.9999 vs 1.0 into 0.5 vs 1.0
+    strength = rank_normalize([None if h["strength"] is None else round(h["strength"], 2) for h in hyps])
     pagerank = rank_normalize([h["pagerank"] for h in hyps])
     out = []
     for i, h in enumerate(hyps):

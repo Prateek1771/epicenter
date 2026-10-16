@@ -54,6 +54,7 @@ class ChangeEvent:
     ts: int
     summary: str
     ref: str | None = None
+    service_kind: str = "app"  # only used if the change creates the Service (U3)
 
 
 @dataclass

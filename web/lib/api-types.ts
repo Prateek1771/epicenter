@@ -320,6 +320,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scenarios */
+        get: operations["list_scenarios_api_v1_runs_scenarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Runs
+         * @description The env's latest runs, newest first: the shared record (Run nodes), so every viewer sees the same history.
+         */
+        get: operations["recent_runs_api_v1_runs_get"];
+        put?: never;
+        /** Start Run */
+        post: operations["start_run_api_v1_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Undo Run */
+        delete: operations["undo_run_api_v1_runs__run_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -907,6 +962,96 @@ export interface components {
              * @constant
              */
             status: "resolved";
+        };
+        /** RunAccepted */
+        RunAccepted: {
+            /** Run Id */
+            run_id: string;
+            /** Incident Id */
+            incident_id: string;
+            /**
+             * Alert At
+             * Format: date-time
+             */
+            alert_at: string;
+            /** Change Id */
+            change_id?: string | null;
+        };
+        /** RunIn */
+        RunIn: {
+            /** Env */
+            env: string;
+            /** Scenario */
+            scenario: string;
+        };
+        /** RunOut */
+        RunOut: {
+            /** Run Id */
+            run_id: string;
+            /** Env */
+            env: string;
+            /** Scenario */
+            scenario: string;
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "fault" | "load" | "baseline" | "replay";
+            /** Status */
+            status: string;
+            /** Incident Id */
+            incident_id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Alert At
+             * Format: date-time
+             */
+            alert_at: string;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** RunUndone */
+        RunUndone: {
+            /** Run Id */
+            run_id: string;
+            /** Status */
+            status: string;
+        };
+        /** Runs */
+        Runs: {
+            /** Items */
+            items: components["schemas"]["RunOut"][];
+        };
+        /** ScenarioOut */
+        ScenarioOut: {
+            /** Env */
+            env: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Expected */
+            expected: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "fault" | "load" | "baseline" | "replay";
+            /** Ready */
+            ready: boolean;
+        };
+        /** Scenarios */
+        Scenarios: {
+            /** Items */
+            items: components["schemas"]["ScenarioOut"][];
+            /** Runner */
+            runner: boolean;
         };
         /** ServiceItem */
         ServiceItem: {
@@ -1634,6 +1779,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Services"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_scenarios_api_v1_runs_scenarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scenarios"];
+                };
+            };
+        };
+    };
+    recent_runs_api_v1_runs_get: {
+        parameters: {
+            query: {
+                env: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Runs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run_api_v1_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_run_api_v1_runs__run_id__delete: {
+        parameters: {
+            query: {
+                env: string;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunUndone"];
                 };
             };
             /** @description Validation Error */

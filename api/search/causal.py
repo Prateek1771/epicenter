@@ -54,6 +54,14 @@ def is_victim(self_ratio: float | None, child_ratio: float | None) -> bool:
     return child_ratio >= 2 * self_ratio and child_ratio > 1.5
 
 
+def is_saturated(self_ratio: float | None, child_ratio: float | None) -> bool:
+    """The mirror rule: the caller's own time grew far more than the time it waited on its calls. Its client spans
+    (how a datastore's latency is measured) then carry its own scheduling lag, e.g. an overloaded event loop."""
+    if self_ratio is None or child_ratio is None:
+        return False
+    return self_ratio >= 2 * child_ratio and self_ratio > 1.5
+
+
 # --- Graph steps ---
 
 
@@ -211,6 +219,29 @@ def check(env: EnvGraph, incident: str, symptom: str, h: dict, w: dict) -> list[
             )
         elif row["self_ratio"] is not None and row["child_ratio"] is not None:
             h["self_caused"] = h["self_caused"] or row["self_ratio"] >= row["child_ratio"]
+    if set(h["kinds"]) <= {"latency"} and not h["victim"]:
+        # a datastore only "slow" as measured inside callers that are themselves saturated: the lag is theirs
+        lag = env.ro("Q3b", cand=h["op"], inc=incident)
+        if lag and all(is_saturated(r["self_ratio"], r["child_ratio"]) for r in lag):
+            h["victim"] = True
+            worst = max(lag, key=lambda r: (r["self_ratio"], r["caller"]))
+            ev.append(
+                {
+                    "rel": "refute",
+                    "kind": "victim",
+                    "summary": f"{h['op']} is only slow as measured inside {worst['caller']}, which is saturated: its"
+                    f" own time grew ×{worst['self_ratio']}, the time it waited on calls ×{worst['child_ratio']}",
+                    "path": [worst["caller"], h["op"]],
+                    "value": json.dumps(
+                        {
+                            "caller": worst["caller"],
+                            "self_ratio": worst["self_ratio"],
+                            "child_ratio": worst["child_ratio"],
+                        }
+                    ),  # fmt: skip
+                    "anomalies": sorted({r["anomaly"] for r in lag}),
+                }
+            )
     changes = sorted({c["id"]: c for row in mech for c in row["changes"]}.values(), key=lambda c: (c["ts"], c["id"]))
     if changes:
         h["change"] = True
@@ -389,7 +420,14 @@ def decide(r: Run, ordered: list[dict]) -> dict:
     best_cov = max((h["coverage"] for h in ordered), default=0.0)
     strongest = max((o["score"] for o in r.observed.values()), default=0.0)
     nrc = sim_cfg["no_root_cause"]
-    if top is None or (r.use_sim and best_cov < nrc["max_coverage"] and strongest < nrc["max_anomaly"]):
+    # Weak anomalies only, and either nothing covers the symptoms or the alerting operation itself is fine (then a
+    # lone weak anomaly "covers" itself 100% while explaining nothing the alert saw: a hand-fired or absorbed alert).
+    # Or the best answer is the alerting operation itself on a weak anomaly of its own: that wobble says nothing the
+    # alert didn't, whatever its callers show (they sit downstream of it)
+    weak = strongest < nrc["max_anomaly"]
+    quiet_symptom = r.symptom not in r.observed
+    self_blame = top is not None and top["op"] == r.symptom and r.observed[r.symptom]["score"] < nrc["max_anomaly"]
+    if top is None or (r.use_sim and ((weak and (best_cov < nrc["max_coverage"] or quiet_symptom)) or self_blame)):
         summary = (
             f"Nothing in the graph explains this alert: checked {len(ordered)} hypotheses upstream of {r.symptom}; "
             f"the best explains {best_cov:.0%} of the symptoms and the strongest anomaly scores {strongest:.2f}"

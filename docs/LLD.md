@@ -16,13 +16,17 @@ graph-hacks/
     graph.py              # FalkorDB client wrapper + query catalogue (Q1–Q5, upserts)
     models.py             # Pydantic models shared by REST, tools and agents
     events.py             # incident event bus for SSE (Redis Streams in FalkorDB's Redis, §9)
-    routes/               # REST endpoints by resource: alerts, incidents (+ SSE), graph_views, health; deps
+    routes/               # REST endpoints by resource: alerts, incidents (+ SSE), graph_views, health, runs; deps
+    runs.py               # example-run scenario registry + host fault runner client (phase 9, ADR 0012)
     ingest/
       base.py             # Adapter protocol
-      otel.py             # Jaeger / OTLP spans → operations + CALLS
-      prometheus.py       # metrics → series
+      window.py           # one ingest window for any adapter: baseline + window → detectors → graph (§3.1)
+      spans.py            # OTLP / Jaeger spans → operation-level CALLS + series (pure)
+      otel.py             # `otel` adapter: flip mode (collector file, winston, nginx) and demo mode (Jaeger,
+                          # Prometheus, OpenSearch)
+      live.py             # live envs: adapter per env (LIVE_ENVS), alert-time ingest, topology tick
       logs.py             # Drain3 over log lines (OpenSearch, winston JSON, nginx access)
-      changes.py          # flagd events, git log, docker events, manual changes
+      changes.py          # the fault journal (examples/*/faults.py) → ChangeEvent
       rcaeval.py          # RCAEval file adapter
       detect.py           # robust z, PELT onset, self/child time, slow burn → AnomalyRow (pure)
       write.py            # the only ingest → graph writer (U1–U5, batched)
@@ -48,6 +52,7 @@ graph-hacks/
       openconnector.py    # POST /v1/actions/{id} with an Idempotency-Key
     eval.py               # RCAEval replay + metrics
     smoke_falkordb.py     # FalkorDB feature check on the pinned tag (README §5)
+    selftest.py           # phase 11: fixtures → scratch graphs → diagnose → verdict table (§13)
   web/                    # Next.js 15 app (React 19, Tailwind 4, shadcn, React Flow 12)
     app/                  # / incidents · incident/[id] canvas · blast-radius · simulate · ask · runs · eval
     components/           # graph/incident-canvas.tsx · incident/{verdict,act,side}.tsx · shell/top-bar.tsx · ui/
@@ -62,6 +67,11 @@ graph-hacks/
   examples/
     flip-commerce/        # collector config + run scripts for the user's system-design-journey
     otel-demo/            # notes + fault script
+    fault_runner.py       # host-side, token-gated: the API's only path to an environment (ADR 0012)
+    synthetic/gen.py      # phase 11: self-made samples in the RCAEval layout (EXAMPLE_RUNS §4)
+    hotrod/  train-ticket/  # phase 11: small and huge live samples (EXAMPLE_RUNS §5, §6)
+  deploy/                 # phase 11: compose.prod.yaml, Caddyfile, cloud-init.sh, aws.sh, demo.sh (ADR 0013)
+  syscheck.py             # phase 11: host system evaluator, stdlib only (§13)
   tests/
 ```
 
@@ -174,6 +184,19 @@ RETURN a.id AS anomaly, a.kind AS kind, a.self_ratio AS self_ratio, a.child_rati
 Rules: `child_ratio >= 2 * self_ratio` and `child_ratio > 1.5` → **victim** (refuted: its callee explains it).
 Any change in the lookback (default 600 s) → `Evidence {kind:'change'}` `SUPPORTED_BY`.
 
+**Q3b `saturated caller`** (phase 9): a datastore's latency is measured by its callers' client spans, so it carries their
+scheduling lag.
+```cypher
+MATCH (:Service {kind: 'datastore'})-[:HAS_OP]->(cand:Operation {id: $cand})<-[:CALLS]-(caller:Operation)
+MATCH (a:Anomaly {incident: $inc, kind: 'latency'})-[:ON]->(caller)
+WHERE a.self_ratio IS NOT NULL AND a.child_ratio IS NOT NULL
+RETURN caller.id AS caller, a.id AS anomaly, a.self_ratio AS self_ratio, a.child_ratio AS child_ratio
+```
+For a latency-only candidate: if **every** such caller has `self_ratio >= 2 * child_ratio` and `self_ratio > 1.5` (its own
+time grew far more than its waiting), the candidate is a **victim** of its saturated caller. That's the mirror of the
+rule above. A genuinely slow datastore shows the opposite: its callers wait (child up) while their own time stays flat
+(`tests/fixtures/saturated_caller.cypher` checks both).
+
 **Q4 `pagerank`** (two steps)
 ```cypher
 -- Q4a, on env graph: anomalous ops in this incident and the CALLS edges among them
@@ -254,10 +277,42 @@ are re-keyed `<incident>@i<k>` (`retire_anomalies`), never deleted. Every reader
 it sees only the current ingest with no extra filter, and older diagnosis runs keep their `ABOUT` edges. Live ingest
 writes an incident's anomalies once, so it never retires anything.
 
+**One window, any adapter (`ingest/window.py`).** RCAEval replay and live envs run the same steps:
+1. calls over the baseline;
+2. series over baseline + window;
+3. `detect_window`, slow burn and logs;
+4. changes;
+5. write.
+
+The adapter also brings `entry_ops()` (where log anomalies attach), `gaps` and `source` (the `ref` prefix).
+
+**Live envs (phase 9, `ingest/live.py`).**
+- An env listed in `LIVE_ENVS` has an `otel` adapter. Before its incident's first diagnosis, `Diagnosis.start` ingests
+  the window around the alert.
+- Live data ends *now*, mid-bucket, so the window is cut at the last **complete** bucket (`until`). Otherwise the
+  half-filled bucket reads as a traffic drop, a false `down`, on every operation.
+- `LIVE_TICK_S` > 0 writes the topology of the last 60 s every N s, so blast radius and what-if work before any
+  incident.
+
+**Spans → operations (`ingest/spans.py`).**
+- An operation span is a server / consumer span, a root span, or a client span with `db.system` (a datastore
+  operation `mongodb/find products`, `redis/GET`). Other client and internal spans are plumbing: a span's caller is its
+  nearest *operation* ancestor.
+- Series bucket each span where it **ends** (start + duration): its error and latency are known only then, and a parent
+  always ends after the child that failed it. By start time, a slow parent's errors landed before its child's and the
+  propagation check refuted the real cause (OTel Demo `paymentFailure`).
+- A live incident is ingested once, at alert time; "ingested" is `Incident.ingest > 0`, not "has anomalies" (a healthy
+  window has none, and a rerun must not re-read the window with what happened since). `again` / the CLI re-ingest.
+- Bare HTTP-method span names (raw `node:http`) get the route, and `METHOD /path` names have their path normalized:
+  id segments (hex, uuid, numbers, upper-case SKUs with a digit) become `{id}`, static files (`.js`, `.css`, images,
+  fonts) `{file}`.
+- nginx access-log lines can't join the trace (nginx sends no `traceparent`). Each one names its upstream operation
+  (prefix stripped) and upstream time, which stand in for the `CALLS` edge and the child time.
+
 | Adapter | calls | series | logs | changes |
 |---|---|---|---|---|
-| `otel` (OTel Demo) | Jaeger `/api/traces` | Prometheus `query_range` | OpenSearch | flagd flag changes |
-| `otel` (flip-commerce) | OTel Collector file exporter (JSON lines) | span-derived latency/error series; k6 summary for load | winston JSON + nginx access log | `examples/flip-commerce/faults.py` journal |
+| `otel` (OTel Demo) | Jaeger `/jaeger/ui/api/traces` | span-derived, plus Prometheus `query_range` of cores (`rate(container_cpu_usage_nanoseconds_total[1m])`) and `container_memory_usage_total_bytes` by `container_name` | OpenSearch `otel-logs-*` | `examples/run/changes.jsonl` (flag flips, journaled by `faults.py`) |
+| `otel` (flip-commerce) | OTel Collector file exporter (OTLP JSON lines) + nginx access log | span-derived per-op latency p95 / error rate / count / self / child in 5 s buckets | winston JSON (`NODE_ENV=production`) | `examples/run/changes.jsonl` (written by `faults.py` before it acts) |
 | `rcaeval` | `traces.parquet` (span parent joins → pairs over the baseline) | span-derived per-op latency p95 / error rate / self / child in 5 s buckets, plus `metrics.parquet` (per **service**, averaged to 5 s, attached to the service's busiest inbound op; `ts-*-mongo` have no traced ops and are skipped) | `logs.parquet` (`timestamp, container_name, message`; missing in a few cases → `Incident.gaps`) | none: `inject_time.txt` is the alert time only (not a `Change`, so it can't leak the answer) |
 
 ### 3.2 Detectors (`detect.py`)
@@ -360,7 +415,7 @@ flowchart TD
     SK -->|"refuted and rounds < 2"| SC
     SK -->|"stands"| MF{"unexplained symptoms?<br/>(§7.5)"}
     MF -->|"yes, round 0"| TRI2["triage again,<br/>seeded from unexplained"] --> FAN
-    MF -->|"no"| NR{"no hypothesis explains ≥ 50%<br/>and anomalies weak? (§7.6)"}
+    MF -->|"no"| NR{"anomalies weak and (nothing explains ≥ 50%<br/>or the alerting op is quiet), or the winner is the<br/>alerting op on a weak anomaly of its own? (§7.6)"}
     NR -->|"yes"| NRC["Incident: no_root_cause"] --> E
     NR -->|"no"| HI[historian]
     HI --> NA[narrator]
@@ -475,7 +530,7 @@ confidence = 1 / (1 + exp(−k · (score₁ − score₂)))
 ### 6.3 `weights.json`
 
 ```json
-{ "version": "2026-10-15.v2",
+{ "version": "2026-10-16.v3",
   "w": { "onset_earliness": 0.25, "strength": 0.20, "mechanism_fit": 0.15, "pagerank": 0.10,
          "change_match": 0.10, "footprint": 0.20 },
   "k": 8.0, "skew_s": 15, "lookback_s": 600, "max_hops": 6,
@@ -484,11 +539,16 @@ confidence = 1 / (1 + exp(−k · (score₁ − score₂)))
                  "second_cause": { "min_unexplained_ops": 2, "strong_anomaly": 0.8, "min_coverage": 0.5 } } }
 ```
 v1 (before the Fault Simulator) had no `footprint` term. Both versions are kept so the ablation table can compare them.
+v3 (phase 9) changes only `detect.down_z` 16 → 80: an operation that went fully silent now scores 1.0, like a 100% error
+rate, instead of 0.86. Before, `strength` (rank-normalized across hypotheses) turned that small gap into 0.25 vs 0.88
+and let a caller's errors outrank the dead datastore behind them (flip-commerce `mongo-majority-lost`). The RE2-TT
+verdicts are unchanged.
 
 Tie-break: higher score, then earlier onset, then operation id. The weights version is stored on the `Incident`.
 
 Implementation notes (`search/score.py`): `onset_earliness`, `strength` and `pagerank` are rank-normalized within
-the incident (ties share the average rank, a missing value ranks last); `mechanism_fit` 1 / 0.5 / 0 as above;
+the incident (ties share the average rank, a missing value ranks last; `strength` is rounded to 2 decimals first, so
+0.9999 and 1.0 are a tie rather than 0.5 vs 1.0); `mechanism_fit` 1 / 0.5 / 0 as above;
 `change_match` 0/1. Confidence uses `s2 = 0` when there is a single non-refuted hypothesis. `score_parts` is stored
 as JSON with sorted keys and floats rounded to 6 places, so reruns are byte-identical. `weights.v1.json` (no
 `footprint`, the rest renormalized to sum 1) is kept for the ablation; `load_weights` rejects files whose weights
@@ -518,7 +578,7 @@ flowchart LR
 Environment-agnostic knowledge, kept in its own FalkorDB graph and seeded from `seed/propagation_rules.yaml`:
 
 ```yaml
-version: 2026-10-15
+version: 2026-10-16
 rules:   # cause_kind on the candidate → symptom_kind on a dependent (upstream) or on itself (self)
   - { cause: [errors, down],               symptom: errors,  direction: upstream, p: 0.80, delay_s_max: 30 }
   - { cause: [errors, down],               symptom: latency, direction: upstream, p: 0.30, delay_s_max: 30 }
@@ -527,13 +587,18 @@ rules:   # cause_kind on the candidate → symptom_kind on a dependent (upstream
   - { cause: [mem],                        symptom: latency, direction: self,     p: 0.60, delay_s_max: 120 }
   - { cause: [mem],                        symptom: down,    direction: self,     p: 0.40, delay_s_max: 300 }
   - { cause: [down], kind_of_service: datastore, symptom: errors, direction: upstream, p: 0.95, delay_s_max: 15 }
+  - { cause: [latency, cpu, saturation], kind_of_caller: proxy, symptom: errors, direction: upstream, p: 0.70, delay_s_max: 30 }
 ```
+- `kind_of_service` restricts a rule to a cause in that kind of service.
+- `kind_of_caller` restricts it to a dependent of that kind. A proxy in front of a slow or overloaded app fails fast
+  (passive health checks eject the upstream; timeouts become 502 / 504) instead of waiting (phase 9).
 
 ```cypher
 // seed (MERGE per rule)
 MERGE (r:Rule {id: $id})
 SET r.cause_kinds = $cause, r.symptom_kind = $symptom, r.direction = $direction,
-    r.p = $p, r.delay_s_max = $delay_s_max, r.service_kind = $kind_of_service, r.version = $version
+    r.p = $p, r.delay_s_max = $delay_s_max, r.service_kind = $kind_of_service, r.caller_kind = $kind_of_caller,
+    r.version = $version
 ```
 
 Probabilities start from the values above and are tuned on RCAEval (grid search, then frozen with `rules_version`).
@@ -603,11 +668,18 @@ than the winner, and explaining at least `second_cause.min_coverage` (0.5) of `U
 
 ### 7.6 Typed negative answer: `no_root_cause`
 
-If **no** hypothesis has `coverage ≥ 0.5` **and** the strongest anomaly score in the incident is `< 0.6`, the incident ends
-in status `no_root_cause` with summary "Nothing in the graph explains this alert", listing what was checked. No root cause
+If the strongest anomaly score in the incident is `< 0.6` **and** either no hypothesis has `coverage ≥ 0.5` or the alerting
+operation itself shows no anomaly, **or** the best hypothesis is the alerting operation itself and its own anomaly is
+`< 0.6` (whatever its callers show: they sit downstream), the incident ends in status `no_root_cause` with summary "Nothing in the graph explains this alert", listing what was checked. No root cause
 is invented, and the responder proposes "check the alert threshold" from the runbook instead. The same status is used
 when every hypothesis is refuted (nothing left to name). Weights without a `footprint` weight (v1) skip the simulator,
 the second round and the coverage test, which keeps the ablation clean.
+
+The quiet-symptom case was added in phase 9: an absorbed fault (flip-commerce's Mongo failover) or a hand-fired alert
+leaves one weak anomaly, which trivially "covers" itself 100% while explaining nothing the alert saw
+(`tests/fixtures/quiet_symptom.cypher`). The weak self-blame case too: the OTel Demo's `emailMemoryLeak` run blamed
+`frontend/POST /api/checkout` at 0.81 on two latency blips that began before the flag flipped, while a 0.71 blip on its
+caller kept the incident from counting as "weak" (`tests/fixtures/weak_self.cypher`).
 
 ### 7.7 What-if mode (no incident)
 
@@ -726,7 +798,15 @@ count grows past the pool.
 | `SLACK_CHANNEL`, `LINEAR_TEAM_ID` | — | `POST /deliver` defaults (Slack channel id, Linear team id) |
 | `ENV_NAME` | `astronomy-shop` | ingest |
 | `JAEGER_URL`, `PROMETHEUS_URL`, `OPENSEARCH_URL` | host.docker.internal ports | `ingest/otel.py` |
-| `FLIP_OTEL_FILE`, `FLIP_LOG_DIR`, `FLIP_NGINX_LOG` | — | flip-commerce adapter |
+| `FLIP_OTEL_FILE`, `FLIP_LOG_DIR`, `FLIP_NGINX_LOG` | — | flip-commerce adapter (paths inside the api container) |
+| `LIVE_ENVS` | empty | envs that ingest live telemetry at alert time (`flip-commerce,astronomy-shop`) |
+| `LIVE_TICK_S` | `0` (off) | topology roll-up period for the live envs |
+| `CHANGE_JOURNAL` | — | `examples/run/changes.jsonl` as mounted in the api container |
+| `FAULT_RUNNER_URL`, `FAULT_RUNNER_TOKEN` | `http://host.docker.internal:8090`, — | `POST /runs` → host fault runner (ADR 0012) |
+| `FAULT_RUNNER_BIND`, `FAULT_RUNNER_PORT` | `127.0.0.1`, `8090` | `examples/fault_runner.py` (host); `0.0.0.0` on Linux / the demo box |
+| `FLIP_REPO`, `DEMO_DIR` | the authors' Windows paths | `examples/*/run.py` (host): the flip-commerce checkout and the OTel Demo clone |
+| `PUBLIC_API_URL` | `http://localhost:8000/api/v1` | web **build** arg `NEXT_PUBLIC_API_URL` (phase 11; `https://<host>/api/v1` on the demo box) |
+| `EPICENTER_HOST`, `DEMO_USER`, `DEMO_PASSWORD_HASH` | — | `deploy/Caddyfile` (phase 11, demo box only) |
 | `RCAEVAL_DIR` | `./data/rcaeval` | `ingest/rcaeval.py` |
 | `BASELINE_S` | `480` (t − 10 min … t − 2 min) | `ingest/detect.py` short pass |
 | `WINDOW_AFTER_S` | `300` | incident window end (t + 5 min) |
@@ -751,3 +831,81 @@ count grows past the pool.
 | Smoke (pinned FalkorDB) | `api/smoke_falkordb.py`: variable-length filter, Q2 shape, `algo.pageRank`, vector index, full-text, two parallel writers |
 | Eval | `python -m api.eval --suite re2 --system tt` → AC@1, AC@3, ablations (no PageRank / no temporal / no mechanism / **no footprint**, i.e. weights v1 vs v2) |
 | End-to-end | flip-commerce: stop the Mongo primary → incident → verdict names `mongodb` with a `docker stop` change |
+| System evaluator (phase 11) | `tests/test_syscheck.py`: `pick_tier` on fake probes (2 CPU / 4 GB → 1; 16 GB host with an 8 GB Docker VM → 2; 8 / 32 / 60 + tools → 4; no Docker → 0) |
+| Synthetic samples (phase 11) | `tests/test_synth.py`: same seed → byte-identical files; `small/cpu` → the labelled op; `small/healthy` → `no_root_cause` |
+
+---
+
+## 13. System evaluator (`syscheck`)
+
+Phase 11, not built yet. One command for anyone with a fresh clone: it finds out what the machine can run, runs it, and
+reports. Two parts:
+
+| Part | Where | Needs | Does |
+|---|---|---|---|
+| `syscheck.py` | host, repo root | Python ≥ 3.10, stdlib only | probe, tier, recommend; with `--run`, drives Docker, `docker compose exec`, the REST API and `examples/*/run.py` |
+| `api/selftest.py` | api container | the app | the small simulation: each `tests/fixtures/*.cypher` → `scratch:selftest-<name>` → diagnose → compare with the expected verdict → `GRAPH.DELETE` in `finally` |
+
+### 13.1 Probe (read-only, < 15 s)
+
+| Probe | How | Used for |
+|---|---|---|
+| OS, arch, cores, RAM | `platform`, `os.cpu_count()`; RAM from `/proc/meminfo`, `sysctl hw.memsize`, or `GlobalMemoryStatusEx` via `ctypes` | report |
+| Disk free | `shutil.disk_usage` on the repo drive and on Docker's root (`docker info -f {{.DockerRootDir}}`; on Docker Desktop the VM disk) | tier |
+| Docker | `docker version`, `docker compose version` (≥ 2.24), `docker info -f '{{.NCPU}} {{.MemTotal}}'` | tier: **the Docker VM's CPUs and memory, not the host's** |
+| Ports | `socket.bind` on 6380 3002 8081 8000 3001 3000 (core) and 8080 16686 9090 9200 8090 (envs); a bound port that answers `/api/v1/health` counts as "Epicenter already up" | warnings |
+| Tools | `shutil.which` git, node (≥ 20), k6, uv | tier 3+ |
+| Internet | HEAD `huggingface.co` and `openrouter.ai`, 3 s timeout | RCAEval download, explanations |
+| `.env` | exists; no `change-me`; which optional keys are set (names only, values never read into the report) | warnings |
+| Stack | `GET /api/v1/health`, `GET /api/v1/runs/scenarios` (`ready`) | skip what's already up |
+| Bench | 3 s single-thread loop → ops/s relative to a reference machine; 256 MB write + fsync → MB/s | scales the time estimates; < 0.4× reference drops one tier |
+
+### 13.2 Tiers
+
+`pick_tier(probe) -> int` is a pure function. Thresholds use `min(host, Docker VM)`; all of a tier's conditions must
+hold. The thresholds live in one table in `syscheck.py` that mirrors this one.
+
+| Tier | CPUs | Memory | Disk | Also needs | `--run` executes | ~Time |
+|---|---|---|---|---|---|---|
+| 0 | below tier 1 | | | | nothing; prints the hosted URL / video and why | — |
+| 1 Lite | 2 | 4 GB | 10 GB | Docker | `up -d falkordb api web`, smoke, `api.selftest`, synthetic small (`cpu`, `healthy`), `pytest` offline subset (`test_simulate`, `test_causal`, `test_score`, `test_spans`, `test_detect`) | 3–5 min |
+| 2 Standard | 4 | 8 GB | 20 GB | internet | + full stack, full `pytest`, synthetic medium (`two`, `loud-victim`, `healthy`), 3 RCAEval replays + `api.eval`, N1 / N2 timings; with `--live`: HotROD | 10–15 min |
+| 3 Live | 6 | 12 GB | 30 GB | node, k6, uv, `FLIP_REPO` | with `--live`: flip-commerce `redis-down`, `circuit-misconfig`, `healthy-baseline`; OTel Demo minimal `paymentFailure` | +25 min |
+| 4 Full | 8 | 16 GB | 40 GB | `DEMO_DIR` | + synthetic huge (`mem` slow burn); with `--live`: OTel Demo full `paymentFailure`, `adHighCpu` | +30 min |
+| 5 Huge | 16 | 32 GB | 80 GB | `--tier 5` (never chosen automatically) | with `--live`: Train-Ticket `auth-cpu`, `order-delay` | +45 min |
+
+Each run's expected verdict comes from the scenario registry (`api/runs.py` `Scenario.expect`, machine-readable) or
+the synthetic `labels.json`. **Matching:** `target_prefix` on the top `ROOT_CAUSE` op, or `status == no_root_cause`.
+
+### 13.3 Modes and flow
+
+```
+python syscheck.py [--run] [--live] [--tier N] [--minutes M] [--json] [--yes-envs]
+```
+
+- **Default:** probe → tier → print the recommended runs that fit `--minutes` (default 30), each with its command
+  and expected verdict. Changes nothing.
+- **`--run`:**
+  1. `docker compose up -d` (only the core services on tier 1);
+  2. wait for health;
+  3. run the tier's non-live checks in order, stopping a group at its first infrastructure error (a wrong verdict is
+     recorded and the run carries on).
+- **`--live`:** per environment, `run.py up` (asks `y/N` first; `--yes-envs` skips the question for unattended
+  rehearsal). Then per scenario:
+  1. `POST /api/v1/runs`;
+  2. poll the incident until it is final (timeout `settle_s + 120 s`);
+  3. compare the verdict;
+  4. `DELETE /api/v1/runs/{id}` (undo);
+  5. wait for `run.py status` to be healthy.
+
+  `run.py down` at the end. Only one environment runs at a time.
+- **Never:** `docker compose down -v`, `GRAPH.DELETE` outside its own `scratch:selftest-*` graphs, or an environment
+  change without `--live` and a yes. Ctrl-C undoes the scenario in flight before exiting.
+
+### 13.4 Report
+
+- **Screen:** probe summary, tier and why (which threshold capped it), one line per run (expected → got, ✓ / ✗,
+  duration), then suggested next runs (the next tier's items, if the machine is close).
+- **Files:** `data/syscheck/<n>-<utc>.json` (full) and `.md` (the screen table). `n` is the next number, so reports are
+  never overwritten. `data/` is git-ignored. No secret values are written; `.env` keys are reported by name only.
+- **Exit codes:** 0 all passed, 1 a check failed or a verdict differed, 2 below tier 1 or Docker missing.

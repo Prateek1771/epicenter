@@ -45,9 +45,12 @@ How others do it: [competitors](docs/COMPETITORS.md) · [technical research](doc
 
 ## Docs
 
-[Implementation phases](docs/phases/) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
+**Judges and evaluators: start with [docs/SETUP.md](docs/SETUP.md).** It sizes your machine, then walks you to a
+diagnosed incident (small, medium or huge samples).
+
+[Setup guide](docs/SETUP.md) · [Implementation phases](docs/phases/) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
 [API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
-[ADRs 0001–0011](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
+[ADRs 0001–0013](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
 [Planning notes](docs/planning/)
 
 ---

@@ -1,5 +1,5 @@
 # Fault Simulator rules (LLD §7.1), seeded into kb:propagation. Bump `version` on any change: the kb graph is replaced.
-version: 2026-10-15
+version: 2026-10-16
 rules:   # cause_kind on the candidate → symptom_kind on a dependent (upstream) or on itself (self)
   - { cause: [errors, down],               symptom: errors,  direction: upstream, p: 0.80, delay_s_max: 30 }
   - { cause: [errors, down],               symptom: latency, direction: upstream, p: 0.30, delay_s_max: 30 }
@@ -8,3 +8,6 @@ rules:   # cause_kind on the candidate → symptom_kind on a dependent (upstream
   - { cause: [mem],                        symptom: latency, direction: self,     p: 0.60, delay_s_max: 120 }
   - { cause: [mem],                        symptom: down,    direction: self,     p: 0.40, delay_s_max: 300 }
   - { cause: [down], kind_of_service: datastore, symptom: errors, direction: upstream, p: 0.95, delay_s_max: 15 }
+  # a proxy in front of an overloaded or slow app fails fast instead of waiting: passive health checks eject the
+  # upstream ("no live upstreams") and timeouts become 502 / 504 (phase 9, flip-commerce cpu-saturation)
+  - { cause: [latency, cpu, saturation], kind_of_caller: proxy, symptom: errors, direction: upstream, p: 0.70, delay_s_max: 30 }

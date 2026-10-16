@@ -1,0 +1,30 @@
+# What flip-commerce needs around it, without touching its repo (EXAMPLE_RUNS §2):
+# Redis for sessions, an OTel collector writing spans to a file, nginx in front of flip-node.
+# Mongo comes from the repo's own compose file (run.py up). Started by `python examples/flip-commerce/run.py up`.
+name: epicenter-flip
+
+services:
+  redis:
+    image: redis:8.0.3-alpine
+    container_name: fk-redis
+    ports: ["6379:6379"]
+    restart: "no"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.135.0
+    container_name: fk-otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./collector.yaml:/etc/otelcol/config.yaml:ro
+      - ./run/otel:/out
+    ports: ["4317:4317", "4318:4318"]
+    user: "0:0"  # writes into the bind-mounted run/ folder
+
+  nginx:
+    image: nginx:1.28.0-alpine
+    container_name: fk-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./run/nginx:/var/log/epicenter
+    ports: ["8080:8080"]
+    extra_hosts: ["flip-host:host-gateway"]  # IPv4 only: host.docker.internal also resolves to an IPv6 nginx tries first

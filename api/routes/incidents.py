@@ -274,6 +274,7 @@ def add_note(incident_id: str, body: NoteIn, env: Env) -> NoteOut:
         [c] = env.rw(
             "U3",
             service=body.change.service,
+            service_kind="app",  # the service exists (checked above), so this is never applied
             id=f"chg-manual-{incident_id}-{d['n']}",
             type=body.change.type,
             ts=epoch(body.change.ts),

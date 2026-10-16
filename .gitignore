@@ -9,3 +9,7 @@ __pycache__/
 .venv/
 data/
 node_modules/
+
+# example environments: runtime state (spans, logs, pids, secrets, fault journal)
+examples/run/
+examples/*/run/

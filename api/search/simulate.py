@@ -26,7 +26,8 @@ class Rule:
     direction: str  # upstream · self
     p: float
     delay_s_max: int
-    service_kind: str | None
+    service_kind: str | None  # the cause's service kind, when the rule is restricted to one
+    caller_kind: str | None = None  # the dependent's service kind (upstream rules): a proxy fails, an app waits
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ def load_rules(kb: EnvGraph) -> tuple[list[Rule], str]:
             r["p"],
             r["delay_s_max"],
             r["service_kind"],
+            r.get("caller_kind"),
         )
         for r in rows
     ]
@@ -58,11 +60,14 @@ def load_rules(kb: EnvGraph) -> tuple[list[Rule], str]:
     return rules, ",".join(versions)
 
 
-def _applies(rule: Rule, cause_kind: str, direction: str, service_kind: str | None) -> bool:
+def _applies(
+    rule: Rule, cause_kind: str, direction: str, service_kind: str | None, caller_kind: str | None = None
+) -> bool:
     return (
         rule.direction == direction
         and cause_kind in rule.cause_kinds
         and (rule.service_kind is None or rule.service_kind == service_kind)
+        and (rule.caller_kind is None or rule.caller_kind == caller_kind)
     )
 
 
@@ -107,10 +112,11 @@ def simulate(
             in_rps = op_info.get(caller, {}).get("in_rps") or 0.0
             share = 1.0 if in_rps <= 0 else min(1.0, rps[hop - 1] / in_rps)
             callee_kind = op_info.get(callee, {}).get("service_kind")
+            caller_kind = op_info.get(caller, {}).get("service_kind")
             nxt: dict[str, tuple[float, int]] = {}
             for k1, (p1, delay) in state.items():
                 for r in rules:
-                    if not _applies(r, k1, "upstream", callee_kind):
+                    if not _applies(r, k1, "upstream", callee_kind, caller_kind):
                         continue
                     p2 = round(p1 * r.p * share, 6)
                     if p2 >= min_p and p2 > nxt.get(r.symptom_kind, (0.0, 0))[0]:

@@ -98,6 +98,23 @@ def test_down_needs_a_long_silence_for_the_rate():
     assert detect_down(_series(sparse, kind="aux", metric="count"), BASE, T, WINDOW[1], 5, CFG) is None
 
 
+def test_down_starts_before_the_alert_and_in_a_cut_short_bucket():
+    # live runs fire the alert a minute after the fault: the calls stopped at T - 60, mid-bucket (3 calls, not 10)
+    ts = np.arange(T - 600, T + 300, 5)
+    stops = np.where(ts < T - 65, 10.0, 0.0)
+    stops[ts == T - 65] = 3.0
+    row = detect_down(_series(stops, kind="aux", metric="count"), BASE, T, WINDOW[1], 5, CFG)
+    assert row is not None and row.onset == T - 65  # the bucket it went silent in, not the first empty one
+
+
+def test_down_ignores_a_gap_that_recovered_and_a_short_tail():
+    ts = np.arange(T - 600, T + 300, 5)
+    recovered = np.where((ts >= T) & (ts < T + 120), 0.0, 10.0)  # bursty traffic and recovered outages look alike
+    assert detect_down(_series(recovered, kind="aux", metric="count"), BASE, T, WINDOW[1], 5, CFG) is None
+    tail = np.where(ts >= WINDOW[1] - 10, 0.0, 10.0)  # silent for the last 10 s only: under down_min_gap_s
+    assert detect_down(_series(tail, kind="aux", metric="count"), BASE, T, WINDOW[1], 5, CFG) is None
+
+
 def test_self_child_ratio():
     base = np.r_[np.full(96, 10.0), np.full(84, 40.0)]
     assert ratio_p95(_series(base), BASE, WINDOW) == pytest.approx(4.0, rel=0.01)

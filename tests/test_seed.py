@@ -19,7 +19,7 @@ def test_env_seed_is_idempotent(blank):
     assert blank.ro("list_indexes") == indexes
     labels = {r["label"] for r in indexes}
     assert {"Service", "Operation", "Anomaly", "Incident", "Signal"} <= labels
-    assert len(ENV_INDEXES) == 15
+    assert len(ENV_INDEXES) == 16  # + idx_run (phase 9)
 
 
 def test_owners_are_per_env(blank):
@@ -33,9 +33,9 @@ def test_rules_seed_and_version_replace(blank, tmp_path):
     seed_rules(blank)
     seed_rules(blank)
     [v] = blank.ro("rules_version")
-    assert v["version"] == "2026-10-15"
+    assert v["version"] == "2026-10-16"
     count = blank.ro("count_nodes")[0]["n"]
-    assert count == 7
+    assert count == 8  # + the proxy rule (phase 9)
 
     bumped = tmp_path / "rules.yaml"
     text = (SEED / "propagation_rules.yaml").read_text(encoding="utf-8")

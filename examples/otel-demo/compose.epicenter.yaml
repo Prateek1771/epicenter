@@ -1,0 +1,17 @@
+# Epicenter's layer over the OTel Demo (compose.yaml + compose.observability.yaml): publish the query ports the
+# `otel` adapter (demo mode) reads from the api container via host.docker.internal. Nothing else changes.
+services:
+  jaeger:
+    ports: ["16686:16686"]   # query API /api/traces
+  opensearch:
+    ports: ["9200:9200"]     # logs
+  recommendation:
+    # demo 3.1.0's compose probes with `nc`, which its 3.0.0 image (IMAGE_VERSION in .env) doesn't ship
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/9001"]
+  load-generator:
+    # more HTTP users so checkout / ads carry enough requests per 5 s bucket to detect a 50% fault; the headless
+    # browser users cost ~2 CPUs on a laptop and add nothing the HTTP users don't
+    environment:
+      LOCUST_USERS: "10"
+      LOCUST_BROWSER_TRAFFIC_ENABLED: "false"

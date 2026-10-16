@@ -33,13 +33,20 @@ class Settings(BaseSettings):
     web_origin: str = "http://localhost:3001"
     api_key: str | None = None  # deployed mode: X-API-Key required on /api/v1 (API.md)
 
-    jaeger_url: str = "http://host.docker.internal:16686"
+    jaeger_url: str = "http://host.docker.internal:16686/jaeger/ui"  # the demo serves Jaeger under QUERY_BASE_PATH
     prometheus_url: str = "http://host.docker.internal:9090"
     opensearch_url: str = "http://host.docker.internal:9200"
 
     flip_otel_file: str | None = None
     flip_log_dir: str | None = None
     flip_nginx_log: str | None = None
+
+    # phase 9: envs whose alerts ingest live telemetry before diagnosis (comma list: flip-commerce,astronomy-shop)
+    live_envs: str = ""
+    live_tick_s: int = 0  # topology roll-up every N s for the live envs; 0 = off
+    change_journal: str | None = None  # JSON lines written by examples/*/faults.py before they act
+    fault_runner_url: str = "http://host.docker.internal:8090"  # examples/fault_runner.py, on the host
+    fault_runner_token: str | None = None
 
     rcaeval_dir: str = "./data/rcaeval"
     baseline_s: int = 480
@@ -58,6 +65,7 @@ class Settings(BaseSettings):
         return v if _value(v) else cls.model_fields[info.field_name].default
 
     @field_validator("openrouter_api_key", "openconnector_api_key", "api_key", "slack_channel", "linear_team_id",
+                     "flip_otel_file", "flip_log_dir", "flip_nginx_log", "change_journal", "fault_runner_token",
                      mode="before")  # fmt: skip
     @classmethod
     def _blank_is_none(cls, v):

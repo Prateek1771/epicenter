@@ -22,11 +22,12 @@ you can click, rerun and argue with.
 | [LLD.md](LLD.md) | Modules, function signatures, Cypher, scoring, agent state, state machines, tests |
 | [USER_FLOW.md](USER_FLOW.md) | What each user does, screen by screen |
 | [README.md](../README.md) | Getting started with Docker |
+| [docs/SETUP.md](SETUP.md) | Setup guide for judges / evaluators: machine tiers, the system evaluator, samples by size, demo-box runbook |
 | [docs/API.md](API.md) | REST + SSE reference |
 | [docs/GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) | Every label, edge, property and index |
 | [docs/EXAMPLE_RUNS.md](EXAMPLE_RUNS.md) | The three environments we demo on |
-| [docs/adr/](adr/) | Decision records 0001–0011 |
-| [docs/phases/](phases/README.md) | Build order: phases 0–10 with tasks, acceptance checks and scalability notes |
+| [docs/adr/](adr/) | Decision records 0001–0013 |
+| [docs/phases/](phases/README.md) | Build order: phases 0–11 with tasks, acceptance checks and scalability notes |
 | [docs/COMPETITORS.md](COMPETITORS.md) | Competitor landscape, pricing, gaps, positioning |
 | [docs/TECH_RESEARCH.md](TECH_RESEARCH.md) | How competitors find root causes, and why we added the Fault Simulator |
 | [docs/planning/](planning/) | Earlier planning notes: [GRAPH_HACKS_PLAN](planning/GRAPH_HACKS_PLAN.md), [FALKORDB_PLAN](planning/FALKORDB_PLAN.md), [FALKORDB_BRAINSTORM](planning/FALKORDB_BRAINSTORM.md). Where they differ from the docs above (e.g. ports), the docs above win |

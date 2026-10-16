@@ -22,6 +22,7 @@ don't copy them. If a phase file and a design doc disagree, the design doc wins;
 | 8 | [Web UI](phase-08-web-ui.md) | Next.js screens, live canvas, overlay | 6 (7 for memory / explanation panels) |
 | 9 | [Live environments](phase-09-live-environments.md) | OTel adapter, flip-commerce scripts, `/runs` | 2, 6 |
 | 10 | [Eval, hardening, demo](phase-10-eval-demo.md) | AC@1/AC@3 + ablations, frozen weights, demo assets | all |
+| 11 | [Demo deployment, setup, evaluator](phase-11-production-demo.md) | AWS demo box (create → demo → destroy), [SETUP.md](../SETUP.md), `syscheck.py`, small / medium / huge samples | 9, 10 |
 
 ```mermaid
 flowchart LR
@@ -40,6 +41,7 @@ flowchart LR
     P2 --> P9[9 Live envs]
     P6 --> P9
     P8 & P9 --> P10[10 Eval + demo]
+    P10 --> P11[11 Deploy + setup + evaluator]
 ```
 
 **Critical path to a demo:** 0 → 1 → 2 → 3 → 4 → 5 → 6 → 8. That is the RCAEval replay diagnosed end to end on the
@@ -98,6 +100,9 @@ Every requirement, endpoint and planned test lands in exactly one phase.
 | smoke (pinned FalkorDB) | 0 |
 | eval | 10 |
 | end-to-end flip-commerce | 9 |
+| demo deployment (AWS, create → destroy) | 11 |
+| setup guide for judges / evaluators | 11 |
+| system evaluator (`syscheck`), small / medium / huge samples | 11 |
 
 ## Doc conflicts already resolved
 
@@ -120,7 +125,7 @@ Gaps in the design docs, listed in the phase where they bite. Decide them there 
 | ~~Q-a~~ | **Closed (phase 1):** stored ids are `<incident>:E<n>` / `:h-<n>` / `:a-<n>`; the API shows the local part ([GRAPH_SCHEMA §3](../GRAPH_SCHEMA.md#3-node-labels)) | 1 |
 | ~~Q-b~~ | **Closed (phase 1):** `footprint` added to `EvidenceOut.kind` | 3 |
 | ~~Q-c~~ | **Closed (phase 3):** every diagnosis is a kept, numbered run; "superseded" = `h.run < Incident.run`, no extra status ([LLD §8](../LLD.md#8-state-machines)) | 5 |
-| Q-d | `eval.py`'s RCAEval loader and the `/runs` scenario runner aren't in the [LLD §1](../LLD.md#1-package-layout) layout (`smoke_falkordb.py` added in phase 0) | 9 |
+| ~~Q-d~~ | **Closed (phase 9):** `api/runs.py` (registry + fault runner client), `routes/runs.py`, `ingest/{window,spans,live}.py` (the topology tick lives in `live.tick`, run by the API lifespan when `LIVE_TICK_S` > 0) are in [LLD §1](../LLD.md#1-package-layout); `eval.py` stays phase 10's | 9 |
 | ~~Q-e~~ | **Closed (phase 1):** `Action` moved to the investigation labels | 1 |
 | ~~Q-f~~ | **Closed (phase 0):** build context is the repo root; `api/Dockerfile` copies `api/` to `/app/api` | 0 |
 | ~~Q-g~~ | **Closed (phase 7 follow-up):** `min_support` calibrated from labelled claims to 0.65 ([report](../calibration/jev-2026-10-16.json)); phase 10 reruns `python -m api.agents.calibrate` on the full RE2 suite | 7 |

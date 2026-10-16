@@ -204,8 +204,11 @@ memory leak that started at hour 1 ([LLD §3.2](LLD.md#32-detectors-detectpy)).
 | 8000 | `api` | REST at `/api/v1`, MCP at `/mcp` |
 | 3001 | `web` | |
 | 3000 | `open-connector` | |
-| 8080, 16686, 9090 | OTel Demo (separate compose) | run one example environment at a time |
-| 8080, 6379, 27017–27019 | flip-commerce (its own compose) | run one example environment at a time |
+| 8080, 16686, 9090, 9200, 4317–4318 | OTel Demo (its compose + `examples/otel-demo/compose.epicenter.yaml`; Jaeger under `/jaeger/ui`) | run one example environment at a time |
+| 8080, 6379, 27017–27019, 4317–4318, 5001 | flip-commerce (repo compose for Mongo + `examples/flip-commerce/compose.yaml` for Redis, collector, nginx; flip-node on the host) | run one example environment at a time |
+| 8090 (loopback) | `examples/fault_runner.py` on the host | token-gated; the API's only path to an environment ([ADR 0012](adr/0012-host-fault-runner.md)) |
+| 80, 443 | `caddy` (demo box only, phase 11) | the only public ports on the demo box ([§5.3](#53-demo-deployment-aws)) |
+| 8083, 16687 | HotROD + its Jaeger (phase 11) | remapped so it doesn't clash with the other environments |
 
 ### 5.2 `docker-compose.yml`
 
@@ -273,6 +276,40 @@ The real [docker-compose.yml](../docker-compose.yml) adds health checks for `api
 **Startup order:** `falkordb` (healthy) → `falkordb-mcp`, `api` → `web`. `api` runs the seed step (indexes, runbooks,
 owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX` guarded).
 
+### 5.3 Demo deployment (AWS)
+
+Phase 11, not built yet ([ADR 0013](adr/0013-ephemeral-demo-deployment.md),
+[phase 11](phases/phase-11-production-demo.md)). The laptop topology runs on one EC2 VM during the event, then the VM
+is destroyed.
+
+```mermaid
+flowchart LR
+    U["Browser (judges, presenter)"] -- "HTTPS 443<br/>basic auth" --> SG{{"Security group<br/>80, 443 public · 22 presenter IP"}}
+    SG --> C["Caddy<br/>Let's Encrypt, &lt;ip&gt;.sslip.io"]
+    subgraph EC2["EC2 m6i.2xlarge · Ubuntu 24.04"]
+        C -- "/api/* (SSE unbuffered)" --> API["api :8000<br/>127.0.0.1 only"]
+        C -- "/*" --> WEB["web :3001<br/>127.0.0.1 only"]
+        API --> FDB[("falkordb :6380<br/>127.0.0.1 only")]
+        API -- "token" --> FR["fault runner :8090<br/>(host process)"]
+        FR --> ENV["OTel Demo / flip-commerce<br/>(one at a time)"]
+        API -- "Jaeger, Prometheus, OpenSearch,<br/>collector files" --> ENV
+    end
+```
+
+| Piece | Demo box | Laptop |
+|---|---|---|
+| Entry | Caddy on 80/443, `https://<a-b-c-d>.sslip.io` | `http://localhost:3001` |
+| Epicenter ports | `deploy/compose.prod.yaml` binds every port to `127.0.0.1` | all interfaces |
+| Web → API | same origin, `PUBLIC_API_URL=https://<host>/api/v1` (build arg) | `http://localhost:8000/api/v1` |
+| Auth | basic auth at Caddy (UI and API, `EventSource` included); `API_KEY` unset | none |
+| Fault runner | `FAULT_RUNNER_BIND=0.0.0.0`; 8090 closed by the security group | loopback |
+| `host.docker.internal` on the host | `/etc/hosts` → `127.0.0.1` (flip-node's `MONGO_URI`) | Docker Desktop provides it |
+| Secrets | generated on the box, `.env` mode 600 | `.env` |
+| Lifecycle | `deploy/aws.sh create → stop → start → destroy`; `demo.sh backup` keeps the graph | always on |
+
+The example environments publish their own ports on all interfaces, and Docker bypasses `ufw`. The **security group is
+the network boundary**: verify it from outside with a port scan before the demo.
+
 ---
 
 ## 6. Non-functional requirements: how each is met
@@ -327,6 +364,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 | Prompt injection via telemetry (log lines are untrusted text) | Log text reaches the LLM only inside evidence fields marked as data; tools are read-only; the verdict doesn't depend on the LLM |
 | Secrets | Never written to the graph; `.env` git-ignored; OpenConnector holds OAuth tokens |
 | Web | CORS restricted to the web origin; no auth for the local demo, API key header if deployed ([docs/API.md](API.md)) |
+| Demo box ([§5.3](#53-demo-deployment-aws)) | HTTPS + basic auth at Caddy in front of UI and API (same origin, so the UI needs no API key); every other port loopback-bound or closed by the security group; SSH from the presenter's IP only; IMDSv2; secrets generated on the box, never in user-data; a separate OpenRouter key with a spend limit, revoked after; the box destroyed after the event ([ADR 0013](adr/0013-ephemeral-demo-deployment.md)) |
 | Tenancy | One graph per environment; tool calls are bound to the incident's environment |
 
 ---

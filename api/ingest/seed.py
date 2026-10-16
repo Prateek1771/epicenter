@@ -20,6 +20,7 @@ ENV_INDEXES = [
     "idx_anomaly",
     "idx_change",
     "idx_change_id",
+    "idx_run",
     "idx_evidence",
     "idx_incident",
     "idx_hypothesis",
@@ -63,9 +64,11 @@ def seed_runbooks(g: EnvGraph, env_name: str, path: Path = SEED_DIR / "runbooks.
 
 
 def rule_id(rule: dict) -> str:
-    """Stable id from the rule's content: `errors+down->errors:upstream`, plus `@datastore` when restricted."""
+    """Stable id from the rule's content: `errors+down->errors:upstream`, plus `@datastore` when the cause's service
+    kind is restricted and `<proxy` when the dependent's is."""
     rid = f"{'+'.join(rule['cause'])}->{rule['symptom']}:{rule['direction']}"
-    return f"{rid}@{rule['kind_of_service']}" if rule.get("kind_of_service") else rid
+    rid = f"{rid}@{rule['kind_of_service']}" if rule.get("kind_of_service") else rid
+    return f"{rid}<{rule['kind_of_caller']}" if rule.get("kind_of_caller") else rid
 
 
 def seed_rules(kb: EnvGraph, path: Path = SEED_DIR / "propagation_rules.yaml") -> None:
@@ -86,6 +89,7 @@ def seed_rules(kb: EnvGraph, path: Path = SEED_DIR / "propagation_rules.yaml") -
             p=rule["p"],
             delay_s_max=rule["delay_s_max"],
             kind_of_service=rule.get("kind_of_service"),
+            kind_of_caller=rule.get("kind_of_caller"),
             version=version,
         )
 

@@ -101,3 +101,11 @@ def test_weights_validation_rejects_bad_files(tmp_path):
     p.write_text(json.dumps(bad))
     with pytest.raises(ValueError, match="sum"):
         sc.load_weights(str(p))
+
+
+def test_strength_near_ties_rank_as_ties():
+    # 0.9999 vs 1.0 is noise; rank normalization must not turn it into 0.5 vs 1.0
+    base = {"onset": 100, "kinds": ["latency"], "victim": False, "self_caused": True, "change": False,
+            "pagerank": 0.1, "footprint": 0.5, "refuted": False}  # fmt: skip
+    a, b = sc.features([base | {"strength": 1.0}, base | {"strength": 0.9999}])
+    assert a["strength"] == b["strength"]

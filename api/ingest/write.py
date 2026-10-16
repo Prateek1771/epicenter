@@ -79,4 +79,13 @@ def write_anomalies(env: EnvGraph, incident: str, rows: list[AnomalyRow]) -> int
 
 
 def write_change(env: EnvGraph, ch: ChangeEvent) -> None:
-    env.rw("U3", service=ch.service, id=ch.id, type=ch.type, ts=ch.ts, summary=ch.summary, ref=ch.ref)
+    env.rw(
+        "U3",
+        service=ch.service,
+        service_kind=ch.service_kind,
+        id=ch.id,
+        type=ch.type,
+        ts=ch.ts,
+        summary=ch.summary,
+        ref=ch.ref,
+    )

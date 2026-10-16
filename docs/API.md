@@ -240,17 +240,45 @@ when OpenRouter is unavailable.
 ## Example runs and eval
 
 ### `GET /runs/scenarios`
+Live scenarios from the registry (`api/runs.py`, EXAMPLE_RUNS tables) plus every RCAEval case found in `RCAEVAL_DIR`.
+`ready`: a live env is up (the host fault runner's `/health`, [ADR 0012](adr/0012-host-fault-runner.md)); a replay
+case is on disk. `runner`: the fault runner answered.
 ```json
-{ "items": [ { "env": "flip-commerce", "id": "mongo-primary-down", "title": "Kill the Mongo primary" },
-             { "env": "astronomy-shop", "id": "paymentFailure", "title": "flagd: paymentFailure" },
-             { "env": "rcaeval-tt", "id": "re2tt_ts-auth-service_cpu_1", "title": "RCAEval case" } ] }
+{ "runner": true,
+  "items": [ { "env": "flip-commerce", "id": "mongo-majority-lost", "title": "Lose the Mongo majority (2 of 3 down)",
+               "expected": "mongodb, kind down", "kind": "fault", "ready": true },
+             { "env": "flip-commerce", "id": "healthy-baseline", "title": "Healthy baseline (no fault)",
+               "expected": "no_root_cause", "kind": "baseline", "ready": true },
+             { "env": "rcaeval-tt", "id": "re2tt_ts-auth-service_cpu_1", "title": "RCAEval replay: ts-auth-service cpu #1",
+               "expected": "ts-auth-service/*, kind cpu", "kind": "replay", "ready": true } ] }
 ```
+`kind`: `fault` (writes a `Change`, then injects) · `load` (traffic is the cause, no `Change`) · `baseline` (nothing
+injected; a hand-fired alert that should end `no_root_cause`) · `replay` (RCAEval).
 
 ### `POST /runs`
 ```json
-{ "env": "flip-commerce", "scenario": "mongo-primary-down" }
+{ "env": "flip-commerce", "scenario": "mongo-majority-lost" }
 ```
-`202` → `{ "run_id": "run-5", "incident_id": "inc-43" }`. Writes the `Change` node for the fault before triggering it.
+`202` → `{ "run_id": "run-1792145146", "incident_id": "inc-run-1792145146", "alert_at": "…", "change_id": "chg-run-1792145146" }`.
+
+A live run, in order:
+1. writes the `Change` node (like a deploy: on record **before** the fault, so its time precedes the effect);
+2. has the fault runner inject the fault;
+3. opens its own incident (never joins another run's, even on the same symptom) with the alert at fault +
+   `settle_s` (~60 s, while the symptoms spread);
+4. at `alert_at`, ingests the window around the alert from the live sources, then diagnoses.
+
+A replay re-ingests the case and diagnoses it (incident `rc-<case>`).
+
+Errors:
+- `404 SCENARIO_NOT_FOUND`;
+- `503 ENV_NOT_RUNNING` (start it with `examples/<env>/run.py up`);
+- `502 FAULT_FAILED` (the fault script's output, recorded on the `Run` node).
+
+### `DELETE /runs/{run_id}?env=`
+Undo: the fault runner runs `faults.py <scenario> --undo`, which restores exactly what the fault touched. Returns
+`{ "run_id", "status": "undone" }`, or `"nothing_to_undo"` for replays and baselines. Idempotent. The `Run` node stays
+(history), marked `undone`.
 
 ### `GET /eval`
 ```json

@@ -117,10 +117,26 @@ def test_upserts_are_idempotent(blank):
     )
     blank.rw("U1", rps=1.0, **call)
     blank.rw("U1", rps=7.0, **call)
-    blank.rw("U3", service="db", id="ch-9", type="infra", ts=1, summary="docker stop db", ref=None)
-    blank.rw("U3", service="db", id="ch-9", type="infra", ts=1, summary="docker stop db", ref=None)
+    change = {
+        "service": "db",
+        "service_kind": "datastore",
+        "id": "ch-9",
+        "type": "infra",
+        "ts": 1,
+        "summary": "docker stop db",
+        "ref": None,
+    }
+    blank.rw("U3", **change)
+    blank.rw("U3", **change)
     assert blank.ro("count_nodes") == [{"n": 5}]  # 2 services, 2 operations, 1 change
     assert blank.ro("Q6", cand="db/get") == [{"op": "a/x", "hops": 1, "path": ["a/x", "db/get"], "rps": [7.0]}]
+
+
+def test_change_on_unseen_service_creates_it(blank):
+    # a fault's change is written before the topology tick may have seen the service (phase 9)
+    blank.rw("U3", service="mongodb", service_kind="datastore", id="ch-1", type="infra", ts=5, summary="stop", ref=None)
+    assert blank.ro("count_nodes") == [{"n": 2}]
+    assert blank.ro("recent_changes", svc="mongodb", since=0)[0]["id"] == "ch-1"
 
 
 def test_every_query_is_timed(env_test):

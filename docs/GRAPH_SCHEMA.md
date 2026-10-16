@@ -105,7 +105,19 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `type` | str | ✓ | `deploy` · `flag` · `config` · `infra` (e.g. `docker stop`, scale) · `manual` |
 | `ts` | ts | ✓ | when it happened (indexed) |
 | `summary` | str | ✓ | `flag paymentFailure → on`, `docker stop mongo1` |
-| `ref` | str | | flagd event id, commit sha, journal line |
+| `ref` | str | | flagd event id, commit sha, journal line, `run:<run_id>` |
+
+A change can arrive before the topology tick has seen its service (a fault's change is written before the fault), so
+`U3` `MERGE`s the `Service` (with the event's `service_kind`) instead of matching it.
+
+**`Run`**: key `id` (`run-<epoch>`): one example run started from `/runs` (phase 9), kept as history
+| Property | Type | Req | Notes |
+|---|---|---|---|
+| `scenario` | str | ✓ | registry id (`mongo-majority-lost`, an RCAEval case) |
+| `started_at` | ts | ✓ | |
+| `incident` | str | ✓ | the incident it opened (`inc-run-<epoch>`, `rc-<case>`) |
+| `status` | str | ✓ | `started` · `fault_failed` · `undone` |
+| `detail` | str | | the fault script's output (what it stopped / restarted) |
 
 ### Investigation
 
@@ -231,6 +243,7 @@ CREATE INDEX FOR (o:Operation) ON (o.id)
 CREATE INDEX FOR (a:Anomaly) ON (a.incident)
 CREATE INDEX FOR (c:Change) ON (c.ts)
 CREATE INDEX FOR (c:Change) ON (c.id)
+CREATE INDEX FOR (r:Run) ON (r.id)
 CREATE INDEX FOR (e:Evidence) ON (e.id)
 CREATE INDEX FOR (i:Incident) ON (i.id)
 CREATE INDEX FOR (i:Incident) ON (i.symptom)   // alert join window

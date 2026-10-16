@@ -3,6 +3,7 @@
 The only module that imports `agents` (AGENTS.md rule 1): routes reach the agent flow through `app.state.diagnosis`.
 """
 
+import asyncio
 import json
 import logging
 import secrets
@@ -18,11 +19,13 @@ from starlette.exceptions import HTTPException
 from api.agents import ask, flow
 from api.config import get_settings
 from api.events import publish
-from api.graph import Graph, GraphUnavailable
+from api.graph import Graph, GraphUnavailable, get_graph
+from api.ingest import live
 from api.ingest.seed import seed_all
-from api.routes import alerts, deliver, graph_views, health, incidents
+from api.routes import alerts, deliver, graph_views, health, incidents, runs
 from api.routes import ask as ask_route
 from api.routes.deps import ApiError
+from api.runs import Runner
 from api.tools import mcp_server
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -53,6 +56,7 @@ class Diagnosis:
         try:
             v = flow.resume(incident_id, env) if resume else None
             if v is None or v["status"] == "diagnosing":  # nothing to resume (no checkpoint): start a new run
+                live.ingest_for_alert(get_graph(), env, incident_id)  # live envs only, once per incident
                 flow.run(incident_id, env)
         except Exception as e:
             log.exception(json.dumps({"incident_id": incident_id, "event": "diagnosis_failed"}))
@@ -70,6 +74,7 @@ async def lifespan(app: FastAPI):
     s = get_settings()
     app.state.graph = Graph(s.falkordb_url, s.query_timeout_s)
     app.state.diagnosis = Diagnosis()
+    app.state.runner = Runner()
     app.state.ask = ask.answer
     try:
         seed_all(app.state.graph, s.env_name)
@@ -79,8 +84,27 @@ async def lifespan(app: FastAPI):
     # A session manager runs once, so each startup builds a fresh /mcp app (tests start the app many times)
     mcp_app = mcp_server.asgi_app()
     app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != "/mcp"] + list(mcp_app.routes)
-    async with mcp_server.server.session_manager.run():  # a mounted sub-app's own lifespan never runs
-        yield
+    ticker = asyncio.create_task(_live_ticks(app.state.graph, s.live_tick_s)) if s.live_tick_s > 0 else None
+    try:
+        async with mcp_server.server.session_manager.run():  # a mounted sub-app's own lifespan never runs
+            yield
+    finally:
+        if ticker:
+            ticker.cancel()
+
+
+async def _live_ticks(graph: Graph, every_s: int) -> None:
+    """Topology roll-up for the live envs, so blast radius and what-if work before any incident.
+
+    ponytail: one loop in the API process; give it its own ingest worker when a second live env runs at once."""
+    while True:
+        for env in sorted(live.live_envs()):
+            try:
+                n = await asyncio.to_thread(live.tick, graph, env)
+                log.info(json.dumps({"event": "live_tick", "env": env, "rows": n}))
+            except Exception as e:  # a down source or graph must not kill the loop
+                log.warning(json.dumps({"event": "live_tick_failed", "env": env, "reason": str(e)}))
+        await asyncio.sleep(every_s)
 
 
 app = FastAPI(title="Epicenter", lifespan=lifespan)
@@ -146,6 +170,6 @@ def jsonable(errors: list) -> list:
 
 
 router = APIRouter(prefix="/api/v1")
-for r in (health.router, alerts.router, incidents.router, deliver.router, ask_route.router, graph_views.router):
-    router.include_router(r)
+for r in (health, alerts, incidents, deliver, ask_route, graph_views, runs):
+    router.include_router(r.router)
 app.include_router(router)

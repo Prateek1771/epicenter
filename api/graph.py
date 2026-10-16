@@ -39,8 +39,9 @@ QUERIES: dict[str, str] = {
         CREATE (a:Anomaly {id: $id, incident: $incident, kind: $kind, onset: $onset, score: $score,
                            self_ratio: $self_ratio, child_ratio: $child_ratio, ref: $ref,
                            detector: $detector})-[:ON]->(o)""",
+    # MERGE, not MATCH: a fault's change is written before the topology tick may have seen the service
     "U3": """
-        MATCH (s:Service {name: $service})
+        MERGE (s:Service {name: $service}) ON CREATE SET s.kind = $service_kind
         MERGE (c:Change {id: $id}) ON CREATE SET c.type = $type, c.ts = $ts, c.summary = $summary, c.ref = $ref
         MERGE (c)-[:CHANGED {ts: $ts}]->(s)
         RETURN c.id AS id""",
@@ -119,6 +120,14 @@ QUERIES: dict[str, str] = {
         RETURN a.id AS anomaly, a.kind AS kind, a.self_ratio AS self_ratio, a.child_ratio AS child_ratio,
                collect(ch {.id, .type, .ts, .summary}) AS changes
         ORDER BY anomaly""",
+    # Q3b: a datastore's latency is measured by its callers' client spans; their self/child split says whether the
+    # time was really spent waiting on it (LLD Q3, "saturated caller")
+    "Q3b": """
+        MATCH (:Service {kind: 'datastore'})-[:HAS_OP]->(cand:Operation {id: $cand})<-[:CALLS]-(caller:Operation)
+        MATCH (a:Anomaly {incident: $inc, kind: 'latency'})-[:ON]->(caller)
+        WHERE a.self_ratio IS NOT NULL AND a.child_ratio IS NOT NULL
+        RETURN caller.id AS caller, a.id AS anomaly, a.self_ratio AS self_ratio, a.child_ratio AS child_ratio
+        ORDER BY caller, anomaly""",
     "Q4a": """
         MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation)
         WITH collect(DISTINCT o) AS ops
@@ -247,7 +256,8 @@ QUERIES: dict[str, str] = {
     "rules": """
         MATCH (r:Rule)
         RETURN r.id AS id, r.cause_kinds AS cause_kinds, r.symptom_kind AS symptom_kind, r.direction AS direction,
-               r.p AS p, r.delay_s_max AS delay_s_max, r.service_kind AS service_kind, r.version AS version
+               r.p AS p, r.delay_s_max AS delay_s_max, r.service_kind AS service_kind, r.caller_kind AS caller_kind,
+               r.version AS version
         ORDER BY id""",
     "op_info": """
         UNWIND $ops AS x
@@ -388,6 +398,24 @@ QUERIES: dict[str, str] = {
         MATCH (i:Incident)-[:TRIGGERED_BY]->(:Alert {id: $id})
         RETURN i.id AS id, i.status AS status""",
     # Join window: an unresolved incident on the same symptom opened within ±$window_s of the alert
+    # Example runs (phase 9): one node per POST /runs, kept as history; undo flips its status
+    "run_create": """
+        MERGE (r:Run {id: $id})
+        ON CREATE SET r.scenario = $scenario, r.started_at = $ts, r.incident = $incident, r.status = 'started'
+        RETURN r.id AS id""",
+    "run_get": """
+        MATCH (r:Run {id: $id})
+        RETURN r.id AS id, r.scenario AS scenario, r.status AS status, r.incident AS incident,
+               r.started_at AS started_at, r.detail AS detail""",
+    "runs_recent": """
+        MATCH (r:Run)
+        RETURN r.id AS id, r.scenario AS scenario, r.status AS status, r.incident AS incident,
+               r.started_at AS started_at, r.detail AS detail
+        ORDER BY started_at DESC, id DESC
+        LIMIT $limit""",
+    "run_set_status": """
+        MATCH (r:Run {id: $id})
+        SET r.status = $status, r.detail = $detail""",
     "alert_find_open": """
         MATCH (i:Incident {symptom: $symptom})
         WHERE i.status <> 'resolved' AND i.opened_at >= $ts - $window_s AND i.opened_at <= $ts + $window_s
@@ -612,6 +640,7 @@ QUERIES: dict[str, str] = {
     "idx_anomaly": "CREATE INDEX FOR (a:Anomaly) ON (a.incident)",
     "idx_change": "CREATE INDEX FOR (c:Change) ON (c.ts)",
     "idx_change_id": "CREATE INDEX FOR (c:Change) ON (c.id)",
+    "idx_run": "CREATE INDEX FOR (r:Run) ON (r.id)",
     "idx_evidence": "CREATE INDEX FOR (e:Evidence) ON (e.id)",
     "idx_incident": "CREATE INDEX FOR (i:Incident) ON (i.id)",
     "idx_hypothesis": "CREATE INDEX FOR (h:Hypothesis) ON (h.id)",
@@ -628,7 +657,8 @@ QUERIES: dict[str, str] = {
     "seed_rule": """
         MERGE (r:Rule {id: $id})
         SET r.cause_kinds = $cause, r.symptom_kind = $symptom, r.direction = $direction,
-            r.p = $p, r.delay_s_max = $delay_s_max, r.service_kind = $kind_of_service, r.version = $version""",
+            r.p = $p, r.delay_s_max = $delay_s_max, r.service_kind = $kind_of_service, r.caller_kind = $kind_of_caller,
+            r.version = $version""",
     "seed_team": """
         MERGE (t:Team {name: $team})
         WITH t UNWIND $services AS svc

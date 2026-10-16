@@ -24,9 +24,8 @@ import pandas as pd
 
 from api.config import get_settings
 from api.graph import Graph
-from api.ingest import detect, logs, write
-from api.ingest.base import AnomalyRow, CallAgg, ChangeEvent, LogLine, Series
-from api.ingest.seed import seed_indexes
+from api.ingest.base import CallAgg, ChangeEvent, LogLine, Series
+from api.ingest.window import ingest_window
 
 HF_BASE = "https://huggingface.co/datasets/phamquiluan/RCAEval/resolve/main/"
 CASE_FILES = ["inject_time.txt", "metrics.parquet", "traces.parquet", "logs.parquet"]
@@ -73,6 +72,7 @@ class RcaevalAdapter:
         self.bucket_s = bucket_s
         self.t_alert = int((case_dir / "inject_time.txt").read_text().strip())
         self.gaps: list[str] = []
+        self.source = f"rcaeval:{self.case}"
         self._spans_df: pd.DataFrame | None = None
 
     # --- spans ---
@@ -212,66 +212,10 @@ class RcaevalAdapter:
 
 def replay(case_dir: Path, env_name: str, graph: Graph) -> dict:
     s = get_settings()
-    weights = json.loads(Path(s.weights_path).read_text(encoding="utf-8"))
-    cfg = weights["detect"]
+    cfg = json.loads(Path(s.weights_path).read_text(encoding="utf-8"))["detect"]
     ad = RcaevalAdapter(case_dir, env_name, cfg["bucket_s"])
-    t = ad.t_alert
-    base = (t - s.baseline_s - 120, t - 120)
-    window = (t - 120, t + s.window_after_s)
-    incident = f"rc-{ad.case}"
-
-    calls = list(ad.calls(*base))
-    series = list(ad.series(base[0], window[1]))
-    rows = detect.detect_window(series, t, cfg, s.baseline_s, s.window_after_s)
-
-    slow_kinds = set(s.slow_burn_kinds.split(","))
-    lookback = (t - s.slow_burn_lookback_s, t)
-    for sr in series:
-        if sr.kind in slow_kinds and sr.metric.startswith("metric:"):
-            keep = (sr.ts >= lookback[0]) & (sr.ts <= lookback[1])
-            minute = sr.ts[keep] // 60 * 60
-            if len(minute) == 0:
-                continue
-            per_min = pd.Series(sr.values[keep]).groupby(minute).mean()
-            one_min = Series(
-                sr.op, sr.metric, sr.kind, per_min.index.to_numpy(dtype=np.int64), per_min.to_numpy(), sr.ref
-            )
-            if hit := detect.detect_slow_burn(one_min, t, cfg):
-                rows.append(hit)
-
-    entry = ad.entry_ops()
-    for la in logs.detect_logs(ad.logs(base[0], window[1]), base, window, cfg):
-        if la.service in entry:
-            ref = f"rcaeval:{ad.case}:logs:{la.service}"
-            rows.append(
-                AnomalyRow(
-                    entry[la.service], la.kind, la.onset, la.score, ref=ref, signal=la.signal, signal_text=la.template
-                )
-            )
-
-    rows = detect.assign_ids(incident, detect.merge(rows))
-    symptom = CLIENT_OP
-
-    env = graph.env(env_name)
-    seed_indexes(env)
-    n_calls = write.write_topology(env, calls, ts=base[1])
-    write.open_incident(env, incident, symptom, t, weights["version"], ad.gaps)
-    ingest = write.new_ingest(env, incident)
-    write.write_anomalies(env, incident, rows)
-    top = sorted(rows, key=lambda r: (-r.score, r.op, r.kind))[:5]
-    return {
-        "incident": incident,
-        "env": f"env:{env_name}",
-        "alert_ts": t,
-        "symptom": symptom,
-        "ingest": ingest,
-        "calls": n_calls,
-        "anomalies": len(rows),
-        "by_kind": {k: sum(r.kind == k for r in rows) for k in sorted({r.kind for r in rows})},
-        "top": [f"{r.op} {r.kind} {r.score}" for r in top],
-        "gaps": ad.gaps,
-        "skipped_metric_services": len(getattr(ad, "skipped_metric_services", [])),
-    }
+    out = ingest_window(ad, env_name, graph, f"rc-{ad.case}", CLIENT_OP, ad.t_alert)
+    return out | {"skipped_metric_services": len(getattr(ad, "skipped_metric_services", []))}
 
 
 def main(argv: list[str] | None = None) -> int:

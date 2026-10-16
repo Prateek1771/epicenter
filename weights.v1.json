@@ -33,7 +33,7 @@
     "pelt_pen": 10.0,
     "min_points": 10,
     "bucket_s": 5,
-    "down_min_base": 10,
+    "down_min_base": 10, "down_min_gap_s": 15,
     "down_z": 16.0,
     "log_ratio": 5.0,
     "log_min": 10,

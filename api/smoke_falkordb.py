@@ -52,13 +52,16 @@ def rows(g, q: str, **params) -> list[list]:
     return g.query(q, params).result_set
 
 
-def eventually(fn: Callable[[], list], tries: int = 20) -> list:
-    # Index creation is asynchronous in FalkorDB; poll briefly before calling a check failed.
-    for _ in range(tries):
+def eventually(fn: Callable[[], list], timeout_s: float = 20.0) -> list:
+    # Index creation is asynchronous in FalkorDB and slows down when the host is busy (e.g. a Docker build):
+    # poll until a deadline, not a fixed number of tries.
+    deadline = time.monotonic() + timeout_s
+    while True:
         if out := fn():
             return out
+        if time.monotonic() > deadline:
+            return []
         time.sleep(0.25)
-    return []
 
 
 def check_var_length(g) -> str:

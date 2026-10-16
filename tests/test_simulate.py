@@ -150,6 +150,51 @@ def test_healthy_baseline_is_no_root_cause(graph, load):
     assert env.ro("root_causes", inc="inc-h") == []
 
 
+def test_quiet_symptom_with_a_weak_anomaly_is_no_root_cause(graph, load):
+    # a lone weak anomaly covers itself 100%; with the alerting operation fine, it explains nothing the alert saw
+    env = load("test-sim-quiet", "quiet_symptom.cypher")
+    v = diagnose(graph, "test-sim-quiet", "inc-q")
+    assert v["status"] == "no_root_cause" and v["root_cause"] is None
+    assert env.ro("root_causes", inc="inc-q") == []
+
+
+def test_a_weak_wobble_on_the_alerting_operation_itself_is_no_root_cause(graph, load):
+    load("test-sim-weak-self", "weak_self.cypher")
+    v = diagnose(graph, "test-sim-weak-self", "inc-w")
+    assert v["status"] == "no_root_cause" and v["root_cause"] is None
+
+
+@pytest.mark.parametrize(("api_self", "api_child", "cause"), [(40.0, 10.0, "api/List"), (1.1, 10.0, "db/Find")])
+def test_datastore_latency_measured_inside_a_saturated_caller(graph, tmp_path, api_self, api_child, cause):
+    # a client span carries its caller's scheduling lag: when the caller's own time grew far more than its waiting,
+    # the datastore's "latency" is the caller's; when the caller only waited, the datastore really was slow
+    text = (FIXTURES / "saturated_caller.cypher").read_text(encoding="utf-8")
+    f = tmp_path / "case.cypher"
+    f.write_text(text.replace("API_SELF", str(api_self)).replace("API_CHILD", str(api_child)), encoding="utf-8")
+    env = graph.env("test-sim-saturated")
+    env.delete()
+    seed_indexes(env)
+    env.load_cypher(f)
+    try:
+        v = diagnose(graph, "test-sim-saturated", "inc-s")
+    finally:
+        env.delete()
+    assert v["root_cause"] == cause
+
+
+def test_a_proxy_in_front_of_a_slow_app_fails_instead_of_waiting():
+    # nginx ejects an overloaded upstream and answers 502: latency upstream → errors at a proxy, not latency
+    proxy = Rule("latency+cpu+saturation->errors:upstream<proxy", ("latency", "cpu", "saturation"), "errors",
+                 "upstream", 0.70, 30, None, "proxy")  # fmt: skip
+    paths = [{"path": ["web/GET /", "api/List"], "rps": [20.0]}]
+    info = {"web/GET /": {"service_kind": "proxy", "in_rps": 0.0}, "api/List": {"service_kind": "app", "in_rps": 20.0}}
+    preds = simulate("api/List", ["latency"], 100, paths, info, [*RULES, proxy], 0.3, 15)
+    assert {(p.op, p.kind) for p in preds if p.op == "web/GET /"} >= {("web/GET /", "errors")}
+    app = {"web/GET /": {"service_kind": "app", "in_rps": 0.0}, "api/List": info["api/List"]}  # an app caller waits
+    assert ("web/GET /", "errors") not in {(p.op, p.kind) for p in simulate("api/List", ["latency"], 100, paths, app,
+                                                                         [*RULES, proxy], 0.3, 15)}  # fmt: skip
+
+
 def test_what_if_matches_reverse_calls_with_traffic(graph, load):
     env = load("test-sim-whatif", "mini_graph.cypher")
     r = what_if(graph, "test-sim-whatif", "redis", "down", save=True)

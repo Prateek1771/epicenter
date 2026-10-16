@@ -80,13 +80,29 @@ def ratio_p95(s: Series, base: tuple[int, int], window: tuple[int, int]) -> floa
 def detect_down(
     count: Series, base: tuple[int, int], t_alert: int, end: int, step: int, cfg: dict
 ) -> AnomalyRow | None:
-    """`down`: the operation had traffic in the baseline, then went silent after the alert for long enough that its
-    baseline rate would have produced ≥ `down_min_base` calls in the gap (so sparse operations don't count)."""
+    """`down`: the operation had traffic in the baseline, then went silent in the incident window and stayed silent to
+    its end, for ≥ `down_min_gap_s` and long enough that the baseline rate would have produced ≥ `down_min_base` calls
+    in the gap (so sparse operations don't count).
+
+    The silence can start before the alert (from the window start, t − 120 s): an alert often fires a minute after the
+    fault, and an operation whose callers stopped calling it (a client-side gate in front of a dead datastore) leaves
+    no other trace. ponytail: a gap that ended inside the window (an outage that recovered before ingest ran) isn't
+    `down`; RCAEval's bursty load generator leaves 20-60 s gaps on healthy operations, so a mid-window gap needs a
+    per-operation burstiness baseline before it can count."""
     in_base = (count.ts >= base[0]) & (count.ts < base[1])
     base_rate = count.values[in_base].sum() / max(base[1] - base[0], 1)
-    after = count.ts[(count.ts >= t_alert) & (count.ts <= end) & (count.values > 0)]
-    onset = int(after.max()) + step if len(after) else t_alert
-    if base_rate * (end - onset) < cfg["down_min_base"]:
+    active = (count.ts >= base[1]) & (count.ts <= end) & (count.values > 0)
+    after = count.ts[active]
+    if len(after):
+        last = int(after.max())
+        # a last bucket well under the baseline's per-bucket calls was cut short: the silence began inside it, at the
+        # same bucket where its callers' errors start (otherwise `down` would trail them by one bucket every time)
+        partial = count.values[count.ts == last].sum() < 0.5 * base_rate * step
+        onset = last if partial else last + step
+    else:
+        onset = base[1]
+    gap = end - onset
+    if gap < cfg["down_min_gap_s"] or base_rate * gap < cfg["down_min_base"]:
         return None
     return AnomalyRow(op=count.op, kind="down", onset=onset, score=to_score(cfg["down_z"]), ref=count.ref)
 
