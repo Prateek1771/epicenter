@@ -22,6 +22,7 @@ class CallAgg:
     rps: float
     p95_ms: float
     err_rate: float
+    caller_kind: str = "app"
 
 
 @dataclass

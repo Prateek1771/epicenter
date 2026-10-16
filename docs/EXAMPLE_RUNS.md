@@ -128,10 +128,13 @@ docker compose exec api python -m api.eval --suite re2 --system tt
 - Cases come from Hugging Face `phamquiluan/RCAEval` (Parquet layout, ~25 MB each); `--download` fetches one into
   `RCAEVAL_DIR` (`./data/rcaeval`, git-ignored). Names are `re2tt_<service>_<fault>_<n>`; faults are cpu, mem, disk,
   delay, loss, socket.
-- RCAEval has no alert, so the symptom is the root operation (a span with no `parentSpanID`; orphans whose parent is
-  missing from the data don't count) with the strongest
-  latency/errors/down anomaly, else the busiest root operation. The incident id is `rc-<case>`.
-- Replaying a case again replaces that incident's anomalies, so a replay is idempotent. One case takes ~15 s.
+- RCAEval has no alert: the faults are driven by a load generator that calls every entry point but isn't traced. Replay
+  models it as `client/load` (service `client`, kind `external`) with a `CALLS` edge to every root operation (a span
+  with no `parentSpanID`; orphans don't count), and that is the incident's symptom. Every anomalous operation is then
+  upstream of the symptom, and the scorer decides. The incident id is `rc-<case>`.
+- `python -m api.search.causal --env rcaeval-tt --incident rc-<case>` diagnoses it (~1 s); each call is a new, kept run.
+- Replaying a case again starts a new ingest: the previous anomalies are retired as `<incident>@i<k>` (not deleted), so
+  readers see the same current anomalies as before and earlier diagnosis runs stay fully linked. One case takes ~15 s.
 - Uses the same writers and the same causal search; only the adapter differs.
 - `inject_time.txt` is used as the alert time only, never as a `Change`, so the answer can't leak into the graph.
 - Report AC@1 / AC@3 and the ablations whatever they are, including losses.

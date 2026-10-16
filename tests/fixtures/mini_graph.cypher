@@ -15,7 +15,7 @@
 //   Q5 sig=e0, inc=inc-1    -> inc-0 (cause payment/Charge, fix "disable flag paymentFailure"), then inc-00
 //   Q6 cand=payment/Charge  -> PlaceOrder @1, GET /checkout @2;  cand=payment/Refund -> none (rps 0)
 //   blast_radius redis      -> GetCart @1, GET /cart @2, PlaceOrder @2, GET /checkout @3
-//   why_not inc-1 checkout  -> inc-1:h-2 refuted by inc-1:E2 (victim)
+//   why_not inc-1 checkout  -> inc-1:r1:h-2 refuted by inc-1:r1:E2 (victim)   (incident run 1)
 //   recent_changes payment  -> ch-1 by alice
 //   who_knows payment       -> alice 2 (member + author), bob 2 (member + fixed inc-0), carol 1 (fixed inc-0)
 
@@ -68,24 +68,24 @@ CREATE
 
   // the open incident and one refuted hypothesis (ids scoped per incident, Q-a)
   (i1:Incident {id: 'inc-1', status: 'diagnosing', symptom: 'frontend/GET /checkout', opened_at: 130,
-                weights_version: '2026-10-15.v2'}),
-  (h2:Hypothesis {id: 'inc-1:h-2', status: 'refuted', hops: 1, onset: 110}),
-  (e2:Evidence {id: 'inc-1:E2', kind: 'victim', summary: 'checkout/PlaceOrder is a victim: its callee explains it',
+                weights_version: '2026-10-15.v2', run: 1}),
+  (h2:Hypothesis {id: 'inc-1:r1:h-2', run: 1, status: 'refuted', hops: 1, onset: 110}),
+  (e2:Evidence {id: 'inc-1:r1:E2', kind: 'victim', summary: 'checkout/PlaceOrder is a victim: its callee explains it',
                 path: ['checkout/PlaceOrder', 'payment/Charge']}),
   (i1)-[:HAS_HYPOTHESIS]->(h2), (h2)-[:BLAMES]->(c1), (h2)-[:REFUTED_BY {by: 'skeptic'}]->(e2),
 
   // past resolved incidents for memory recall (Q5) and who_knows
   (i0:Incident {id: 'inc-0', status: 'resolved', symptom: 'frontend/GET /checkout', opened_at: 10,
-                weights_version: '2026-10-15.v2'}),
-  (h0:Hypothesis {id: 'inc-0:h-1', status: 'confirmed', hops: 2}),
+                weights_version: '2026-10-15.v2', run: 1}),
+  (h0:Hypothesis {id: 'inc-0:r1:h-1', run: 1, status: 'confirmed', hops: 2}),
   (a0:Action {id: 'inc-0:a-1', name: 'disable flag paymentFailure', status: 'done'}),
-  (i0)-[:HAS_HYPOTHESIS]->(h0), (i0)-[:ROOT_CAUSE {rank: 1}]->(h0), (h0)-[:BLAMES]->(p1), (i0)-[:RESOLVED_BY]->(a0),
+  (i0)-[:HAS_HYPOTHESIS]->(h0), (i0)-[:ROOT_CAUSE {rank: 1, run: 1}]->(h0), (h0)-[:BLAMES]->(p1), (i0)-[:RESOLVED_BY]->(a0),
   (bob)-[:FIXED]->(i0), (carol)-[:FIXED]->(i0),
 
   (i00:Incident {id: 'inc-00', status: 'resolved', symptom: 'frontend/GET /cart', opened_at: 5,
-                 weights_version: '2026-10-15.v2'}),
-  (h00:Hypothesis {id: 'inc-00:h-1', status: 'confirmed', hops: 2}),
-  (i00)-[:HAS_HYPOTHESIS]->(h00), (i00)-[:ROOT_CAUSE {rank: 1}]->(h00), (h00)-[:BLAMES]->(r1);
+                 weights_version: '2026-10-15.v2', run: 1}),
+  (h00:Hypothesis {id: 'inc-00:r1:h-1', run: 1, status: 'confirmed', hops: 2}),
+  (i00)-[:HAS_HYPOTHESIS]->(h00), (i00)-[:ROOT_CAUSE {rank: 1, run: 1}]->(h00), (h00)-[:BLAMES]->(r1);
 
 // 64-dim signatures (ADR 0008): inc-1 and inc-0 = e0, inc-00 = mostly e1 (still within the top 5)
 MATCH (i:Incident) WHERE i.id IN ['inc-1', 'inc-0']

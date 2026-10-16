@@ -129,7 +129,8 @@ WITH cand, min(length(p)) AS hops, min(a.onset) AS onset, max(a.score) AS streng
 RETURN cand.id AS op, hops, onset, strength, kinds
 ORDER BY onset, op
 ```
-The symptom operation itself is added in Python as a hypothesis with `hops = 0` (it can be its own cause).
+The symptom operation itself is added in Python as a hypothesis with `hops = 0` (it can be its own cause), but only
+when it has an anomaly in the incident: an operation with no anomaly can't be the cause (e.g. RCAEval's `client/load`).
 
 **Q2 `propagation_path`**
 ```cypher
@@ -143,7 +144,9 @@ ORDER BY i
 WITH p, collect(n.id) AS path, collect(onset) AS onsets
 RETURN path, onsets
 ```
-Python check, per returned path: no `null` in `onsets`, and `onsets[i+1] <= onsets[i] + skew` (default skew 15 s), i.e.
+Python check, per returned path (`search/causal.py: propagation_passes`): no `null` in `onsets` except on the symptom
+itself (an alert can fire on an operation with no anomaly of its own), and `onsets[i+1] <= onsets[i] + skew` (default
+skew 15 s; it allows each hop to be up to 15 s *later*, so it adds up along long paths), i.e.
 the problem started at the candidate end and moved towards the symptom. Best path = passes, then fewest hops, then
 lexicographic. Pass → `Evidence {kind:'propagation'}` `SUPPORTED_BY`; no passing path → `REFUTED_BY`.
 
@@ -224,6 +227,10 @@ class Adapter(Protocol):           # times are epoch seconds (int), like the gra
 Adapters return plain dataclasses (`api/ingest/base.py`) and never import `graph.py`; `api/ingest/write.py` is the
 only ingest code that writes (U1–U6, batched with `UNWIND` in chunks of 500). `U6_ops` upserts every operation an
 anomaly points at before U2 runs, so an anomaly on an operation with no call pair yet is never silently dropped.
+A replay starts a new **ingest** (`write.new_ingest`): `Incident.ingest` is bumped and the previous ingest's anomalies
+are re-keyed `<incident>@i<k>` (`retire_anomalies`), never deleted. Every reader already matches `incident: $inc`, so
+it sees only the current ingest with no extra filter, and older diagnosis runs keep their `ABOUT` edges. Live ingest
+writes an incident's anomalies once, so it never retires anything.
 
 | Adapter | calls | series | logs | changes |
 |---|---|---|---|---|
@@ -395,6 +402,13 @@ v1 (before the Fault Simulator) had no `footprint` term. Both versions are kept 
 
 Tie-break: higher score, then earlier onset, then operation id. The weights version is stored on the `Incident`.
 
+Implementation notes (`search/score.py`): `onset_earliness`, `strength` and `pagerank` are rank-normalized within
+the incident (ties share the average rank, a missing value ranks last); `mechanism_fit` 1 / 0.5 / 0 as above;
+`change_match` 0/1. Confidence uses `s2 = 0` when there is a single non-refuted hypothesis. `score_parts` is stored
+as JSON with sorted keys and floats rounded to 6 places, so reruns are byte-identical. `weights.v1.json` (no
+`footprint`, the rest renormalized to sum 1) is kept for the ablation; `load_weights` rejects files whose weights
+don't sum to 1. PageRank is unweighted (pinned FalkorDB has no weighted form; §2 smoke results).
+
 ---
 
 ## 7. Fault Simulator
@@ -535,10 +549,18 @@ stateDiagram-v2
     open --> refuted: any REFUTED_BY
     open --> inconclusive: query timeout / missing data
     supported --> confirmed: chosen as ROOT_CAUSE
+    inconclusive --> confirmed: best non-refuted
     supported --> pruned: lost on score
     inconclusive --> pruned
     refuted --> [*]
 ```
+
+Every diagnosis is a kept, numbered **run**: `Incident.run` is the current one, each run writes its own hypotheses
+and evidence (ids `<incident>:r<n>:h-<k>` / `:E<k>`, properties `run` and `ingest`, the anomaly ingest it read), and
+`ROOT_CAUSE` carries `{rank, run, ingest, confidence, weights_version, ts}`. Evidence links (`ABOUT`) to every anomaly
+it is about (propagation and victim evidence → the candidate's anomalies, change evidence → the `Change`). Readers (why_not, Q5, who_knows, the canvas) use `run = Incident.run`; older runs
+stay as history ("superseded" = `h.run < i.run`), e.g. to compare verdicts before and after a weights change. If every
+hypothesis is refuted there is no `ROOT_CAUSE` and the incident stays `diagnosing` until §7.6 decides `no_root_cause`.
 
 ---
 

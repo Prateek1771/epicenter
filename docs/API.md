@@ -91,7 +91,7 @@ When a second, independent fault is found, `verdict.second_root_cause` holds a h
 
 ### `POST /incidents/{id}/diagnose`
 Runs the agent flow, or resumes it after a crash. `202` → `{ "incident_id": "inc-42", "status": "diagnosing" }`.
-`409 INCIDENT_STATE` if it's already `diagnosed` (send `?force=true` to rerun; the old hypotheses are kept and marked superseded).
+`409 INCIDENT_STATE` if it's already `diagnosed` (send `?force=true` to rerun: a new run; earlier runs and their hypotheses stay in the graph as history, LLD §8).
 
 ### `GET /incidents/{id}/stream`
 Server-Sent Events. Supports `Last-Event-ID` for replay. Event types are listed in [LLD §9](LLD.md#9-events-sse).

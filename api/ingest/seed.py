@@ -19,6 +19,8 @@ ENV_INDEXES = [
     "idx_operation",
     "idx_anomaly",
     "idx_change",
+    "idx_change_id",
+    "idx_evidence",
     "idx_incident",
     "idx_hypothesis",
     "idx_person",

@@ -69,6 +69,9 @@ tests/test_detect.py
 - ~~PELT penalty~~: `weights.json → detect.pelt_pen` (10), with `sustain` 3 and `eps_rel` 0.1 picked on one case
   (`re2tt_ts-auth-service_cpu_2`); phase 10 tunes them on a dev split and freezes them.
 
+- Re-replaying a case no longer deletes its anomalies: phase 3 added ingest versions (`Incident.ingest`, previous ingest
+  retired as `<incident>@i<k>`), so diagnosis history stays linked. See [LLD §3.1](../LLD.md#31-adapter-protocol).
+
 ## Done when
 
 `python -m api.ingest.rcaeval --case re2tt_<service>_<fault>_<n> --env rcaeval-tt --download` fills the graph deterministically and the detector tests pass.

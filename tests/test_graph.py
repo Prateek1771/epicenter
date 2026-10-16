@@ -79,8 +79,8 @@ def test_blast_radius(env_test):
 
 def test_why_not(env_test):
     [row] = env_test.ro("why_not", inc="inc-1", svc="checkout")
-    assert (row["hypothesis"], row["status"]) == ("inc-1:h-2", "refuted")
-    assert [(e["id"], e["kind"]) for e in row["refuted_by"]] == [("inc-1:E2", "victim")]
+    assert (row["hypothesis"], row["status"]) == ("inc-1:r1:h-2", "refuted")
+    assert [(e["id"], e["kind"]) for e in row["refuted_by"]] == [("inc-1:r1:E2", "victim")]
     assert env_test.ro("why_not", inc="inc-1", svc="redis") == []  # no hypothesis: caller falls back to Q1
 
 

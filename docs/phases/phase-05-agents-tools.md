@@ -61,7 +61,7 @@ tests/test_flow.py
 
 ## Risks / open questions
 
-- **Q-c:** `?force=true` rerun marks old hypotheses "superseded"; add that status to [LLD §8](../LLD.md#8-state-machines) and GRAPH_SCHEMA, or reuse `pruned` with a flag.
+- ~~Q-c~~ closed in phase 3: `?force=true` starts a new run; earlier runs are kept ([LLD §8](../LLD.md#8-state-machines)).
 - LangGraph `Send` + checkpointer + resume needs a spike early in this phase.
 
 ## Done when

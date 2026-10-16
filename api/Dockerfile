@@ -4,7 +4,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY api/requirements.txt api/requirements-dev.txt api/
 RUN pip install --no-cache-dir -r api/requirements-dev.txt
-COPY pyproject.toml weights.json ./
+COPY pyproject.toml weights.json weights.v1.json ./
 COPY api/ api/
 COPY seed/ seed/
 COPY tests/ tests/

@@ -40,7 +40,11 @@ METRIC_KIND = {
     "latency-90": "latency",
     "error": "errors",
 }
-SYMPTOM_KINDS = {"latency", "errors", "down"}
+# RCAEval faults are driven by a load generator that calls every entry point but isn't traced. Replay models it as
+# one operation calling every root operation and uses it as the alert symptom, so every anomalous operation is
+# upstream of the symptom and the scorer, not the symptom pick, decides.
+CLIENT_SVC = "client"
+CLIENT_OP = "client/load"
 _LEVEL = re.compile(r"\s(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\s")
 
 
@@ -112,15 +116,24 @@ class RcaevalAdapter:
         counts = counts.sort_values(["svc", "n", "op"], ascending=[True, False, True])
         return dict(counts.groupby("svc").first()["op"].items())
 
-    def root_ops(self) -> dict[str, int]:
-        """Operations of root spans (no parent in the trace) → span count."""
-        df = self._spans()
-        return {k: int(v) for k, v in df[df["root"]].groupby("op").size().sort_index().items()}
-
     def calls(self, since: int, until: int):
         df = self._spans()
         df = df[(df["sec"] >= since) & (df["sec"] < until) & df["parent_op"].notna() & (df["parent_op"] != df["op"])]
         secs = max(until - since, 1)
+        roots = self._spans()
+        roots = roots[(roots["sec"] >= since) & (roots["sec"] < until) & roots["root"]]
+        for (svc, op), g in roots.groupby(["svc", "op"], sort=True):
+            yield CallAgg(
+                caller_svc=CLIENT_SVC,
+                caller_op=CLIENT_OP,
+                caller_kind="external",
+                callee_svc=svc,
+                callee_op=op,
+                callee_kind="app",
+                rps=round(len(g) / secs, 4),
+                p95_ms=round(float(np.percentile(g["duration"], 95)) / 1000, 3),
+                err_rate=round(float(g["err"].mean()), 4),
+            )
         for (psvc, pop, svc, op), g in df.groupby(["parent_svc", "parent_op", "svc", "op"], sort=True):
             yield CallAgg(
                 caller_svc=psvc,
@@ -197,14 +210,6 @@ class RcaevalAdapter:
         return []  # RCAEval has no change events; inject_time is deliberately not one
 
 
-def choose_symptom(rows: list[AnomalyRow], roots: dict[str, int]) -> str:
-    """RCAEval has no alert: the root operation with the strongest latency/errors/down anomaly, else the busiest."""
-    hits = [r for r in rows if r.op in roots and r.kind in SYMPTOM_KINDS]
-    if hits:
-        return min(hits, key=lambda r: (-r.score, r.op)).op
-    return min(roots, key=lambda op: (-roots[op], op))
-
-
 def replay(case_dir: Path, env_name: str, graph: Graph) -> dict:
     s = get_settings()
     weights = json.loads(Path(s.weights_path).read_text(encoding="utf-8"))
@@ -245,13 +250,13 @@ def replay(case_dir: Path, env_name: str, graph: Graph) -> dict:
             )
 
     rows = detect.assign_ids(incident, detect.merge(rows))
-    symptom = choose_symptom(rows, ad.root_ops())
+    symptom = CLIENT_OP
 
     env = graph.env(env_name)
     seed_indexes(env)
     n_calls = write.write_topology(env, calls, ts=base[1])
     write.open_incident(env, incident, symptom, t, weights["version"], ad.gaps)
-    write.clear_incident(env, incident)
+    ingest = write.new_ingest(env, incident)
     write.write_anomalies(env, incident, rows)
     top = sorted(rows, key=lambda r: (-r.score, r.op, r.kind))[:5]
     return {
@@ -259,6 +264,7 @@ def replay(case_dir: Path, env_name: str, graph: Graph) -> dict:
         "env": f"env:{env_name}",
         "alert_ts": t,
         "symptom": symptom,
+        "ingest": ingest,
         "calls": n_calls,
         "anomalies": len(rows),
         "by_kind": {k: sum(r.kind == k for r in rows) for k in sorted({r.kind for r in rows})},

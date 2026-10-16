@@ -8,3 +8,4 @@ pandas==3.0.6
 pyarrow==26.0.0
 ruptures==1.1.10
 drain3==0.9.11
+networkx==3.7

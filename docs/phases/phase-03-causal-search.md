@@ -24,16 +24,16 @@ tests/test_causal.py  tests/test_score.py
 
 ## Tasks
 
-- [ ] `hypotheses(env, incident, symptom)`: Q1 rows + the symptom itself (`hops = 0`); write `Hypothesis {status:'open'}`, `HAS_HYPOTHESIS`, `BLAMES`.
-- [ ] `check_propagation`: Q2 paths; a path passes if no `null` onset and `onsets[i+1] <= onsets[i] + skew_s`. Best path = passes, fewest hops, lexicographic. Pass → `Evidence{kind:'propagation'}` `SUPPORTED_BY`; none → `REFUTED_BY`.
-- [ ] `check_mechanism`: Q3; victim rule `child_ratio >= 2·self_ratio and child_ratio > 1.5` → `Evidence{kind:'victim'}` `REFUTED_BY`; change in `lookback_s` → `Evidence{kind:'change'}` `SUPPORTED_BY`, `ABOUT` the `Change`.
-- [ ] Evidence `summary` comes from a template string, never an LLM ("payment/Charge errors began 52 s before checkout/PlaceOrder").
-- [ ] Hypothesis status from evidence only: any `REFUTED_BY` → `refuted`; only `SUPPORTED_BY` → `supported`; query timeout / missing data → `inconclusive`.
-- [ ] Q4: Q4a on the env graph → edge list; write ops + `BLAME {w}` into `scratch:<incident>`; Q4b PageRank; **delete the scratch graph in `finally`**. Fallback `networkx.pagerank` on the same edge list; record `score_parts.pagerank_impl`.
-- [ ] Features rank-normalized within the incident; `score = w·features − 1.0·refuted`; `confidence = sigmoid(k·(s1 − s2))`.
-- [ ] Tie-break: score desc, onset asc, op id asc. Store `weights_version` on the `Incident`, `score` + `score_parts` (JSON, sorted keys) on each `Hypothesis`.
-- [ ] Write `(Incident)-[:ROOT_CAUSE {rank:1}]->(top)`; top → `confirmed`, the rest `supported` → `pruned`.
-- [ ] `weights.json` loaded once, validated (weights sum, required keys); version string goes everywhere a score goes.
+- [x] `hypotheses(env, incident, symptom)`: Q1 rows + the symptom itself (`hops = 0`); write `Hypothesis {status:'open'}`, `HAS_HYPOTHESIS`, `BLAMES`.
+- [x] `check_propagation`: Q2 paths; a path passes if no `null` onset and `onsets[i+1] <= onsets[i] + skew_s`. Best path = passes, fewest hops, lexicographic. Pass → `Evidence{kind:'propagation'}` `SUPPORTED_BY`; none → `REFUTED_BY`.
+- [x] `check_mechanism`: Q3; victim rule `child_ratio >= 2·self_ratio and child_ratio > 1.5` → `Evidence{kind:'victim'}` `REFUTED_BY`; change in `lookback_s` → `Evidence{kind:'change'}` `SUPPORTED_BY`, `ABOUT` the `Change`.
+- [x] Evidence `summary` comes from a template string, never an LLM ("payment/Charge errors began 52 s before checkout/PlaceOrder").
+- [x] Hypothesis status from evidence only: any `REFUTED_BY` → `refuted`; only `SUPPORTED_BY` → `supported`; query timeout / missing data → `inconclusive`.
+- [x] Q4: Q4a on the env graph → edge list; write ops + `BLAME {w}` into `scratch:<incident>`; Q4b PageRank; **delete the scratch graph in `finally`**. Fallback `networkx.pagerank` on the same edge list; record `score_parts.pagerank_impl`.
+- [x] Features rank-normalized within the incident; `score = w·features − 1.0·refuted`; `confidence = sigmoid(k·(s1 − s2))`.
+- [x] Tie-break: score desc, onset asc, op id asc. Store `weights_version` on the `Incident`, `score` + `score_parts` (JSON, sorted keys) on each `Hypothesis`.
+- [x] Write `(Incident)-[:ROOT_CAUSE {rank:1}]->(top)`; top → `confirmed`, the rest `supported` → `pruned`.
+- [x] `weights.json` loaded once, validated (weights sum, required keys); version string goes everywhere a score goes.
 
 ## Acceptance
 
@@ -57,10 +57,24 @@ tests/test_causal.py  tests/test_score.py
 
 ## Risks / open questions
 
-- **Q-b:** add `footprint` to `EvidenceOut.kind` in [LLD §4](../LLD.md#4-data-models-modelspy-excerpt) (needed in phase 4).
-- Weighted PageRank depends on the phase 0 smoke result.
+- ~~Q-b~~ closed in phase 1.
+- PageRank is unweighted on the pinned tag (phase 0 smoke result).
 - `mechanism_fit` for non-latency kinds is a coarse rule; validate on RCAEval in phase 10.
 
 ## Done when
 
 An RCAEval case produces a ranked, deterministic verdict in the graph with supporting and refuting evidence for every hypothesis.
+
+## Results (2026-10-16, 3 RE2-TT cases, weights v2, footprint not yet in)
+
+| Case | Root cause picked | Faulty service rank | Q1–Q4 p95 |
+|---|---|---|---|
+| `ts-auth-service_cpu_1` | `ts-auth-service/UserRepository.findByUsername` ✅ | 1 | < 5 ms |
+| `ts-auth-service_cpu_2` | `ts-seat-service` (pre-injection log noise) | 3 | < 5 ms |
+| `ts-order-service_delay_1` | `ts-inside-payment-service` (its caller) | 2 | < 5 ms |
+
+Re-replaying a case retires its old anomalies (`<incident>@i<k>`) instead of deleting them, so every earlier run keeps
+its `ABOUT` links (verified on the 3 cases: 16 / 19 / 45 links intact after a re-replay).
+
+AC@1 1/3, AC@3 3/3 on three cases: a smoke check, not the eval (phase 10 runs all 90 cases). Diagnosis ~1 s per case,
+reruns identical.

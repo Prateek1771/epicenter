@@ -43,7 +43,7 @@ QUERIES: dict[str, str] = {
     # Batched forms for ingest (one round trip per tick; rows sorted by the caller)
     "U1_batch": """
         UNWIND $rows AS r
-        MERGE (cs:Service {name: r.caller_svc}) ON CREATE SET cs.kind = 'app'
+        MERGE (cs:Service {name: r.caller_svc}) ON CREATE SET cs.kind = r.caller_kind
         MERGE (co:Operation {id: r.caller_op}) ON CREATE SET co.name = r.caller_name
         MERGE (cs)-[:HAS_OP]->(co)
         MERGE (ss:Service {name: r.callee_svc}) ON CREATE SET ss.kind = r.callee_kind
@@ -74,7 +74,16 @@ QUERIES: dict[str, str] = {
         WITH s, r
         MATCH (a:Anomaly {incident: $incident, id: r.anomaly})
         MERGE (a)-[:IN_SIGNAL]->(s)""",
-    "clear_incident_anomalies": "MATCH (a:Anomaly {incident: $inc}) DETACH DELETE a",
+    # Replays never delete anomalies: the previous ingest is re-keyed "<inc>@i<k>" so every reader (which filters
+    # incident: $inc) sees only the current one, while old diagnosis runs keep their ABOUT edges.
+    "next_ingest": """
+        MATCH (i:Incident {id: $inc})
+        WITH i, coalesce(i.ingest, 0) AS k
+        SET i.ingest = k + 1
+        RETURN k AS retired, i.ingest AS ingest""",
+    "retire_anomalies": """
+        MATCH (a:Anomaly {incident: $inc})
+        SET a.id = a.id + $suffix, a.incident = $inc + $suffix""",
     "incident_anomalies": """
         MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation)
         RETURN a.id AS id, o.id AS op, a.kind AS kind, a.onset AS onset, a.score AS score, a.detector AS detector,
@@ -128,7 +137,8 @@ QUERIES: dict[str, str] = {
     "Q5": """
         CALL db.idx.vector.queryNodes('Incident', 'signature', 5, vecf32($sig)) YIELD node AS past, score
         WITH past, score WHERE past.id <> $inc AND past.status = 'resolved'
-        MATCH (past)-[:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(cause)
+        MATCH (past)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(cause)
+        WHERE rc.run = past.run
         OPTIONAL MATCH (past)-[:RESOLVED_BY]->(act:Action)
         RETURN past.id AS incident, score, labels(cause)[0] AS cause_type,
                coalesce(cause.id, cause.name) AS cause, collect(act.name) AS fixes
@@ -139,6 +149,77 @@ QUERIES: dict[str, str] = {
         RETURN caller.id AS op, length(p) AS hops,
                [n IN nodes(p) | n.id] AS path, [r IN relationships(p) | r.rps] AS rps
         ORDER BY hops, op""",
+    # --- Diagnosis (phase 3). Each diagnosis is a kept, numbered run; readers use Incident.run. ---
+    "next_run": """
+        MATCH (i:Incident {id: $inc})
+        SET i.run = coalesce(i.run, 0) + 1, i.status = 'diagnosing'
+        RETURN i.run AS run, i.symptom AS symptom, i.opened_at AS opened_at, coalesce(i.ingest, 1) AS ingest""",
+    "op_anomalies": """
+        MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation {id: $op})
+        RETURN min(a.onset) AS onset, max(a.score) AS strength, collect(DISTINCT a.kind) AS kinds,
+               collect(a.id) AS anomalies""",
+    "H_create": """
+        MATCH (i:Incident {id: $inc})
+        UNWIND $rows AS r
+        MATCH (o:Operation {id: r.op})
+        CREATE (h:Hypothesis {id: r.id, run: $run, ingest: $ingest, status: 'open', hops: r.hops})
+        SET h.onset = r.onset
+        CREATE (i)-[:HAS_HYPOTHESIS]->(h)
+        CREATE (h)-[:BLAMES]->(o)""",
+    # Relationship types can't be parameters, hence one query per direction
+    "E_support": """
+        UNWIND $rows AS r
+        MATCH (h:Hypothesis {id: r.hyp})
+        CREATE (h)-[:SUPPORTED_BY {by: r.by}]->(e:Evidence {id: r.id, kind: r.kind, summary: r.summary})
+        SET e.path = r.path, e.value = r.value
+        WITH e, r
+        UNWIND r.anomalies AS aid
+        MATCH (a:Anomaly {incident: $inc, id: aid})
+        CREATE (e)-[:ABOUT]->(a)""",
+    "E_refute": """
+        UNWIND $rows AS r
+        MATCH (h:Hypothesis {id: r.hyp})
+        CREATE (h)-[:REFUTED_BY {by: r.by}]->(e:Evidence {id: r.id, kind: r.kind, summary: r.summary})
+        SET e.path = r.path, e.value = r.value
+        WITH e, r
+        UNWIND r.anomalies AS aid
+        MATCH (a:Anomaly {incident: $inc, id: aid})
+        CREATE (e)-[:ABOUT]->(a)""",
+    "E_about_change": """
+        UNWIND $rows AS r
+        MATCH (e:Evidence {id: r.evidence})
+        MATCH (c:Change {id: r.change})
+        CREATE (e)-[:ABOUT]->(c)""",
+    "H_score": """
+        UNWIND $rows AS r
+        MATCH (h:Hypothesis {id: r.id})
+        SET h.status = r.status, h.score = r.score, h.score_parts = r.score_parts""",
+    "root_cause": """
+        MATCH (i:Incident {id: $inc})
+        MATCH (h:Hypothesis {id: $hyp})
+        CREATE (i)-[:ROOT_CAUSE {rank: $rank, run: $run, ingest: $ingest, confidence: $confidence, weights_version: $wv,
+                                 ts: $ts}]->(h)
+        SET i.status = 'diagnosed', i.confidence = $confidence, i.weights_version = $wv""",
+    "run_hypotheses": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE h.run = $run
+        OPTIONAL MATCH (h)-[r:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+        WITH h, o, e, r ORDER BY e.id
+        RETURN h.id AS id, o.id AS op, h.status AS status, h.hops AS hops, h.onset AS onset, h.score AS score,
+               h.score_parts AS score_parts,
+               [x IN collect([type(r), e.kind, e.summary]) WHERE x[0] IS NOT NULL] AS evidence
+        ORDER BY id""",
+    # Anomalies one run's evidence cites; for an older run they may be retired ("<inc>@i<k>") ingests
+    "run_evidence_about": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+              -[:ABOUT]->(a:Anomaly)
+        WHERE h.run = $run
+        RETURN e.id AS evidence, a.id AS anomaly, a.incident AS anomaly_incident
+        ORDER BY evidence, anomaly""",
+    "run_ingests": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)
+        RETURN DISTINCT h.run AS run, h.ingest AS ingest
+        ORDER BY run""",
     # --- Tool queries (LLD §2.3) ---
     "blast_radius": """
         MATCH (s:Service {name: $svc})-[:HAS_OP]->(o)
@@ -148,8 +229,9 @@ QUERIES: dict[str, str] = {
         RETURN cs.name AS service, caller.id AS op, min(length(p)) AS hops, t.name AS team
         ORDER BY hops, op""",
     "why_not": """
-        MATCH (:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
               <-[:HAS_OP]-(:Service {name: $svc})
+        WHERE h.run = i.run
         OPTIONAL MATCH (h)-[:REFUTED_BY]->(e:Evidence)
         RETURN h.id AS hypothesis, h.status AS status, o.id AS op,
                collect(e {.id, .kind, .summary, .path}) AS refuted_by
@@ -165,8 +247,9 @@ QUERIES: dict[str, str] = {
         MATCH (s:Service {name: $svc})
         OPTIONAL MATCH (s)-[:OWNED_BY]->(:Team)<-[:MEMBER_OF]-(m:Person)
         WITH s, collect(DISTINCT m) AS members
-        OPTIONAL MATCH (f:Person)-[:FIXED]->(:Incident)-[:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(:Operation)
+        OPTIONAL MATCH (f:Person)-[:FIXED]->(fi:Incident)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(:Operation)
                        <-[:HAS_OP]-(s)
+        WHERE rc.run = fi.run
         WITH s, members, collect(f) AS fixers
         OPTIONAL MATCH (a:Person)-[:AUTHORED]->(:Change)-[:CHANGED]->(s)
         WITH members, fixers, collect(a) AS authors
@@ -178,6 +261,8 @@ QUERIES: dict[str, str] = {
     "idx_operation": "CREATE INDEX FOR (o:Operation) ON (o.id)",
     "idx_anomaly": "CREATE INDEX FOR (a:Anomaly) ON (a.incident)",
     "idx_change": "CREATE INDEX FOR (c:Change) ON (c.ts)",
+    "idx_change_id": "CREATE INDEX FOR (c:Change) ON (c.id)",
+    "idx_evidence": "CREATE INDEX FOR (e:Evidence) ON (e.id)",
     "idx_incident": "CREATE INDEX FOR (i:Incident) ON (i.id)",
     "idx_hypothesis": "CREATE INDEX FOR (h:Hypothesis) ON (h.id)",
     "idx_person": "CREATE INDEX FOR (p:Person) ON (p.handle)",

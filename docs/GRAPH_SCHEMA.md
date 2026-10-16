@@ -79,10 +79,10 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 
 ### Signals
 
-**`Anomaly`**: key `id` (`an-<incident>-<n>`)
+**`Anomaly`**: key `id` (`an-<incident>-<n>`; a retired ingest's copy is `an-<incident>-<n>@i<k>`)
 | Property | Type | Req | Notes |
 |---|---|---|---|
-| `incident` | str | ✓ | incident id (indexed) |
+| `incident` | str | ✓ | incident id (indexed). A re-replay **retires** the previous ingest's anomalies by re-keying them `<incident>@i<k>` instead of deleting them, so readers (which match `incident: $inc`) see only the current ingest while older diagnosis runs keep their `ABOUT` edges |
 | `kind` | str | ✓ | `latency` · `errors` · `cpu` · `mem` · `saturation` · `log_burst` · `new_template` · `down` |
 | `onset` | ts | ✓ | first change point |
 | `score` | float | ✓ | normalized 0..1 |
@@ -115,21 +115,25 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `status` | str | ✓ | `open` · `diagnosing` · `diagnosed` · `no_root_cause` · `delivered` · `resolved` |
 | `symptom` | str | ✓ | operation id |
 | `opened_at` | ts | ✓ | |
+| `run` | int | after diagnosis | current diagnosis run (1, 2, …); every run is kept |
+| `ingest` | int | after ingest | current anomaly ingest (1, 2, …); bumped by every replay, older ingests are retired as `<id>@i<k>` |
 | `signature` | vecf32[64] | after diagnosis | [ADR 0008](adr/0008-deterministic-incident-signature.md) (vector-indexed) |
 | `confidence` | float | after diagnosis | |
 | `weights_version` | str | ✓ | from `weights.json` |
 | `gaps` | list<str> | | sources that were unavailable |
 
-**`Hypothesis`**: key `id` (`<incident>:h-<n>`, e.g. `inc-1:h-2`; the API shows `h-2`)
+**`Hypothesis`**: key `id` (`<incident>:r<run>:h-<n>`, e.g. `inc-1:r2:h-3`; the API shows `h-3`)
 | Property | Type | Req | Notes |
 |---|---|---|---|
 | `status` | str | ✓ | `open` · `supported` · `refuted` · `inconclusive` · `confirmed` · `pruned` |
+| `run` | int | ✓ | diagnosis run that wrote it; the current one is `Incident.run`, older runs are history |
+| `ingest` | int | ✓ | the anomaly ingest this run read (`Incident.ingest` at the time) |
 | `hops` | int | ✓ | distance from the symptom (0 = symptom itself) |
 | `onset` | ts | | earliest anomaly onset on the target |
 | `score` | float | after scoring | |
 | `score_parts` | str (JSON) | after scoring | feature values, `pagerank_impl` |
 
-**`Evidence`**: key `id` (`<incident>:E<n>`, e.g. `inc-1:E3`; the API shows `E3`). Incidents share the env graph, so per-incident ids are scoped (`models.scoped_id` / `local_id`)
+**`Evidence`**: key `id` (`<incident>:r<run>:E<n>`, e.g. `inc-1:r2:E3`; the API shows `E3`). Incidents share the env graph, so per-incident ids are scoped (`models.scoped_id` / `local_id`)
 | Property | Type | Req | Notes |
 |---|---|---|---|
 | `kind` | str | ✓ | `propagation` · `mechanism` · `change` · `victim` · `pagerank` · `footprint` · `log` · `history` |
@@ -188,7 +192,7 @@ Rule ids in `kb:propagation` come from the rule's content (`errors+down->errors:
 | `BLAMES` | Hypothesis → Operation \| Change | | |
 | `SUPPORTED_BY` / `REFUTED_BY` | Hypothesis → Evidence | `by` (agent name) | |
 | `ABOUT` | Evidence → Anomaly \| Change | | |
-| `ROOT_CAUSE` | Incident → Hypothesis | `rank` int | `rank: 1` after diagnosis; `rank: 2` if the Fault Simulator finds a second, independent fault; none when `no_root_cause` |
+| `ROOT_CAUSE` | Incident → Hypothesis | `rank` int, `run` int, `ingest` int, `confidence` float, `weights_version` str, `ts` | `rank: 1` after diagnosis; `rank: 2` if the Fault Simulator finds a second, independent fault; none when `no_root_cause` |
 | `PREDICTS` | Simulation → Operation | `p` float, `hops` int, `kind` str | what-if prediction |
 | `HAS_EXPLANATION` | Incident → Explanation | | |
 | `HAS_DECISION` | Incident → Decision | | |
@@ -210,6 +214,8 @@ CREATE INDEX FOR (s:Service) ON (s.name)
 CREATE INDEX FOR (o:Operation) ON (o.id)
 CREATE INDEX FOR (a:Anomaly) ON (a.incident)
 CREATE INDEX FOR (c:Change) ON (c.ts)
+CREATE INDEX FOR (c:Change) ON (c.id)
+CREATE INDEX FOR (e:Evidence) ON (e.id)
 CREATE INDEX FOR (i:Incident) ON (i.id)
 CREATE INDEX FOR (h:Hypothesis) ON (h.id)
 CREATE INDEX FOR (p:Person) ON (p.handle)
@@ -256,7 +262,7 @@ CALL db.idx.fulltext.queryNodes('Signal', 'ECONNREFUSED') YIELD node RETURN node
 | Data | Rule |
 |---|---|
 | Topology | never deleted; `last_seen` shows staleness; UI hides operations unseen for 24 h |
-| Anomalies, signals, investigation nodes | kept with the incident (they are the memory) |
+| Anomalies, signals, investigation nodes | kept with the incident (they are the memory). Replays never delete anomalies: the previous ingest is retired as `<incident>@i<k>` and stays linked from the diagnosis runs that cited it |
 | Scratch graphs | deleted after scoring (`finally` block) |
 | `Simulation` nodes | kept, so predictions can be compared with later incidents |
 | `kb:propagation` | replaced as a whole when the rules version changes (old version kept in git as YAML) |

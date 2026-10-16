@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from api.ingest.rcaeval import replay
+from api.search.causal import diagnose
 
 T = 1_700_000_000  # inject time
 ENV = "test-rcaeval"
@@ -55,11 +56,11 @@ def test_replay_builds_topology_and_anomalies(graph, case_dir):
         env.delete()
 
     assert first == second  # replay is idempotent and deterministic
-    assert summary["symptom"] == "front/GET /"
+    assert summary["symptom"] == "client/load"  # the load generator, calling every root operation
     assert summary["gaps"] == ["logs"]
-    assert summary["calls"] == 2
+    assert summary["calls"] == 3  # client→front, front→back, back→db
     assert set(labels) == {"Anomaly", "Incident", "Operation", "Service"}  # no span-level nodes
-    assert labels["Operation"] == 4  # 3 in call pairs + the orphan, upserted so its anomaly isn't dropped
+    assert labels["Operation"] == 5  # client + 3 in call pairs + the orphan, upserted so its anomaly isn't dropped
     found = {(r["op"], r["kind"]) for r in first}
     assert {("db/Find", "latency"), ("db/Find", "cpu"), ("back/Orphan", "latency")} <= found
     assert len(first) == summary["anomalies"]  # every detected anomaly reached the graph
@@ -76,3 +77,51 @@ def test_inject_time_is_not_a_change(graph, case_dir):
     finally:
         env.delete()
     assert "Change" not in labels
+
+
+def test_replay_then_diagnose_is_deterministic(graph, case_dir):
+    env = graph.env(ENV)
+    env.delete()
+    try:
+        inc = replay(case_dir, ENV, graph)["incident"]
+        a = diagnose(graph, ENV, inc)
+        b = diagnose(graph, ENV, inc)
+        ra = [{k: v for k, v in r.items() if k != "id"} for r in env.ro("run_hypotheses", inc=inc, run=1)]
+        rb = [{k: v for k, v in r.items() if k != "id"} for r in env.ro("run_hypotheses", inc=inc, run=2)]
+    finally:
+        env.delete()
+    assert ra == rb  # identical score_parts JSON and statuses, run after run (N3)
+    assert a["root_cause"] == b["root_cause"] == "db/Find"
+
+
+def test_rereplay_retires_anomalies_and_keeps_old_runs_intact(graph, case_dir):
+    env = graph.env(ENV)
+    env.delete()
+    try:
+        first = replay(case_dir, ENV, graph)
+        inc = first["incident"]
+        current_before = env.ro("incident_anomalies", inc=inc)
+        diagnose(graph, ENV, inc)
+        cited_before = env.ro("run_evidence_about", inc=inc, run=1)
+
+        second = replay(case_dir, ENV, graph)
+        current_after = env.ro("incident_anomalies", inc=inc)
+        cited_after = env.ro("run_evidence_about", inc=inc, run=1)
+        retired = env.ro("incident_anomalies", inc=f"{inc}@i1")
+        v = diagnose(graph, ENV, inc)
+        ingests = {r["ingest"] for r in env.ro("run_ingests", inc=inc)}
+    finally:
+        env.delete()
+
+    assert (first["ingest"], second["ingest"]) == (1, 2)
+    assert current_after == current_before  # readers see only the current ingest, unchanged
+    retired_set = {tuple(sorted(r.items())) for r in retired}
+    assert retired_set == {tuple(sorted(dict(r, id=r["id"] + "@i1").items())) for r in current_before}  # not deleted
+    assert cited_before, "run 1 should cite at least one anomaly (victim evidence)"
+    # run 1's evidence keeps its ABOUT edges; they now point at the retired ingest
+    # (as sets: the "@i1" suffix changes string sort order, e.g. "-1@i1" now sorts after "-10@i1")
+    assert {(e["evidence"], e["anomaly"]) for e in cited_after} == {
+        (e["evidence"], e["anomaly"] + "@i1") for e in cited_before
+    }
+    assert {e["anomaly_incident"] for e in cited_after} == {f"{inc}@i1"}
+    assert v["run"] == 2 and v["ingest"] == 2 and ingests == {1, 2}

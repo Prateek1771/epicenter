@@ -17,6 +17,7 @@ def write_topology(env: EnvGraph, calls: Iterable[CallAgg], ts: int) -> int:
             "caller_svc": c.caller_svc,
             "caller_op": c.caller_op,
             "caller_name": _name(c.caller_op),
+            "caller_kind": c.caller_kind,
             "callee_svc": c.callee_svc,
             "callee_kind": c.callee_kind,
             "callee_op": c.callee_op,
@@ -43,9 +44,12 @@ def open_incident(env: EnvGraph, incident: str, symptom: str, opened_at: int, we
     )
 
 
-def clear_incident(env: EnvGraph, incident: str) -> None:
-    """Drop an incident's anomalies before a replay writes them again, so replays are idempotent."""
-    env.rw("clear_incident_anomalies", inc=incident)
+def new_ingest(env: EnvGraph, incident: str) -> int:
+    """Start a new ingest of the incident's anomalies. The previous ingest's anomalies are retired, not deleted:
+    re-keyed `<incident>@i<k>`, so readers only see the new ones and older diagnosis runs keep their ABOUT edges."""
+    [row] = env.rw("next_ingest", inc=incident)
+    env.rw("retire_anomalies", inc=incident, suffix=f"@i{row['retired']}")
+    return row["ingest"]
 
 
 def write_anomalies(env: EnvGraph, incident: str, rows: list[AnomalyRow]) -> int:
