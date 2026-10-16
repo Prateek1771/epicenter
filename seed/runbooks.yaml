@@ -1,0 +1,34 @@
+# Runbooks per environment (key = ENV_NAME). `kind` = anomaly kind it applies to; each listed service gets a FOR edge.
+astronomy-shop:
+  runbooks:
+    - id: rb-flag-rollback
+      kind: errors
+      services: [payment, ad, cart, recommendation, product-catalog]
+      steps: [Check recent flagd changes for the service, Turn the flag off, Confirm the error rate drops]
+    - id: rb-valkey-down
+      kind: down
+      services: [valkey-cart]
+      steps: [Check the valkey-cart container is running, Restart valkey-cart, Confirm cart calls succeed]
+    - id: rb-memory-leak
+      kind: mem
+      services: [email, recommendation]
+      steps: [Confirm memory climbs steadily, Restart the service, Open a ticket with the heap profile]
+    - id: rb-alert-threshold
+      kind: latency
+      services: [frontend]
+      steps: [Nothing upstream explains the alert, Check the alert threshold against the baseline]
+
+flip-commerce:
+  runbooks:
+    - id: rb-mongo-failover
+      kind: down
+      services: [mongodb]
+      steps: ["Check replica set status: rs.status()", Start the stopped member, Confirm a primary is elected]
+    - id: rb-redis-down
+      kind: down
+      services: [redis]
+      steps: [Check the redis container, Restart redis, Confirm cache hits recover]
+    - id: rb-circuit-config
+      kind: errors
+      services: [flip-node]
+      steps: [Diff the last config change, Revert the circuit-breaker settings, Confirm upstream errors drop]

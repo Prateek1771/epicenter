@@ -1,0 +1,22 @@
+# Teams and people per environment (key = ENV_NAME). Seeded into env:<name> as Team, Person, OWNED_BY, MEMBER_OF.
+# Handles are placeholders: replace them with your real on-call people.
+astronomy-shop:
+  teams:
+    - name: storefront
+      services: [frontend, frontend-proxy, ad, recommendation, product-catalog, image-provider]
+      members: [{ handle: sf-oncall, name: Storefront on-call }]
+    - name: payments
+      services: [checkout, payment, currency, shipping, quote, email]
+      members: [{ handle: pay-oncall, name: Payments on-call }]
+    - name: platform
+      services: [cart, valkey-cart, kafka, accounting, fraud-detection, flagd]
+      members: [{ handle: plat-oncall, name: Platform on-call }]
+
+flip-commerce:
+  teams:
+    - name: backend
+      services: [flip-node, flip-fastapi, nginx]
+      members: [{ handle: backend-oncall, name: Backend on-call }]
+    - name: data
+      services: [mongodb, redis]
+      members: [{ handle: data-oncall, name: Data on-call }]

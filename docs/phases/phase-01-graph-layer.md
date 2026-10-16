@@ -25,16 +25,16 @@ tests/test_graph.py
 
 ## Tasks
 
-- [ ] `Graph(url)` with `env(name)` → `env:<name>`, `scratch(incident_id)` → `scratch:<id>`, and `kb()` → `kb:propagation`.
-- [ ] `EnvGraph.ro(qid, **params)` uses `GRAPH.RO_QUERY`; `rw(qid, **params)` uses `GRAPH.QUERY`; both return `list[dict]`.
-- [ ] `QUERIES: dict[str, str]` holds U1–U3, Q1–Q6, Q4a/Q4b, the four tool queries and the seed statements. Callers pass ids, never Cypher.
-- [ ] Each call logs `{qid, graph, duration_ms, rows}` (structured JSON) and pushes `duration_ms` into a per-qid ring buffer (last 200) for `/health` p50/p95.
-- [ ] 5 s client-side timeout per query; 1 retry on connection errors only ([LLD §10](../LLD.md#10-external-calls-timeouts-and-retries)). Raise a typed `GraphUnavailable` the API maps to `503 GRAPH_UNAVAILABLE`.
-- [ ] Ids: decide Q-a (below) and implement one `ids.py`-style helper in `graph.py` or `models.py` (not scattered f-strings).
-- [ ] `seed.py`: every statement idempotent (`MERGE`, index creation that ignores "already exists"). Runs on API startup for the configured env graph and `kb:propagation`.
-- [ ] Rules seed: read `seed/propagation_rules.yaml`, `MERGE (r:Rule {id})` per rule with `version`; replace the whole graph when the version changes ([GRAPH_SCHEMA §7](../GRAPH_SCHEMA.md#7-retention)).
-- [ ] `mini_graph.cypher`: 8 ops across ~5 services incl. one datastore, `CALLS` with `rps`, one incident's `Anomaly` nodes with known onsets, one `Change`. Document the expected answer for each query at the top of the file.
-- [ ] Test fixture loads into `env:test`, dropped after the run.
+- [x] `Graph(url)` with `env(name)` → `env:<name>`, `scratch(incident_id)` → `scratch:<id>`, and `kb()` → `kb:propagation`.
+- [x] `EnvGraph.ro(qid, **params)` uses `GRAPH.RO_QUERY`; `rw(qid, **params)` uses `GRAPH.QUERY`; both return `list[dict]`.
+- [x] `QUERIES: dict[str, str]` holds U1–U3, Q1–Q6, Q4a/Q4b, the four tool queries and the seed statements. Callers pass ids, never Cypher.
+- [x] Each call logs `{qid, graph, duration_ms, rows}` (structured JSON) and pushes `duration_ms` into a per-qid ring buffer (last 200) for `/health` p50/p95.
+- [x] 5 s client-side timeout per query; 1 retry on connection errors only ([LLD §10](../LLD.md#10-external-calls-timeouts-and-retries)). Raise a typed `GraphUnavailable` the API maps to `503 GRAPH_UNAVAILABLE`.
+- [x] Ids: decide Q-a (below) and implement one `ids.py`-style helper in `graph.py` or `models.py` (not scattered f-strings).
+- [x] `seed.py`: every statement idempotent (`MERGE`, index creation that ignores "already exists"). Runs on API startup for the configured env graph and `kb:propagation`.
+- [x] Rules seed: read `seed/propagation_rules.yaml`, `MERGE (r:Rule {id})` per rule with `version`; replace the whole graph when the version changes ([GRAPH_SCHEMA §7](../GRAPH_SCHEMA.md#7-retention)).
+- [x] `mini_graph.cypher`: 8 ops across ~5 services incl. one datastore, `CALLS` with `rps`, one incident's `Anomaly` nodes with known onsets, one `Change`. Document the expected answer for each query at the top of the file.
+- [x] Test fixture loads into `env:test`, dropped after the run.
 
 ## Acceptance
 
@@ -55,9 +55,8 @@ tests/test_graph.py
 
 ## Risks / open questions
 
-- **Q-a:** `Evidence.id = E<n>` collides across incidents in one env graph. Proposal: stored key `<incident>:E<n>`,
-  API shows `E<n>`. Same for `Hypothesis` and `Action` ids. Decide and update GRAPH_SCHEMA §3.
-- **Q-e:** move `Action` out of the `kb:propagation` section in GRAPH_SCHEMA §3.
+- ~~Q-a~~ decided: stored key `<incident>:E<n>` (and `:h-<n>`, `:a-<n>`), API shows the local part; `api/models.py` `scoped_id` / `local_id`.
+- ~~Q-e~~ done.
 - Index syntax differs between FalkorDB versions; trust the smoke-test results from phase 0.
 
 ## Done when

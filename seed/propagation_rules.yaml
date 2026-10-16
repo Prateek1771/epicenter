@@ -1,0 +1,10 @@
+# Fault Simulator rules (LLD §7.1), seeded into kb:propagation. Bump `version` on any change: the kb graph is replaced.
+version: 2026-10-15
+rules:   # cause_kind on the candidate → symptom_kind on a dependent (upstream) or on itself (self)
+  - { cause: [errors, down],               symptom: errors,  direction: upstream, p: 0.80, delay_s_max: 30 }
+  - { cause: [errors, down],               symptom: latency, direction: upstream, p: 0.30, delay_s_max: 30 }
+  - { cause: [latency, cpu, saturation],   symptom: latency, direction: upstream, p: 0.90, delay_s_max: 20 }
+  - { cause: [latency, cpu, saturation],   symptom: errors,  direction: upstream, p: 0.25, delay_s_max: 60 }   # timeouts
+  - { cause: [mem],                        symptom: latency, direction: self,     p: 0.60, delay_s_max: 120 }
+  - { cause: [mem],                        symptom: down,    direction: self,     p: 0.40, delay_s_max: 300 }
+  - { cause: [down], kind_of_service: datastore, symptom: errors, direction: upstream, p: 0.95, delay_s_max: 15 }

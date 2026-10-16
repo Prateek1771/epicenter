@@ -120,7 +120,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `weights_version` | str | ✓ | from `weights.json` |
 | `gaps` | list<str> | | sources that were unavailable |
 
-**`Hypothesis`**: key `id`
+**`Hypothesis`**: key `id` (`<incident>:h-<n>`, e.g. `inc-1:h-2`; the API shows `h-2`)
 | Property | Type | Req | Notes |
 |---|---|---|---|
 | `status` | str | ✓ | `open` · `supported` · `refuted` · `inconclusive` · `confirmed` · `pruned` |
@@ -129,7 +129,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `score` | float | after scoring | |
 | `score_parts` | str (JSON) | after scoring | feature values, `pagerank_impl` |
 
-**`Evidence`**: key `id` (`E<n>`, unique per incident)
+**`Evidence`**: key `id` (`<incident>:E<n>`, e.g. `inc-1:E3`; the API shows `E3`). Incidents share the env graph, so per-incident ids are scoped (`models.scoped_id` / `local_id`)
 | Property | Type | Req | Notes |
 |---|---|---|---|
 | `kind` | str | ✓ | `propagation` · `mechanism` · `change` · `victim` · `pagerank` · `footprint` · `log` · `history` |
@@ -143,6 +143,8 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 **`Simulation`**: key `id` · `target` str (operation or service) · `kind` str · `ts` ts · `rules_version` str. A saved
 what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)).
 
+**`Action`**: key `id` (`<incident>:a-<n>`) · `name` str · `status` (`proposed` · `done`) · `delivery` str (JSON per target)
+
 ### Knowledge base (`kb:propagation` graph only)
 
 **`Rule`**: key `id`
@@ -155,12 +157,16 @@ what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)).
 | `delay_s_max` | int | ✓ | max delay per hop |
 | `service_kind` | str | | restricts the rule, e.g. `datastore` |
 | `version` | str | ✓ | rules version, recorded on every footprint |
-**`Action`**: key `id` · `name` str · `status` (`proposed` · `done`) · `delivery` str (JSON per target)
 
 ### People and knowledge
 
 **`Team`** (key `name`), **`Person`** (key `handle`, `name`): from `seed/owners.yaml` and git authors.
 **`Runbook`**: key `id` · `kind` (anomaly kind it applies to) · `steps` list<str> · `success` str (JSON: step → count)
+
+Seed files are keyed by environment name, so seeding one env never creates another env's services:
+[`seed/owners.yaml`](../seed/owners.yaml) `<env>: {teams: [{name, services: [...], members: [{handle, name}]}]}` and
+[`seed/runbooks.yaml`](../seed/runbooks.yaml) `<env>: {runbooks: [{id, kind, services: [...], steps: [...]}]}`.
+Rule ids in `kb:propagation` come from the rule's content (`errors+down->errors:upstream`, `down->errors:upstream@datastore`).
 
 ---
 

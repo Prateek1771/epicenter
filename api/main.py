@@ -1,5 +1,7 @@
-"""FastAPI app: REST under /api/v1. SSE, the /mcp mount and the seed step arrive in phases 1, 5 and 6."""
+"""FastAPI app: REST under /api/v1. SSE and the /mcp mount arrive in phases 5 and 6."""
 
+import json
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
@@ -9,14 +11,22 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from api.config import get_settings
-from api.graph import Graph
+from api.graph import Graph, GraphUnavailable, query_stats
+from api.ingest.seed import seed_all
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+log = logging.getLogger("epicenter.api")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
     app.state.graph = Graph(s.falkordb_url, s.query_timeout_s)
-    # phase 1: seed indexes, owners and runbooks here (idempotent)
+    try:
+        seed_all(app.state.graph, s.env_name)
+    except GraphUnavailable as e:
+        # ponytail: seed runs once per start; restart the api after FalkorDB is back to seed
+        log.warning(json.dumps({"event": "seed_skipped", "reason": str(e)}))
     yield
 
 
@@ -42,6 +52,11 @@ async def validation_error(_: Request, exc: RequestValidationError) -> JSONRespo
     return _error(400, "VALIDATION_ERROR", "Bad body or query parameter", jsonable(exc.errors()))
 
 
+@app.exception_handler(GraphUnavailable)
+async def graph_unavailable(_: Request, exc: GraphUnavailable) -> JSONResponse:
+    return _error(503, "GRAPH_UNAVAILABLE", "FalkorDB unreachable")
+
+
 def jsonable(errors: list) -> list:
     return [{"loc": list(e.get("loc", [])), "msg": e.get("msg", "")} for e in errors]
 
@@ -51,9 +66,9 @@ router = APIRouter(prefix="/api/v1")
 
 @router.get("/health")
 def health(request: Request) -> dict:
-    # ponytail: only FalkorDB so far; falkordb_mcp/openrouter/openconnector and query_ms join in phases 5–7
+    # ponytail: only FalkorDB so far; falkordb_mcp/openrouter/openconnector join in phases 5–7
     ok = request.app.state.graph.ping()
-    return {"status": "ok" if ok else "degraded", "falkordb": "ok" if ok else "down"}
+    return {"status": "ok" if ok else "degraded", "falkordb": "ok" if ok else "down", "query_ms": query_stats()}
 
 
 app.include_router(router)

@@ -70,11 +70,20 @@ class Graph:
     def env(self, name: str) -> "EnvGraph"              # select_graph(f"env:{name}")
     def scratch(self, incident_id: str) -> "EnvGraph"   # select_graph(f"scratch:{incident_id}")
 
+    def kb(self) -> "EnvGraph"                          # select_graph("kb:propagation")
+
 class EnvGraph:
-    def ro(self, qid: str, **params) -> list[dict]      # GRAPH.RO_QUERY, timed, logged
+    def ro(self, qid: str, **params) -> list[dict]      # GRAPH.RO_QUERY, timed, logged; [] if the graph doesn't exist yet
     def rw(self, qid: str, **params) -> list[dict]      # GRAPH.QUERY
-    def delete(self) -> None
+    def delete(self) -> None                            # no-op if already gone
+    def load_cypher(self, path) -> None                 # trusted `;`-separated files (test fixtures) only
 ```
+
+`Graph` connects lazily, so the API starts (degraded) while FalkorDB is down. Connection or timeout errors are retried
+once, then raised as `GraphUnavailable` → `503 GRAPH_UNAVAILABLE`. Besides the queries below, the catalogue holds the
+index statements (GRAPH_SCHEMA §5), the seed upserts (`seed_rule`, `seed_team`, `seed_member`, `seed_runbook`) and
+`Q4_blame`, which writes the Q4 projection into the scratch graph:
+`UNWIND $edges AS e MERGE (x:Operation {id: e.caller}) MERGE (y:Operation {id: e.callee}) MERGE (x)-[b:BLAME]->(y) SET b.w = e.w`.
 
 Every query lives in one dict, `QUERIES: dict[str, str]`, keyed by id. Callers pass the id plus parameters, never Cypher
 text. Each call logs `{qid, duration_ms, rows}` and feeds the p50/p95 shown on `/health`. Per-query client timeout: 5 s.
@@ -162,7 +171,7 @@ CALL algo.pageRank('Operation', 'BLAME') YIELD node, score
 RETURN node.id AS op, score
 ```
 `BLAME` points the same way as `CALLS` (caller → callee): an anomalous caller "blames" the anomalous operations it
-depends on, so rank flows from symptoms down the dependency chain and collects at the deepest anomalous callee.
+depends on, so rank flows from symptoms down the dependency chain and collects at the deepest anomalous callee of a chain. With fan-out it doesn't: an operation that calls two anomalous callees keeps the caller's full share and each callee gets half, so the fan-out point can outrank them (seen on `mini_graph`). That's one reason `pagerank` is a low-weight feature (§6.3).
 `w = max(err, p95 ratio)` of the call, if the pinned version supports weighted PageRank. The scratch graph is deleted in a `finally`. If the pinned FalkorDB
 lacks this signature, the fallback is `networkx.pagerank` on the same edge list, recorded in `score_parts.pagerank_impl`.
 
@@ -191,10 +200,10 @@ ORDER BY hops, op
 
 | Tool | Query |
 |---|---|
-| `blast_radius(service)` | `MATCH (s:Service {name:$svc})-[:HAS_OP]->(o) MATCH p=(caller:Operation)-[:CALLS*1..6]->(o) MATCH (cs:Service)-[:HAS_OP]->(caller) OPTIONAL MATCH (cs)-[:OWNED_BY]->(t:Team) RETURN DISTINCT cs.name, caller.id, min(length(p)) AS hops, t.name` |
+| `blast_radius(service)` | `MATCH (s:Service {name:$svc})-[:HAS_OP]->(o) MATCH p=(caller:Operation)-[:CALLS*1..6]->(o) MATCH (cs:Service)-[:HAS_OP]->(caller) OPTIONAL MATCH (cs)-[:OWNED_BY]->(t:Team) RETURN cs.name, caller.id, min(length(p)) AS hops, t.name ORDER BY hops, caller.id` |
 | `why_not(incident, service)` | the service's `Hypothesis` with its `REFUTED_BY` evidence and stored paths; if none, run Q1 membership → "not upstream of the symptom" |
-| `recent_changes(service, minutes)` | `Change -[:CHANGED]-> Service` within the window, with `AUTHORED` person |
-| `who_knows(service)` | `OWNED_BY` team members + `FIXED` incidents whose root cause is on that service + `AUTHORED` changes on it, ranked by count |
+| `recent_changes(service, minutes)` | `Change -[:CHANGED]-> Service` with `ts >= $since` (the caller turns minutes into `$since`), with `AUTHORED` people; newest first |
+| `who_knows(service)` | `OWNED_BY` team members + `FIXED` incidents whose root cause is on that service + `AUTHORED` changes on it, one point per reason, ranked by count then handle |
 
 ---
 
@@ -263,7 +272,7 @@ class HypothesisOut(BaseModel):
     score: float | None; score_parts: dict[str, float]; hops: int; onset: datetime | None
 
 class EvidenceOut(BaseModel):
-    id: str; kind: Literal["propagation", "mechanism", "change", "victim", "pagerank", "log", "history"]
+    id: str; kind: Literal["propagation", "mechanism", "change", "victim", "pagerank", "footprint", "log", "history"]
     verdict: Literal["supports", "refutes"]; summary: str; path: list[str]; ref: str | None
 
 class Verdict(BaseModel):
