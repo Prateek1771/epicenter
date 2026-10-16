@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 
 from api.config import get_settings
 from api.graph import query_stats
-from api.models import Health
+from api.models import Envs, Health
 
 router = APIRouter()
 
@@ -59,3 +59,9 @@ def health(request: Request) -> Health:
         openconnector=probe(oc),
         query_ms=query_stats(),
     )
+
+
+@router.get("/envs", response_model=Envs)
+def envs(request: Request) -> Envs:
+    """Environments that have a graph, for the UI's env switcher."""
+    return Envs(items=request.app.state.graph.env_names(), default=get_settings().env_name)

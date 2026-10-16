@@ -116,6 +116,23 @@ event: evidence.added
 data: {"id":"E3","hypothesis_id":"h-7","kind":"propagation","verdict":"supports","path":["checkout/PlaceOrder","payment/Charge"]}
 ```
 
+### `GET /incidents/{id}/graph`
+Everything the incident canvas draws, in one load, for the current run. The UI then opens the stream with
+`?after=<last_seq>`, so only newer events patch it (no replay of older runs). Bounded: ≤ 50 hypotheses, paths ≤ 6 hops.
+`nodes` = every op on an evidence path + each hypothesis op + the symptom; `edges` = `CALLS` among those nodes.
+```json
+{ "incident": "inc-42", "run": 3, "status": "diagnosed", "symptom": "frontend/GET /cart",
+  "root_cause": "payment/Charge", "second_cause": null, "last_seq": 118,
+  "hypotheses": [ { "id": "h-1", "op": "payment/Charge", "status": "confirmed", "score": 0.71, "hops": 2, "round": 1,
+                    "evidence": [ { "id": "E1.1", "kind": "propagation", "verdict": "supports", "summary": "…",
+                                    "path": ["frontend/GET /cart", "checkout/PlaceOrder", "payment/Charge"] } ] } ],
+  "nodes": [ { "id": "payment/Charge", "service": "payment", "service_kind": "app",
+               "anomaly": { "kind": "errors", "onset": 1705918110, "score": 0.95 } } ],
+  "edges": [ { "src": "checkout/PlaceOrder", "dst": "payment/Charge", "rps": 1.05, "err_rate": 0.31, "p95_ms": 610.4 } ] }
+```
+`round: 2` hypotheses are the second-cause search ([LLD §7.5](LLD.md)): scored on the symptoms the root cause leaves
+unexplained, so their scores aren't comparable with round 1's.
+
 ### `GET /incidents/{id}/hypotheses/{hid}/footprint`
 Fault Simulator result for one hypothesis ([LLD §7](LLD.md#7-fault-simulator)): predicted vs. observed.
 ```json
@@ -173,6 +190,13 @@ Query: `center` (node id), `hops` (1–3, default 2), `incident` (optional: incl
 ```json
 { "nodes": [ { "id": "payment/Charge", "label": "Operation", "props": { "service": "payment" } } ],
   "edges": [ { "from": "checkout/PlaceOrder", "to": "payment/Charge", "type": "CALLS", "props": { "p95_ms": 840, "err_rate": 0.31 } } ] }
+```
+
+### `GET /services`
+Services in the env graph with their kind and operation count (the UI's service pickers).
+```json
+{ "items": [ { "name": "client", "kind": "external", "operations": 1 },
+             { "name": "ts-admin-basic-info-service", "kind": "app", "operations": 3 } ] }
 ```
 
 ### `GET /blast-radius/{service}`
@@ -247,3 +271,9 @@ when OpenRouter is unavailable.
 `status` follows FalkorDB only (the verdict needs nothing else). `falkordb_mcp` / `openconnector` / `openrouter` /
 `jev`: `ok` · `down` · `not_configured`. OpenRouter is checked with `GET /v1/key` (free), cached 60 s; `jev` shares
 its key and status. Not behind `X-API-Key`.
+
+### `GET /envs`
+The environments that have a graph (`env:<name>`), and the default one. Feeds the UI's env switcher.
+```json
+{ "items": ["astronomy-shop", "demo", "rcaeval-tt"], "default": "astronomy-shop" }
+```

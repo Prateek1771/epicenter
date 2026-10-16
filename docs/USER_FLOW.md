@@ -52,7 +52,7 @@ journey
 | # | User does | Screen | API | Graph work |
 |---|---|---|---|---|
 | 1 | Nothing (alert arrives) | — | `POST /api/v1/alerts` | `MERGE Incident` on alert id; `TRIGGERED_BY` |
-| 2 | Opens the link | Incident | `GET /incidents/{id}`, `GET /incidents/{id}/stream` | read incident subgraph |
+| 2 | Opens the link | Incident | `GET /incidents/{id}`, `GET /incidents/{id}/graph`, then `GET /incidents/{id}/stream?after=<last_seq>` | read incident subgraph |
 | 3 | Watches hypotheses appear | Incident: canvas | SSE `hypothesis.created` | triage: blast radius, **Q1** |
 | 4 | Watches branches turn red / green | Incident: canvas | SSE `evidence.added`, `hypothesis.status` | investigators: **Q2**, **Q3** |
 | 4b | Clicks a hypothesis; sees dashed "predicted" nodes over filled "observed" ones, coloured matched / missed / unexplained, and "explains 6 of 7 symptoms" | Incident: canvas overlay | SSE `footprint`, `GET /incidents/{id}/hypotheses/{hid}/footprint` | **Fault Simulator**: **Q6** + rules from `kb:propagation`, match |
@@ -70,6 +70,9 @@ journey
 - Nothing explains the alert (no suspect covers ≥ 50% of symptoms, anomalies weak) → status `no_root_cause`: "Nothing in
   the graph explains this alert", with the list of what was checked and a "check the alert threshold" suggestion.
   No cause is invented.
+- Connection drops (API restart, network) → the top bar shows "API unreachable" and the stream retries with backoff
+  from the last seq it saw (`?after=`). Events are applied by id, so nothing is drawn twice when it reconnects.
+- Diagnosis still `diagnosing` with no events for 30 s → a **Resume diagnosis** button (resumes from the checkpoint).
 
 ---
 

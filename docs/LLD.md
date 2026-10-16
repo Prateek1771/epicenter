@@ -48,7 +48,16 @@ graph-hacks/
       openconnector.py    # POST /v1/actions/{id} with an Idempotency-Key
     eval.py               # RCAEval replay + metrics
     smoke_falkordb.py     # FalkorDB feature check on the pinned tag (README §5)
-  web/                    # Next.js app
+  web/                    # Next.js 15 app (React 19, Tailwind 4, shadcn, React Flow 12)
+    app/                  # / incidents · incident/[id] canvas · blast-radius · simulate · ask · runs · eval
+    components/           # graph/incident-canvas.tsx · incident/{verdict,act,side}.tsx · shell/top-bar.tsx · ui/
+    lib/
+      api-types.ts        # generated from /openapi.json (npm run gen:api), committed
+      api.ts              # openapi-fetch client; error envelope → ApiError(code, request_id)
+      incident-state.ts   # pure reducer: /graph snapshot + SSE events, applied by id (idempotent)
+      layout.ts           # elk layered layout, incremental: placed nodes keep their position
+      useIncidentStream.ts  # EventSource, reconnects with ?after=<last seq> + backoff
+      *.test.ts           # node:test (npm test)
   seed/  owners.yaml  runbooks.yaml  propagation_rules.yaml
   examples/
     flip-commerce/        # collector config + run scripts for the user's system-design-journey
@@ -406,7 +415,8 @@ historian, narrator, jev_gate and responder run after `finalize` has published t
   `(1 − distance) + overlap_op·[same root op] + overlap_change·[shared change type]` (`weights.json` `memory`) → top 3 →
   `SIMILAR_TO {score, run}` → event `memory.similar {similar: [{incident, score, cause, fixes, worked}]}`.
 - **narrator:** input = verdict + the evidence of the top 4 hypotheses and the committed causes, as one JSON document
-  inside `<verdict_json>…</verdict_json>` (the system prompt says it is data). Output is a strict JSON schema; a claim
+  inside `<verdict_json>…</verdict_json>` (the system prompt says it is data). `confidence` goes in at 2 decimals (the
+  model quotes it verbatim); hypothesis scores stay unrounded so they can't be mistaken for it. Output is a strict JSON schema; a claim
   citing an unknown id, or nothing, is dropped and counted. No key / error / invalid output → **template** (claims
   built from the evidence summaries), `source: 'template'`.
 - **jev_gate:** one Jev request, one **Noul per claim**; each question carries its own claim and the text, kind,

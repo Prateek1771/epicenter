@@ -4,7 +4,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
-from api.models import Affected, BlastRadius, GraphEdge, GraphNode, SimulatedOp, SimulateIn, SimulateOut, Subgraph
+from api.models import (
+    Affected,
+    BlastRadius,
+    GraphEdge,
+    GraphNode,
+    ServiceItem,
+    Services,
+    SimulatedOp,
+    SimulateIn,
+    SimulateOut,
+    Subgraph,
+)
 from api.routes.deps import ApiError, Env, env_name, incident_or_404
 from api.search import simulate as simulator
 from api.tools import graph_tools
@@ -82,3 +93,9 @@ def simulate(body: SimulateIn, env: Env, request: Request) -> SimulateOut:
         predicted=preds,
         counts={"services": len({p.service for p in preds}), "operations": len({p.op for p in preds})},
     )
+
+
+@router.get("/services", response_model=Services)
+def services(env: Env) -> Services:
+    """Every service in the env with its kind and operation count, for pickers (blast radius, what-if, why-not)."""
+    return Services(items=[ServiceItem(**r) for r in env.ro("services")])

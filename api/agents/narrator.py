@@ -82,9 +82,11 @@ def narrator_input(r: causal.Run) -> dict:
         "status": v["status"],
         "root_cause": v["root_cause"],
         "second_cause": v["second_cause"],
-        "confidence": v["confidence"],
+        # 2 decimals: the model quotes numbers verbatim, and "0.576323" reads as noise
+        "confidence": None if v["confidence"] is None else round(v["confidence"], 2),
         "explains": v["explains"],
         "summary": v["summary"],
+        # scores stay unrounded: at 2 decimals the model quotes the winner's score (0.62) as the confidence (0.58)
         "hypotheses": [{k: h[k] for k in ("id", "op", "status", "score", "coverage")} for h in ranked],
         "evidence": evidence,
     }

@@ -98,6 +98,17 @@ docker compose up -d                                                    # falkor
 
 The API seeds indexes, owners and runbooks on startup. Every seed statement is idempotent.
 
+Web development (hot reload against the API on :8000; stop the `web` container first, it owns port 3001):
+
+```bash
+docker compose stop web
+cd web && npm ci
+npm run dev -- -p 3001     # http://localhost:3001
+npm run gen:api            # regenerate lib/api-types.ts after an API change (API must be up)
+npm test                   # reducer + layout unit tests (node:test)
+npm run lint && npm run build
+```
+
 ## 4. Check persistence (first run only)
 
 The FalkorDB docs show two data paths. Find the real one and fix the volume in `docker-compose.yml` if needed:

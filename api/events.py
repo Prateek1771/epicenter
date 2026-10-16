@@ -33,6 +33,8 @@ class EventBus(Protocol):
 
     def history(self, env_key: str, incident_id: str, after_seq: int = 0, block_ms: int = 0) -> list[dict]: ...
 
+    def last_seq(self, env_key: str, incident_id: str) -> int: ...
+
 
 class RedisStreamBus:
     """`env_key` is the env graph key (`env:<name>`), so streams stay per environment like the graphs."""
@@ -47,6 +49,9 @@ class RedisStreamBus:
     def history(self, env_key: str, incident_id: str, after_seq: int = 0, block_ms: int = 0) -> list[dict]:
         """Events after `after_seq`, oldest first; with `block_ms`, waits that long for the next ones (live tail)."""
         return get_graph().read_events(f"{env_key}:{incident_id}", after_seq, block_ms)
+
+    def last_seq(self, env_key: str, incident_id: str) -> int:
+        return get_graph().last_event_seq(f"{env_key}:{incident_id}")
 
 
 bus: EventBus = RedisStreamBus()

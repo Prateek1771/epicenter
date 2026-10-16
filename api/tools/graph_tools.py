@@ -208,7 +208,7 @@ def why_not(incident: str, service: str, env: str | None = None) -> WhyNot:
     return WhyNot(
         service=service,
         answer="lost_on_score",
-        summary=f"{h['op']} was consistent with the evidence but scored {h['score']} and lost on score",
+        summary=f"{h['op']} was consistent with the evidence but scored {h['score'] or 0:.2f} and lost on score",
         evidence=ev,
     )
 

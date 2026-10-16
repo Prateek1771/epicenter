@@ -249,6 +249,60 @@ class AskOut(BaseModel):
     cypher: str | None  # set when the answer came from the read-only falkordb-mcp fallback
 
 
+class GraphEvidence(BaseModel):
+    id: str
+    kind: str
+    verdict: Literal["supports", "refutes"]
+    summary: str
+    path: list[str]
+
+
+class GraphHypothesis(BaseModel):
+    id: str
+    op: str
+    status: HypothesisStatus
+    score: float | None
+    hops: int
+    round: int
+    evidence: list[GraphEvidence]
+
+
+class AnomalyMark(BaseModel):
+    kind: str
+    onset: int | None
+    score: float | None
+
+
+class GraphOp(BaseModel):
+    id: str
+    service: str
+    service_kind: str | None
+    anomaly: AnomalyMark | None
+
+
+class GraphCall(BaseModel):
+    src: str
+    dst: str
+    rps: float | None
+    err_rate: float | None
+    p95_ms: float | None
+
+
+class IncidentGraph(BaseModel):
+    """Everything the incident canvas draws for the current run; SSE events patch the same shape by id."""
+
+    incident: str
+    run: int | None
+    status: IncidentStatus
+    symptom: str | None
+    root_cause: str | None
+    second_cause: str | None
+    last_seq: int  # open the stream with ?after=last_seq: the snapshot already contains everything before it
+    hypotheses: list[GraphHypothesis]
+    nodes: list[GraphOp]
+    edges: list[GraphCall]
+
+
 # --- graph views ---
 
 
@@ -316,6 +370,21 @@ class SimulateOut(BaseModel):
     rules_version: str
     predicted: list[SimulatedOp]
     counts: dict[str, int]
+
+
+class ServiceItem(BaseModel):
+    name: str
+    kind: str | None
+    operations: int
+
+
+class Services(BaseModel):
+    items: list[ServiceItem]
+
+
+class Envs(BaseModel):
+    items: list[str]
+    default: str
 
 
 class Health(BaseModel):

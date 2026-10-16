@@ -215,6 +215,7 @@ def test_openapi_lists_every_endpoint(client):
         "/api/v1/incidents",
         "/api/v1/incidents/{incident_id}",
         "/api/v1/incidents/{incident_id}/diagnose",
+        "/api/v1/incidents/{incident_id}/graph",
         "/api/v1/incidents/{incident_id}/stream",
         "/api/v1/incidents/{incident_id}/hypotheses/{hid}/footprint",
         "/api/v1/incidents/{incident_id}/why-not/{service}",
@@ -224,6 +225,8 @@ def test_openapi_lists_every_endpoint(client):
         "/api/v1/blast-radius/{service}",
         "/api/v1/simulate",
         "/api/v1/health",
+        "/api/v1/envs",
+        "/api/v1/services",
     } <= paths
 
 
@@ -243,3 +246,26 @@ def test_resolve_with_an_action_bumps_its_runbook_step(client, tmp_path):
     assert r.status_code == 200
     [row] = client.g.ro("action", id=f"inc-1:r2:{step['id']}")
     assert (row["runbook"], row["step"], row["success"]) == ("rb-flag", 1, '{"1": 1}')
+
+
+def test_incident_graph_has_everything_the_canvas_draws(client):
+    before = m.IncidentGraph(**client.get("/api/v1/incidents/inc-1/graph", params=Q).json())
+    assert before.run == 1 and before.symptom == "frontend/GET /checkout"  # the fixture's run 1
+    _diagnosed(client)
+    g = m.IncidentGraph(**client.get("/api/v1/incidents/inc-1/graph", params=Q).json())
+    assert (g.run, g.status, g.root_cause, g.second_cause) == (2, "diagnosed", "payment/Charge", None)
+    ops = {n.id for n in g.nodes}
+    assert {h.op for h in g.hypotheses} <= ops and g.symptom in ops
+    assert all(set(e.path) <= ops for h in g.hypotheses for e in h.evidence)  # every evidence path is drawable
+    charge = next(h for h in g.hypotheses if h.op == "payment/Charge")
+    assert charge.status == "confirmed" and {e.kind for e in charge.evidence} == {"propagation", "change", "footprint"}
+    assert ("checkout/PlaceOrder", "payment/Charge") in {(c.src, c.dst) for c in g.edges}
+    assert next(n for n in g.nodes if n.id == "payment/Charge").anomaly.kind == "errors"
+    assert client.get("/api/v1/incidents/nope/graph", params=Q).status_code == 404
+    events = bus.history(f"env:{ENV}", "inc-1")
+    assert g.last_seq == (events[-1]["seq"] if events else 0)  # the stream resumes right after the snapshot
+    svcs = m.Services(**client.get("/api/v1/services", params=Q).json())
+    assert {"payment", "redis"} <= {s.name for s in svcs.items}
+    assert next(s for s in svcs.items if s.name == "redis").kind == "datastore"
+    envs = m.Envs(**client.get("/api/v1/envs").json())
+    assert ENV in envs.items and envs.default

@@ -17,8 +17,13 @@ from api.models import (
     ExplanationOut,
     FootprintOut,
     FootprintSummary,
+    GraphCall,
+    GraphEvidence,
+    GraphHypothesis,
+    GraphOp,
     HypothesisOut,
     HypothesisRef,
+    IncidentGraph,
     IncidentOut,
     IncidentPage,
     IncidentStatus,
@@ -160,6 +165,52 @@ def get_incident(incident_id: str, env: Env, request: Request) -> IncidentOut:
     out.actions = [ActionOut(**(a | {"id": local_id(a["id"])})) for a in env.ro("run_actions", inc=incident_id)]
     out.delivery = json.loads(inc["delivery"]) if inc["delivery"] else None
     return out
+
+
+@router.get("/incidents/{incident_id}/graph", response_model=IncidentGraph)
+def incident_graph(incident_id: str, env: Env) -> IncidentGraph:
+    """The canvas in one load: hypotheses with their evidence, the operations on every evidence path, the calls among
+    them. Bounded by the run (≤ 50 hypotheses, paths ≤ 6 hops)."""
+    last_seq = bus.last_seq(env.key, incident_id)  # read first: an event racing this read is replayed, not lost
+    inc = incident_or_404(env, incident_id)
+    hyps = env.ro("run_evidence_paths", inc=incident_id) if inc["run"] is not None else []
+    causes = {c["rank"]: c["op"] for c in env.ro("root_causes", inc=incident_id)}
+    ops = {h["op"] for h in hyps} | {op for h in hyps for e in h["evidence"] for op in (e["path"] or [])}
+    if inc["symptom"]:
+        ops.add(inc["symptom"])
+    ops = sorted(ops)
+    return IncidentGraph(
+        incident=incident_id,
+        run=inc["run"],
+        status=inc["status"],
+        symptom=inc["symptom"],
+        root_cause=causes.get(1),
+        second_cause=causes.get(2),
+        last_seq=last_seq,
+        hypotheses=[
+            GraphHypothesis(
+                id=local_id(h["id"]),
+                op=h["op"],
+                status=h["status"],
+                score=h["score"],
+                hops=h["hops"],
+                round=h["round"] or 1,
+                evidence=[
+                    GraphEvidence(
+                        id=local_id(e["id"]),
+                        kind=e["kind"],
+                        verdict="supports" if e["rel"] == "SUPPORTED_BY" else "refutes",
+                        summary=e["summary"],
+                        path=e["path"] or [],
+                    )
+                    for e in h["evidence"]
+                ],
+            )
+            for h in hyps
+        ],
+        nodes=[GraphOp(**n) for n in env.ro("graph_nodes", ops=ops, inc=incident_id)] if ops else [],
+        edges=[GraphCall(**c) for c in env.ro("graph_edges", ops=ops)] if ops else [],
+    )
 
 
 @router.post("/incidents/{incident_id}/diagnose", status_code=202, response_model=Accepted)

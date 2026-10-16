@@ -1,10 +1,21 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@xyflow/react/dist/style.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* status + overlay colours (USER_FLOW Flow 1, LLD §7.8); text-st-confirmed, bg-ov-missed/15, … */
+  --color-st-open: oklch(0.72 0.03 255);
+  --color-st-supported: oklch(0.74 0.13 230);
+  --color-st-refuted: oklch(0.68 0.19 18);
+  --color-st-inconclusive: oklch(0.72 0.01 265);
+  --color-st-pruned: oklch(0.66 0.02 265);
+  --color-st-confirmed: oklch(0.78 0.17 155);
+  --color-ov-matched: oklch(0.78 0.17 155);
+  --color-ov-missed: oklch(0.8 0.15 80);
+  --color-ov-unexplained: oklch(0.68 0.19 18);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -80,24 +91,26 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  color-scheme: dark; /* native scrollbars, inputs and selects follow the theme */
+  /* Epicenter dark: a deep blue-tinted neutral, one indigo accent, status colours reserved for meaning */
+  --background: oklch(0.155 0.008 265);
+  --foreground: oklch(0.965 0.004 265);
+  --card: oklch(0.195 0.01 265);
+  --card-foreground: oklch(0.965 0.004 265);
+  --popover: oklch(0.21 0.012 265);
+  --popover-foreground: oklch(0.965 0.004 265);
+  --primary: oklch(0.68 0.17 275);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.255 0.012 265);
+  --secondary-foreground: oklch(0.965 0.004 265);
+  --muted: oklch(0.235 0.01 265);
+  --muted-foreground: oklch(0.74 0.015 265);
+  --accent: oklch(0.27 0.02 270);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --destructive: oklch(0.68 0.2 22);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.68 0.17 275);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -123,3 +136,33 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* --- Epicenter --- */
+@layer base {
+  html { font-size: 15px; }
+  ::selection { background: oklch(0.68 0.17 275 / 35%); }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+.bg-grid {
+  background-image: radial-gradient(oklch(1 0 0 / 6%) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* the winning path glows (canvas edges and nodes) */
+@keyframes epi-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px oklch(0.78 0.17 155 / 55%)); }
+  50% { filter: drop-shadow(0 0 12px oklch(0.78 0.17 155 / 90%)); }
+}
+.epi-glow { animation: epi-glow 2.4s ease-in-out infinite; }
+@keyframes epi-in { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: none; } }
+.epi-in { animation: epi-in 280ms ease-out backwards; } /* not `both`: a held opacity:1 would override the dim classes */
+@media (prefers-reduced-motion: reduce) { .epi-glow, .epi-in { animation: none; } }
+
+/* React Flow, dark */
+.react-flow { --xy-background-color: transparent; --xy-edge-stroke: oklch(1 0 0 / 22%); --xy-minimap-background-color: var(--card);
+  --xy-controls-button-background-color: var(--card); --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border); --xy-controls-button-background-color-hover: var(--accent); }
+.react-flow__attribution { display: none; }
+
+* { scrollbar-width: thin; scrollbar-color: oklch(1 0 0 / 14%) transparent; }

@@ -455,6 +455,11 @@ QUERIES: dict[str, str] = {
         MERGE (i)-[:RESOLVED_BY]->(a)""",
     "runbook_success": "MATCH (r:Runbook {id: $id}) SET r.success = $success",
     "service_exists": "MATCH (s:Service {name: $svc}) RETURN s.name AS name",
+    "services": """
+        MATCH (s:Service)
+        OPTIONAL MATCH (s)-[:HAS_OP]->(o:Operation)
+        RETURN s.name AS name, s.kind AS kind, count(o) AS operations
+        ORDER BY name""",
     # --- Memory, explanation, actions (phase 7, LLD §5.3) ---
     # Signature inputs (ADR 0008): the current run's root causes with their anomaly kinds, then the rest below
     "signature_roots": """
@@ -577,6 +582,30 @@ QUERIES: dict[str, str] = {
         WHERE rc.run = i.run
         RETURN DISTINCT i.id AS id
         ORDER BY id""",
+    # Incident canvas (phase 8): the current run's hypotheses with all their evidence and its paths
+    "run_evidence_paths": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE h.run = i.run
+        OPTIONAL MATCH (h)-[r:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+        WITH h, o, r, e ORDER BY e.id
+        RETURN h.id AS id, o.id AS op, h.status AS status, h.score AS score, h.hops AS hops, h.round AS round,
+               [x IN collect({id: e.id, kind: e.kind, rel: type(r), summary: e.summary, path: e.path})
+                WHERE x.id IS NOT NULL] AS evidence
+        ORDER BY id""",
+    "graph_nodes": """
+        UNWIND $ops AS x
+        MATCH (s:Service)-[:HAS_OP]->(o:Operation {id: x})
+        OPTIONAL MATCH (a:Anomaly {incident: $inc})-[:ON]->(o)
+        WITH o, s, a ORDER BY a.score DESC
+        RETURN o.id AS id, s.name AS service, s.kind AS service_kind,
+               head(collect(a {.kind, .onset, .score})) AS anomaly
+        ORDER BY id""",
+    "graph_edges": """
+        UNWIND $ops AS x
+        MATCH (a:Operation {id: x})-[c:CALLS]->(b:Operation)
+        WHERE b.id IN $ops
+        RETURN a.id AS src, b.id AS dst, c.rps AS rps, c.err_rate AS err_rate, c.p95_ms AS p95_ms
+        ORDER BY src, dst""",
     # --- Seed (GRAPH_SCHEMA §5, LLD §7.1) ---
     "idx_service": "CREATE INDEX FOR (s:Service) ON (s.name)",
     "idx_operation": "CREATE INDEX FOR (o:Operation) ON (o.id)",
@@ -751,6 +780,10 @@ class Graph:
         return int(
             self._redis(lambda c: c.eval(_PUBLISH_EVENT, 2, f"seq:{key}", f"events:{key}", event, data, EVENTS_KEEP))
         )
+
+    def last_event_seq(self, key: str) -> int:
+        """The seq of the newest event of `key` (0 if none): where a client that just loaded a snapshot resumes."""
+        return int(self._redis(lambda c: c.get(f"seq:{key}")) or 0)
 
     def read_events(self, key: str, after_seq: int = 0, block_ms: int = 0) -> list[dict]:
         """Events of `key` after `after_seq`, oldest first. With `block_ms`, waits up to that long for new ones

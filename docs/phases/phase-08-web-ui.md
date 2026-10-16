@@ -20,23 +20,25 @@ web/app/page.tsx                       incidents list + env switcher
 web/app/incident/[id]/page.tsx         canvas, verdict card, evidence, explanation, why-not, memory, deliver
 web/app/blast-radius/page.tsx  simulate/page.tsx  ask/page.tsx  runs/page.tsx  eval/page.tsx
 web/lib/api.ts                         typed client (types generated from the API's OpenAPI schema)
-web/lib/useIncidentStream.ts           SSE hook with Last-Event-ID reconnect
+web/lib/useIncidentStream.ts           SSE hook; reconnects with ?after=<last seq> (EventSource can't set Last-Event-ID)
+web/lib/incident-state.ts              pure reducer: /graph snapshot + SSE events, applied by id (node:test)
+web/lib/layout.ts                      elk layered layout, incremental (placed nodes keep their spot)
 web/components/graph/                  React Flow canvas, node types, overlay legend
 ```
 
 ## Tasks
 
-- [ ] Typed API client generated from `/openapi.json` (no hand-written duplicate types).
-- [ ] `useIncidentStream`: `EventSource`, reducer keyed by event type, reconnect with `Last-Event-ID`, connection banner.
-- [ ] Canvas (React Flow): operations as nodes grouped by service, `CALLS` edges, hypotheses as branches; status colours (open, supported, refuted, inconclusive grey, confirmed glow); auto layout (dagre / elk) computed once per new node batch.
-- [ ] Overlay (LLD §7.8): observed = filled, predicted = dashed outline; matched green, missed amber, unexplained red; legend "explains 6 / 7 · precision 0.82 · order 0.9". Click a hypothesis to switch overlay.
-- [ ] Verdict card: root cause, confidence, `score_parts` bars, runner-up, second root cause, `no_root_cause` state with what was checked.
-- [ ] Evidence list and explanation: `[E3]` citations highlight that evidence's path on the canvas; "AI explanation unavailable" and "Claims not verified" badges.
-- [ ] Why-not box (service autocomplete) → answer + highlighted path.
-- [ ] Memory panel, actions with Send / Retry, Resolve dialog (pick the action that fixed it), notes input (Decision / Change).
-- [ ] Blast radius (grouped by hops, owners, past incidents link → simulate), What-if (service + kind → ranked predictions, save), Ask (answer + clickable path + Cypher when fallback used), Runs (pick env + scenario), Eval table.
-- [ ] Degraded states from HLD §7: "graph offline" banner, "Traces unavailable for this window", grey inconclusive branches, resume button.
-- [ ] Dark-first, keyboard accessible, readable at laptop and projector sizes; skeleton loaders, no layout jump as SSE events arrive.
+- [x] Typed API client generated from `/openapi.json` (no hand-written duplicate types).
+- [x] `useIncidentStream`: `EventSource`, reducer keyed by event type, reconnect from the last seq (`?after=`; the API accepts both), connection banner.
+- [x] Canvas (React Flow): operations as nodes grouped by service, `CALLS` edges, hypotheses as branches; status colours (open, supported, refuted, inconclusive grey, confirmed glow); auto layout (elk) computed once per new node batch.
+- [x] Overlay (LLD §7.8): observed = filled, predicted = dashed outline; matched green, missed amber, unexplained red; legend "explains 6 / 7 · precision 0.82 · order 0.9". Click a hypothesis to switch overlay.
+- [x] Verdict card: root cause, confidence, `score_parts` bars, runner-up, second root cause, `no_root_cause` state with what was checked.
+- [x] Evidence list and explanation: `[E3]` citations highlight that evidence's path on the canvas; "AI explanation unavailable" and "Claims not verified" badges.
+- [x] Why-not box (service autocomplete) → answer + highlighted path.
+- [x] Memory panel, actions with Send / Retry, Resolve dialog (pick the action that fixed it), notes input (Decision / Change).
+- [x] Blast radius (grouped by hops, owners, past incidents link → simulate), What-if (service + kind → ranked predictions, save), Ask (answer + clickable path + Cypher when fallback used), Runs (pick env + scenario), Eval table.
+- [x] Degraded states from HLD §7: "graph offline" banner, "Traces unavailable for this window", grey inconclusive branches, resume button.
+- [x] Dark-first, keyboard accessible, readable at laptop and projector sizes; skeleton loaders, no layout jump as SSE events arrive.
 
 ## Acceptance
 
@@ -56,8 +58,40 @@ web/components/graph/                  React Flow canvas, node types, overlay le
 ## Risks / open questions
 
 - Mermaid `journey` scores in USER_FLOW are UX intent, not features; don't build them.
-- Decide dagre vs elk early; elk handles grouped (compound) nodes better.
+- ~~Decide dagre vs elk early~~ **Decided: elk** (`elkjs` 0.12, layered, left→right, service-grouped ordering).
 
 ## Done when
 
 Every screen in USER_FLOW works against the live API, the main flow is demo-ready, and degraded states look intentional.
+
+## Results (2026-10-16)
+
+- **API for the canvas:** `GET /incidents/{id}/graph` returns one snapshot: hypotheses with evidence paths, nodes
+  (ops on any evidence path, hypothesis ops, the symptom, each with its anomaly), `CALLS` edges among them, and
+  `last_seq`. The page then streams `?after=last_seq`, so older runs never replay. Also `GET /envs` and
+  `GET /services` (switcher, pickers). Contract test in `tests/test_api.py`.
+- **Checks:** pytest 149 passed (2 live evals skipped), ruff clean; web `eslint`, `tsc --noEmit`, `npm test` 8/8
+  (node:test with `--experimental-strip-types`; vitest dropped: its native rolldown binding was missing from the
+  lockfile on Windows), `next build` in Docker. `npm run gen:api` against the running API → no diff in `api-types.ts`.
+- **Flow 1 live (visible Chrome, RE2-TT cpu_1 / cpu_2):** the canvas opens on the winning path (29 nodes / 33
+  edges); suspect click → overlay (matched / missed / unexplained, rest dimmed); `E1.1` → path spotlight; why-not
+  `ts-order-service` → "lost on score" + path; Rerun → 111 events stream into the timeline, explanation turns
+  "GPT-4o · every claim checked by Jev".
+- **Reconnect:** `docker compose restart api` with the page open → "API unreachable" + stream `reconnecting` →
+  back to live; the next rerun streams 111 more events, **0 duplicate seqs, node count unchanged (29)**.
+- **Lighthouse accessibility (incident page): 100 mobile, 100 desktop** (fixed on the way: names for icon-only nav
+  links at mobile width, path-chip label mismatch, heading order, anomaly badge and "Pruned" pill contrast).
+- **TT size:** RE2-TT incident subgraphs are 24–42 nodes; the full ~400-op graph is never drawn (only the incident
+  subgraph is loaded), so the 400-op pan check doesn't apply to the default view.
+
+### Fixed while verifying
+
+- Suspects mixed round 1 with the second-cause round (§7.5), so a pruned round-2 suspect (0.71) outranked the root
+  cause (0.62). Round 2 now has its own "Second-cause search" group: its scores use a narrower symptom set.
+- GPT-4o quoted the raw confidence ("0.576323"). The narrator now gets it rounded to 2 decimals. Hypothesis scores
+  stay unrounded: rounding both made GPT-4o quote the winner's score (0.62) as the confidence (0.58), and Jev rejected
+  the headline (0.06). With confidence-only rounding the headline passes at 0.92, 3/3 trials.
+- Why-not printed `scored 0.486816` → 2 decimals.
+- In a real Chrome (not headless): light native scrollbars on the dark UI (`color-scheme: dark`); the timeline pushed
+  the column sideways and scrolled the tabs away (wrap + sticky tabs); citation spotlight didn't dim (the fade-in
+  animation's fill mode held `opacity: 1`); the minimap was empty (controlled nodes had no measured size).
