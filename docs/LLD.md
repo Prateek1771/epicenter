@@ -202,6 +202,14 @@ ORDER BY hops, op
 
 ### 2.3 Tool queries
 
+The typed tools live in `api/tools/graph_tools.py` (pydantic in/out, env-bound, no Cypher): `blast_radius`,
+`upstream_candidates` (Q1), `propagation_path` (Q2), `mechanism` (Q3), `why_not`, `recent_changes`,
+`similar_incidents` (Q5), `who_knows`, `simulate` (what-if). `api/tools/mcp_server.py` registers the same `TOOLS`
+list on an MCP server mounted at `/mcp` (streamable HTTP, stateless, JSON responses). `why_not` answers from the
+current run: `is_root_cause` (rank 1 or 2), `victim` / `later_onset` / `small_footprint` (the refuting evidence
+kind), `small_footprint` or `lost_on_score` for a pruned hypothesis (coverage below / at the winner's),
+`not_upstream` (anomalous, but no hypothesis) or `no_anomaly`.
+
 | Tool | Query |
 |---|---|
 | `blast_radius(service)` | `MATCH (s:Service {name:$svc})-[:HAS_OP]->(o) MATCH p=(caller:Operation)-[:CALLS*1..6]->(o) MATCH (cs:Service)-[:HAS_OP]->(caller) OPTIONAL MATCH (cs)-[:OWNED_BY]->(t:Team) RETURN cs.name, caller.id, min(length(p)) AS hops, t.name ORDER BY hops, caller.id` |
@@ -323,6 +331,8 @@ class IncidentState(TypedDict):
 ```
 
 State holds **ids only**. Content lives in the graph (P4 / [ADR 0007](adr/0007-graph-as-shared-agent-state.md)).
+The implementation (`agents/flow.py`) adds `run` (the diagnosis run), `round2_ids` (second-cause round) and
+`skeptic_refuted` (loop flag); every node rebuilds what it needs from the graph (`causal.open_run`).
 
 ### 5.2 Graph of steps
 
@@ -345,8 +355,26 @@ flowchart TD
     RE --> E([end])
 ```
 
-LangGraph `Send` handles the fan-out; a checkpointer (SQLite, `./data/checkpoints.db`) lets
-`POST /incidents/{id}/diagnose` resume after a crash.
+LangGraph `Send` handles the fan-out; a checkpointer (SQLite, `./data/checkpoints.db`, thread id
+`<incident>:r<run>`) lets `POST /incidents/{id}/diagnose` resume after a crash: finished steps are not redone, and a
+step that was cut off re-runs and `MERGE`s onto what it already wrote (hypothesis, evidence, `ABOUT` and
+`ROOT_CAUSE` writes all merge on ids).
+
+**Steps are search-layer functions** (`search/causal.py`: `start_run`, `triage`, `investigate`, `score_round`,
+`skeptic`, `decide`, `pick_second`, `finalize`, `read_verdict`), and the graph is their only shared state: the
+investigator stores each hypothesis's `facts` (victim, self_caused, change, footprint, coverage, unexplained) and the
+scorer reads them back. `diagnose()` runs the same steps in order in one process (CLI, tests, eval), so the agent
+flow and the sequential path return the same verdict (tested on every fixture and on RE2-TT cases). Evidence ids are
+per hypothesis, `<incident>:r<run>:E<n>.<k>` (k-th evidence of hypothesis n), so parallel investigators never share a
+counter.
+
+**Skeptic (phase 5, deterministic):** if the alerting operation has an anomaly and the provisional winner's footprint
+does not explain it, the skeptic writes `REFUTED_BY {kind:'footprint', by:'skeptic'}` and the scorer ranks again (at
+most 2 challenges). The LLM that picks *which* alternative / tool to test arrives with the OpenRouter client in
+phase 7; everything it can pick is deterministic, so the verdict is identical with or without a model (N7).
+
+**Events:** nodes publish the §9 events through `api/events.py` (`EventBus` interface, in-process implementation with
+a per-incident `seq` and a bounded history for replay).
 
 ### 5.3 Agent contracts
 

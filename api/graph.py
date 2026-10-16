@@ -158,48 +158,78 @@ QUERIES: dict[str, str] = {
         MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation {id: $op})
         RETURN min(a.onset) AS onset, max(a.score) AS strength, collect(DISTINCT a.kind) AS kinds,
                collect(a.id) AS anomalies""",
+    # Writes below MERGE on ids: a step re-run after a crash (agents/flow.py resume) never duplicates nodes.
     "H_create": """
         MATCH (i:Incident {id: $inc})
         UNWIND $rows AS r
         MATCH (o:Operation {id: r.op})
-        CREATE (h:Hypothesis {id: r.id, run: $run, ingest: $ingest, round: r.round, status: 'open', hops: r.hops})
-        SET h.onset = r.onset
-        CREATE (i)-[:HAS_HYPOTHESIS]->(h)
-        CREATE (h)-[:BLAMES]->(o)""",
+        MERGE (h:Hypothesis {id: r.id})
+        ON CREATE SET h.run = $run, h.ingest = $ingest, h.round = r.round, h.status = 'open', h.hops = r.hops,
+                      h.onset = r.onset, h.kinds = r.kinds, h.strength = r.strength, h.seed = r.seed,
+                      h.scope = r.scope
+        MERGE (i)-[:HAS_HYPOTHESIS]->(h)
+        MERGE (h)-[:BLAMES]->(o)""",
+    "hypothesis": """
+        MATCH (h:Hypothesis {id: $id})-[:BLAMES]->(o:Operation)
+        RETURN h.id AS id, o.id AS op, h.run AS run, h.round AS round, h.hops AS hops, h.onset AS onset,
+               h.kinds AS kinds, h.strength AS strength, h.seed AS seed, h.scope AS scope, h.status AS status,
+               h.facts AS facts""",
+    "round_hypotheses": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE h.run = $run AND h.round = $round
+        RETURN h.id AS id, o.id AS op, h.hops AS hops, h.onset AS onset, h.kinds AS kinds, h.strength AS strength,
+               h.status AS status, h.facts AS facts, h.score AS score
+        ORDER BY id""",
     # Relationship types can't be parameters, hence one query per direction
     "E_support": """
         UNWIND $rows AS r
         MATCH (h:Hypothesis {id: r.hyp})
-        CREATE (h)-[:SUPPORTED_BY {by: r.by}]->(e:Evidence {id: r.id, kind: r.kind, summary: r.summary})
-        SET e.path = r.path, e.value = r.value
+        MERGE (e:Evidence {id: r.id})
+        ON CREATE SET e.kind = r.kind, e.summary = r.summary, e.path = r.path, e.value = r.value
+        MERGE (h)-[:SUPPORTED_BY {by: r.by}]->(e)
         WITH e, r
         UNWIND r.anomalies AS aid
         MATCH (a:Anomaly {incident: $inc, id: aid})
-        CREATE (e)-[:ABOUT]->(a)""",
+        MERGE (e)-[:ABOUT]->(a)""",
     "E_refute": """
         UNWIND $rows AS r
         MATCH (h:Hypothesis {id: r.hyp})
-        CREATE (h)-[:REFUTED_BY {by: r.by}]->(e:Evidence {id: r.id, kind: r.kind, summary: r.summary})
-        SET e.path = r.path, e.value = r.value
+        MERGE (e:Evidence {id: r.id})
+        ON CREATE SET e.kind = r.kind, e.summary = r.summary, e.path = r.path, e.value = r.value
+        MERGE (h)-[:REFUTED_BY {by: r.by}]->(e)
         WITH e, r
         UNWIND r.anomalies AS aid
         MATCH (a:Anomaly {incident: $inc, id: aid})
-        CREATE (e)-[:ABOUT]->(a)""",
+        MERGE (e)-[:ABOUT]->(a)""",
     "E_about_change": """
         UNWIND $rows AS r
         MATCH (e:Evidence {id: r.evidence})
         MATCH (c:Change {id: r.change})
-        CREATE (e)-[:ABOUT]->(c)""",
+        MERGE (e)-[:ABOUT]->(c)""",
+    "H_facts": """
+        MATCH (h:Hypothesis {id: $id})
+        SET h.status = $status, h.facts = $facts""",
     "H_score": """
         UNWIND $rows AS r
         MATCH (h:Hypothesis {id: r.id})
-        SET h.status = r.status, h.score = r.score, h.score_parts = r.score_parts""",
+        SET h.score = r.score, h.score_parts = r.score_parts""",
+    "H_status": """
+        MATCH (h:Hypothesis {id: $id})
+        SET h.status = $status""",
+    "H_prune": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)
+        WHERE h.run = $run AND h.status IN ['supported', 'inconclusive']
+        SET h.status = 'pruned'
+        RETURN h.id AS id
+        ORDER BY id""",
     "root_cause": """
         MATCH (i:Incident {id: $inc})
         MATCH (h:Hypothesis {id: $hyp})
-        CREATE (i)-[:ROOT_CAUSE {rank: $rank, run: $run, ingest: $ingest, confidence: $confidence, weights_version: $wv,
-                                 ts: $ts}]->(h)
-        SET i.status = 'diagnosed', i.confidence = $confidence, i.weights_version = $wv, i.summary = null""",
+        MERGE (i)-[rc:ROOT_CAUSE {rank: $rank, run: $run}]->(h)
+        ON CREATE SET rc.ingest = $ingest, rc.confidence = $confidence, rc.weights_version = $wv, rc.ts = $ts
+        SET h.status = 'confirmed'
+        FOREACH (_ IN CASE WHEN $rank = 1 THEN [1] ELSE [] END |
+          SET i.status = 'diagnosed', i.confidence = $confidence, i.weights_version = $wv, i.summary = null)""",
     "run_hypotheses": """
         MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
         WHERE h.run = $run
@@ -246,11 +276,6 @@ QUERIES: dict[str, str] = {
     "incident_no_root_cause": """
         MATCH (i:Incident {id: $inc})
         SET i.status = 'no_root_cause', i.summary = $summary, i.confidence = null, i.weights_version = $wv""",
-    "second_cause": """
-        MATCH (i:Incident {id: $inc})
-        MATCH (h:Hypothesis {id: $hyp})
-        CREATE (i)-[:ROOT_CAUSE {rank: 2, run: $run, ingest: $ingest, confidence: $confidence, weights_version: $wv,
-                                 ts: $ts}]->(h)""",
     "footprint_values": """
         MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
         WHERE h.run = $run AND e.kind = 'footprint'
@@ -262,10 +287,31 @@ QUERIES: dict[str, str] = {
         WHERE h.run = $run
         RETURN DISTINCT h.round AS round
         ORDER BY round""",
+    # why_not tool: the service's hypotheses in the incident's current run, with all their evidence
+    "service_hypotheses": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+              <-[:HAS_OP]-(:Service {name: $svc})
+        WHERE h.run = i.run
+        OPTIONAL MATCH (h)-[r:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+        WITH h, o, r, e ORDER BY e.id
+        RETURN h.id AS id, o.id AS op, h.status AS status, h.score AS score, h.facts AS facts,
+               [x IN collect({rel: type(r), id: e.id, kind: e.kind, summary: e.summary, path: e.path})
+                WHERE x.id IS NOT NULL] AS evidence
+        ORDER BY id""",
+    "service_anomalies": """
+        MATCH (:Service {name: $svc})-[:HAS_OP]->(o:Operation)
+        OPTIONAL MATCH (a:Anomaly {incident: $inc})-[:ON]->(o)
+        RETURN count(a) AS n""",
+    "run_evidence_ids": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[r:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+        WHERE h.run = $run
+        RETURN h.id AS hypothesis, e.id AS evidence, r.by AS by
+        ORDER BY evidence""",
+    "incident_signature": "MATCH (i:Incident {id: $inc}) RETURN i.signature AS signature",
     "incident": """
         MATCH (i:Incident {id: $inc})
         RETURN i.status AS status, i.summary AS summary, i.run AS run, i.ingest AS ingest,
-               i.confidence AS confidence""",
+               i.confidence AS confidence, i.symptom AS symptom, i.opened_at AS opened_at""",
     "root_causes": """
         MATCH (i:Incident {id: $inc})-[r:ROOT_CAUSE]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
         WHERE r.run = i.run
@@ -458,6 +504,13 @@ class Graph:
 
     def kb(self) -> EnvGraph:
         return self._select(KB_GRAPH)
+
+    def env_names(self) -> list[str]:
+        """Environments that have a graph (`env:<name>`), sorted."""
+        try:
+            return sorted(k[4:] for k in self._db.list_graphs() if k.startswith("env:"))
+        except (RedisConnectionError, RedisTimeoutError) as e:
+            raise GraphUnavailable(str(e)) from e
 
     def ping(self) -> bool:
         try:

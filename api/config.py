@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     query_timeout_s: float = 5.0  # LLD §10: per FalkorDB query
     weights_path: str = "weights.json"
+    checkpoint_db: str = "./data/checkpoints.db"  # LangGraph checkpointer (resume after a crash)
 
 
 @lru_cache

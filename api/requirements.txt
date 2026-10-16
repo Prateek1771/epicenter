@@ -9,3 +9,6 @@ pyarrow==26.0.0
 ruptures==1.1.10
 drain3==0.9.11
 networkx==3.7
+langgraph==1.2.15
+langgraph-checkpoint-sqlite==3.1.2
+mcp==2.3.0

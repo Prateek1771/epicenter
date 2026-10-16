@@ -4,19 +4,24 @@ footprint (Q6, LLD §7), PageRank (Q4), score.
     python -m api.search.causal --env rcaeval-tt --incident rc-re2tt_ts-auth-service_cpu_2
 
 Every diagnosis is a kept, numbered run (`Incident.run`); its hypotheses and evidence carry ids
-`<incident>:r<run>:h-<n>` / `:E<n>`, so earlier runs stay in the graph as history. No LLM in this module.
+`<incident>:r<run>:h-<n>` / `:E<n>.<k>` (k-th evidence of hypothesis n), so earlier runs stay in the graph as history.
+
+The diagnosis is a set of steps that share state through the graph only (ADR 0007): `start_run`, `triage`,
+`investigate` (one per hypothesis, safe to run in parallel), `score_round`, `skeptic`, `decide`, `finalize`.
+`diagnose()` runs them in order; `api/agents/flow.py` runs the same steps as a LangGraph flow. No LLM in this module.
 """
 
 import argparse
 import json
 import sys
 import time
+from dataclasses import dataclass, field
 
 import networkx
 
 from api.config import get_settings
 from api.graph import EnvGraph, Graph, GraphUnavailable
-from api.models import scoped_id
+from api.models import local_id, scoped_id
 from api.search import score as sc
 from api.search.simulate import Simulator, match, observed_set
 
@@ -52,25 +57,93 @@ def is_victim(self_ratio: float | None, child_ratio: float | None) -> bool:
 # --- Graph steps ---
 
 
-def make_hypotheses(env: EnvGraph, incident: str, run: int, symptom: str, start: int = 1) -> list[dict]:
-    """Q1 candidates plus the symptom itself (hops 0) when it has an anomaly of its own."""
+@dataclass
+class Run:
+    """Handle on one diagnosis run. Holds only what can be re-read from the graph, so any process can rebuild it."""
+
+    graph: Graph
+    env: EnvGraph
+    incident: str
+    run: int
+    ingest: int
+    symptom: str
+    w: dict
+    _sim: "Simulator | None" = field(default=None, repr=False)
+    _observed: dict | None = field(default=None, repr=False)
+    _ranks: tuple | None = field(default=None, repr=False)
+
+    @property
+    def use_sim(self) -> bool:
+        return "footprint" in self.w["w"]
+
+    @property
+    def sim(self) -> "Simulator | None":
+        if self.use_sim and self._sim is None:
+            self._sim = Simulator(self.graph, self.env, self.w["simulator"], self.w["skew_s"])
+        return self._sim
+
+    @property
+    def observed(self) -> dict[str, dict]:
+        if self._observed is None:
+            self._observed = observed_set(self.env.ro("observed", inc=self.incident))
+        return self._observed
+
+    @property
+    def ranks(self) -> tuple[dict[str, float], str]:
+        if self._ranks is None:
+            self._ranks = pagerank(self.graph, self.env, self.incident)
+        return self._ranks
+
+
+def start_run(graph: Graph, env_name: str, incident: str, weights_path: str | None = None) -> Run:
+    """Open a new, kept diagnosis run (Incident.run + 1, status diagnosing)."""
+    env = graph.env(env_name)
+    [inc] = env.rw("next_run", inc=incident)
+    w = sc.load_weights(weights_path or get_settings().weights_path)
+    return Run(graph, env, incident, inc["run"], inc["ingest"], inc["symptom"], w)
+
+
+def open_run(graph: Graph, env_name: str, incident: str, weights_path: str | None = None) -> Run:
+    """The incident's current run, rebuilt from the graph (used by agent nodes and resume)."""
+    env = graph.env(env_name)
+    [inc] = env.ro("incident", inc=incident)
+    w = sc.load_weights(weights_path or get_settings().weights_path)
+    return Run(graph, env, incident, inc["run"], inc["ingest"] or 1, inc["symptom"], w)
+
+
+def _hyp_no(hyp_id: str) -> int:
+    return int(hyp_id.rsplit("h-", 1)[1])
+
+
+def triage(
+    r: Run, round_: int = 1, seed: str | None = None, scope: list[str] | None = None, exclude: str | None = None
+) -> list[dict]:
+    """Hypotheses: Q1 candidates upstream of `seed` (default: the symptom) plus the seed itself when it has an anomaly
+    of its own. Round 2 (second cause) is scoped to the symptoms the winner left unexplained. Written with MERGE."""
+    seed = seed or r.symptom
     rows = []
-    own = env.ro("op_anomalies", inc=incident, op=symptom)
+    own = r.env.ro("op_anomalies", inc=r.incident, op=seed)
     if own and own[0]["kinds"]:
-        rows.append({"op": symptom, "hops": 0, "onset": own[0]["onset"], "strength": own[0]["strength"]} | own[0])
-    rows += [r for r in env.ro("Q1", symptom=symptom, inc=incident) if r["op"] != symptom]  # a call cycle can return it
-    hyps = []
-    for n, r in enumerate(rows, start):
-        hyps.append(
-            {
-                "id": scoped_id(incident, f"r{run}:h-{n}"),
-                "op": r["op"],
-                "hops": r["hops"],
-                "onset": r["onset"],
-                "strength": r["strength"],
-                "kinds": sorted(r["kinds"]),
-            }
-        )
+        rows.append({"op": seed, "hops": 0, "onset": own[0]["onset"], "strength": own[0]["strength"]} | own[0])
+    rows += [x for x in r.env.ro("Q1", symptom=seed, inc=r.incident) if x["op"] != seed]  # a call cycle can return it
+    rows = [x for x in rows if x["op"] != exclude]
+    start = 1 + max((_hyp_no(h["id"]) for h in r.env.ro("run_hypotheses", inc=r.incident, run=r.run)), default=0)
+    hyps = [
+        {
+            "id": scoped_id(r.incident, f"r{r.run}:h-{n}"),
+            "op": x["op"],
+            "hops": x["hops"],
+            "onset": x["onset"],
+            "strength": x["strength"],
+            "kinds": sorted(x["kinds"]),
+            "round": round_,
+            "seed": seed,
+            "scope": sorted(scope) if scope is not None else None,
+        }
+        for n, x in enumerate(rows, start)
+    ]
+    if hyps:
+        r.env.rw("H_create", inc=r.incident, run=r.run, ingest=r.ingest, rows=hyps)
     return hyps
 
 
@@ -195,181 +268,247 @@ def footprint_evidence(h: dict, sim: Simulator, observed: dict[str, dict], cfg: 
     }
 
 
-def evaluate(
-    env: EnvGraph,
-    incident: str,
-    run: int,
-    ingest: int,
-    seed: str,
-    hyps: list[dict],
-    observed: dict[str, dict],
-    w: dict,
-    sim: Simulator | None,
-    ranks: dict[str, float],
-    impl: str,
-    counter: list[int],
-) -> None:
-    """One round: write the hypotheses, check each (Q2, Q3, footprint), write evidence, score. Statuses are provisional
-    (supported / refuted / inconclusive); the caller picks the winner."""
-    env.rw(
-        "H_create",
-        inc=incident,
-        run=run,
-        ingest=ingest,
-        rows=[{k: h[k] for k in ("id", "op", "hops", "onset", "round")} for h in hyps],
-    )
-    evidence = []
-    for h in hyps:
-        h.update(footprint=0.0, coverage=0.0, unexplained=[])
-        try:
-            found = check(env, incident, seed, h, w)
-            if sim is not None:
-                found.append(footprint_evidence(h, sim, observed, w["simulator"]))
-        except GraphUnavailable:
-            h.update(victim=False, self_caused=None, change=False)  # no evidence → inconclusive below
-            found = []
-        for e in found:
-            counter[0] += 1
-            e.update(id=scoped_id(incident, f"r{run}:E{counter[0]}"), hyp=h["id"], by="investigator")
-        evidence += found
-        h["refuted"] = any(e["rel"] == "refute" for e in found)
-        h["status"] = (
-            "refuted" if h["refuted"] else "supported" if any(e["rel"] == "support" for e in found) else "inconclusive"
-        )
+def investigate(r: Run, hyp_id: str) -> dict:
+    """One investigator: Q3, Q2 and the Fault Simulator for one hypothesis. Writes only under that hypothesis (its
+    evidence ids are `E<n>.<k>`, n = the hypothesis number), so investigators can run in parallel; a re-run after a
+    crash MERGEs onto what it already wrote. Returns the evidence and the footprint for event publishing."""
+    [h] = r.env.ro("hypothesis", id=hyp_id)
+    if h["facts"] is not None:  # finished before a crash: nothing to redo
+        return {"id": hyp_id, "status": h["status"], "evidence": [], "footprint": None}
+    observed = r.observed if h["scope"] is None else {op: r.observed[op] for op in h["scope"] if op in r.observed}
+    h = dict(h)
+    footprint = None
+    try:
+        found = check(r.env, r.incident, h["seed"], h, r.w)
+        if r.sim is not None:
+            fp = footprint_evidence(h, r.sim, observed, r.w["simulator"])
+            footprint = json.loads(fp["value"])
+            found.append(fp)
+    except GraphUnavailable:
+        found = []
+        h.update(victim=False, self_caused=None, change=False)
+    n = _hyp_no(hyp_id)
+    for k, e in enumerate(found, 1):
+        e.update(id=scoped_id(r.incident, f"r{r.run}:E{n}.{k}"), hyp=hyp_id, by="investigator")
     for rel, qid in (("support", "E_support"), ("refute", "E_refute")):
         rows = [{k: e[k] for k in ("id", "hyp", "by", "kind", "summary", "path", "value", "anomalies")}
-                for e in evidence if e["rel"] == rel]  # fmt: skip
+                for e in found if e["rel"] == rel]  # fmt: skip
         if rows:
-            env.rw(qid, inc=incident, rows=rows)
-    about = [{"evidence": e["id"], "change": c} for e in evidence for c in e.get("changes", [])]
+            r.env.rw(qid, inc=r.incident, rows=rows)
+    about = [{"evidence": e["id"], "change": c} for e in found for c in e.get("changes", [])]
     if about:
-        env.rw("E_about_change", rows=about)
-    for h in hyps:
-        h["pagerank"] = ranks.get(h["op"], 0.0)
+        r.env.rw("E_about_change", rows=about)
+    refuted = any(e["rel"] == "refute" for e in found)
+    status = "refuted" if refuted else "supported" if any(e["rel"] == "support" for e in found) else "inconclusive"
+    facts = {
+        "victim": h.get("victim", False),
+        "self_caused": h.get("self_caused"),
+        "change": h.get("change", False),
+        "footprint": h.get("footprint", 0.0),
+        "coverage": h.get("coverage", 0.0),
+        "unexplained": h.get("unexplained", []),
+    }
+    r.env.rw("H_facts", id=hyp_id, status=status, facts=json.dumps(facts, sort_keys=True))
+    return {"id": hyp_id, "status": status, "evidence": found, "footprint": footprint}
+
+
+def score_round(r: Run, round_: int) -> list[dict]:
+    """Scorer: features + scores for one round's hypotheses, read back from the graph. Returns them ranked."""
+    ranks, impl = r.ranks
+    hyps = []
+    for row in r.env.ro("round_hypotheses", inc=r.incident, run=r.run, round=round_):
+        f = json.loads(row["facts"]) if row["facts"] else {}
+        hyps.append(
+            {
+                "id": row["id"],
+                "op": row["op"],
+                "onset": row["onset"],
+                "strength": row["strength"],
+                "kinds": row["kinds"] or [],
+                "status": row["status"],
+                "victim": f.get("victim", False),
+                "self_caused": f.get("self_caused"),
+                "change": f.get("change", False),
+                "footprint": f.get("footprint", 0.0),
+                "coverage": f.get("coverage", 0.0),
+                "unexplained": f.get("unexplained", []),
+                "refuted": row["status"] == "refuted",
+                "pagerank": ranks.get(row["op"], 0.0),
+            }
+        )
     for h, f in zip(hyps, sc.features(hyps), strict=True):
-        h["score"] = sc.score(f, w)
+        h["score"] = sc.score(f, r.w)
         h["score_parts"] = sc.score_parts_json(f, {"pagerank_impl": impl})
+    if hyps:
+        r.env.rw("H_score", rows=[{k: h[k] for k in ("id", "score", "score_parts")} for h in hyps])
+    return sc.ranking(hyps)
 
 
-def diagnose(graph: Graph, env_name: str, incident: str, weights_path: str | None = None) -> dict:
-    """One full, deterministic diagnosis run (a new, kept run). Returns the verdict; everything is written to the graph.
+def pick(ordered: list[dict]) -> dict | None:
+    return next((h for h in ordered if h["status"] != "refuted"), None)
 
-    Round 1 ranks the hypotheses upstream of the symptom. With the Fault Simulator on (weights with a `footprint`
-    weight) the outcome is one of: `no_root_cause` (§7.6), one root cause, or a root cause plus a second one found by a
-    round 2 seeded from the symptoms the winner leaves unexplained (§7.5)."""
-    w = sc.load_weights(weights_path or get_settings().weights_path)
-    use_sim = "footprint" in w["w"]
-    sim_cfg = w["simulator"]
-    env = graph.env(env_name)
-    [inc] = env.rw("next_run", inc=incident)
-    run, symptom, ingest = inc["run"], inc["symptom"], inc["ingest"]
-    sim = Simulator(graph, env, sim_cfg, w["skew_s"]) if use_sim else None
-    observed = observed_set(env.ro("observed", inc=incident))
-    ranks, impl = pagerank(graph, env, incident)
-    counter = [0]
 
-    hyps = [h | {"round": 1} for h in make_hypotheses(env, incident, run, symptom)]
-    evaluate(env, incident, run, ingest, symptom, hyps, observed, w, sim, ranks, impl, counter)
+def skeptic(r: Run, winner: dict) -> bool:
+    """Deterministic challenge of the provisional winner: if the alerting operation has an anomaly of its own, the
+    winner's footprint must explain it. Returns True if the winner is refuted (the scorer then runs again). The LLM
+    (phase 7) may only choose *which* deterministic check to run first, so the verdict never depends on it (N7)."""
+    if not r.use_sim or r.symptom not in r.observed or winner["op"] == r.symptom:
+        return False
+    if r.symptom not in winner["unexplained"]:
+        return False
+    eid = scoped_id(r.incident, f"r{r.run}:E{_hyp_no(winner['id'])}.s")
+    r.env.rw(
+        "E_refute",
+        inc=r.incident,
+        rows=[
+            {
+                "id": eid,
+                "hyp": winner["id"],
+                "by": "skeptic",
+                "kind": "footprint",
+                "summary": f"{winner['op']} does not explain the alerting operation {r.symptom}",
+                "path": [winner["op"], r.symptom],
+                "value": json.dumps({"symptom": r.symptom}),
+                "anomalies": r.observed[r.symptom]["anomalies"],
+            }
+        ],
+    )
+    r.env.rw("H_status", id=winner["id"], status="refuted")
+    return True
 
-    ordered = sc.ranking(hyps)
-    top = next((h for h in ordered if h["status"] != "refuted"), None)
-    conf = sc.confidence([h["score"] for h in hyps if h["status"] != "refuted"], w["k"])
-    best_cov = max((h["coverage"] for h in hyps), default=0.0)
-    strongest = max((o["score"] for o in observed.values()), default=0.0)
+
+def decide(r: Run, ordered: list[dict]) -> dict:
+    """After the scorer and skeptic: `no_root_cause` (§7.6) or commit the winner as ROOT_CAUSE {rank: 1}.
+    Returns {no_root_cause, winner, second_seed, second_scope}."""
+    top = pick(ordered)
+    sim_cfg = r.w["simulator"]
+    best_cov = max((h["coverage"] for h in ordered), default=0.0)
+    strongest = max((o["score"] for o in r.observed.values()), default=0.0)
     nrc = sim_cfg["no_root_cause"]
-    no_root = top is None or (use_sim and best_cov < nrc["max_coverage"] and strongest < nrc["max_anomaly"])
-
-    second, all_hyps = None, list(hyps)
-    if no_root:
-        top = None
+    if top is None or (r.use_sim and best_cov < nrc["max_coverage"] and strongest < nrc["max_anomaly"]):
         summary = (
-            f"Nothing in the graph explains this alert: checked {len(hyps)} hypotheses upstream of {symptom}; "
+            f"Nothing in the graph explains this alert: checked {len(ordered)} hypotheses upstream of {r.symptom}; "
             f"the best explains {best_cov:.0%} of the symptoms and the strongest anomaly scores {strongest:.2f}"
         )
-        env.rw("incident_no_root_cause", inc=incident, summary=summary, wv=w["version"])
-    else:
-        top["status"] = "confirmed"
-        env.rw(
-            "root_cause",
-            inc=incident,
-            hyp=top["id"],
-            rank=1,
-            run=run,
-            ingest=ingest,
-            confidence=conf,
-            wv=w["version"],
-            ts=int(time.time()),
-        )
-        unexplained = top["unexplained"]
-        sc_cfg = sim_cfg["second_cause"]
-        if use_sim and (
-            len(unexplained) >= sc_cfg["min_unexplained_ops"]
-            or any(observed[u]["score"] >= sc_cfg["strong_anomaly"] for u in unexplained)
-        ):
-            seed = min(unexplained, key=lambda u: (observed[u]["onset"], u))
-            round2 = [
-                h | {"round": 2}
-                for h in make_hypotheses(env, incident, run, seed, start=len(hyps) + 1)
-                if h["op"] != top["op"]
-            ]
-            if round2:
-                left = {u: observed[u] for u in unexplained}
-                evaluate(env, incident, run, ingest, seed, round2, left, w, sim, ranks, impl, counter)
-                # An independent second fault: on another service, and it must explain enough of what is left
-                second = next(
-                    (
-                        h
-                        for h in sc.ranking(round2)
-                        if h["status"] != "refuted"
-                        and h["op"].split("/", 1)[0] != top["op"].split("/", 1)[0]
-                        and h["coverage"] >= sc_cfg["min_coverage"]
-                    ),
-                    None,
-                )
-                if second:
-                    second["status"] = "confirmed"
-                    env.rw(
-                        "second_cause",
-                        inc=incident,
-                        hyp=second["id"],
-                        run=run,
-                        ingest=ingest,
-                        confidence=sc.confidence([h["score"] for h in round2 if h["status"] != "refuted"], w["k"]),
-                        wv=w["version"],
-                        ts=int(time.time()),
-                    )
-                all_hyps += round2
+        r.env.rw("incident_no_root_cause", inc=r.incident, summary=summary, wv=r.w["version"])
+        return {"no_root_cause": True, "summary": summary, "winner": None, "max_coverage": best_cov}
+    conf = sc.confidence([h["score"] for h in ordered if h["status"] != "refuted"], r.w["k"])
+    _commit(r, top, 1, conf)
+    out = {"no_root_cause": False, "winner": top | {"confidence": conf}, "second_seed": None, "second_scope": None}
+    u = top["unexplained"]
+    sc_cfg = sim_cfg["second_cause"]
+    if r.use_sim and (
+        len(u) >= sc_cfg["min_unexplained_ops"] or any(r.observed[x]["score"] >= sc_cfg["strong_anomaly"] for x in u)
+    ):
+        out["second_seed"] = min(u, key=lambda x: (r.observed[x]["onset"], x))
+        out["second_scope"] = u
+    return out
 
-    for h in all_hyps:
-        if h["status"] in ("supported", "inconclusive"):
-            h["status"] = "pruned"
-    env.rw("H_score", rows=[{k: h[k] for k in ("id", "status", "score", "score_parts")} for h in all_hyps])
 
+def pick_second(r: Run, winner: dict, ordered: list[dict]) -> dict | None:
+    """The second cause must be an independent fault: another service, explaining enough of what was left (§7.5)."""
+    cfg = r.w["simulator"]["second_cause"]
+    svc = winner["op"].split("/", 1)[0]
+    second = next(
+        (
+            h
+            for h in ordered
+            if h["status"] != "refuted" and h["op"].split("/", 1)[0] != svc and h["coverage"] >= cfg["min_coverage"]
+        ),
+        None,
+    )
+    if second:
+        conf = sc.confidence([h["score"] for h in ordered if h["status"] != "refuted"], r.w["k"])
+        _commit(r, second, 2, conf)
+    return second
+
+
+def _commit(r: Run, h: dict, rank: int, conf: float) -> None:
+    r.env.rw(
+        "root_cause",
+        inc=r.incident,
+        hyp=h["id"],
+        rank=rank,
+        run=r.run,
+        ingest=r.ingest,
+        confidence=conf,
+        wv=r.w["version"],
+        ts=int(time.time()),
+    )
+    h["status"] = "confirmed"
+
+
+def finalize(r: Run) -> list[str]:
+    """Every hypothesis ends terminal: supported / inconclusive ones that didn't win become pruned."""
+    return [x["id"] for x in r.env.rw("H_prune", inc=r.incident, run=r.run)]
+
+
+def read_verdict(r: Run) -> dict:
+    """The run's verdict, read back from the graph. The sequential `diagnose()` and the agent flow both return this, so
+    they can't disagree about what was written."""
+    [inc] = r.env.ro("incident", inc=r.incident)
+    hyps = r.env.ro("round_hypotheses", inc=r.incident, run=r.run, round=1)
+    for h in hyps:
+        h["coverage"] = json.loads(h["facts"] or "{}").get("coverage", 0.0)
+    causes = {c["rank"]: c for c in r.env.ro("root_causes", inc=r.incident)}
+    top = next((h for h in hyps if causes.get(1) and h["id"] == causes[1]["hypothesis"]), None)
+    final = [x["status"] for x in r.env.ro("run_hypotheses", inc=r.incident, run=r.run)]
+    impl = next((json.loads(h["score_parts"])["pagerank_impl"] for h in r.env.ro("run_hypotheses", inc=r.incident,
+                 run=r.run) if h["score_parts"]), "none")  # fmt: skip
     return {
-        "incident": incident,
-        "run": run,
-        "ingest": ingest,
-        "symptom": symptom,
-        "status": "no_root_cause" if no_root else "diagnosed",
-        "root_cause": top["op"] if top else None,
-        "confidence": conf if top else None,
-        "explains": f"{top['coverage']:.0%} of symptoms" if top and use_sim else None,
-        "second_cause": second["op"] if second else None,
-        "weights_version": w["version"],
+        "incident": r.incident,
+        "run": r.run,
+        "ingest": r.ingest,
+        "symptom": r.symptom,
+        "status": inc["status"],
+        "summary": inc["summary"],
+        "root_cause": causes[1]["op"] if 1 in causes else None,
+        "confidence": causes[1]["confidence"] if 1 in causes else None,
+        "explains": f"{top['coverage']:.0%} of symptoms" if top and r.use_sim else None,
+        "second_cause": causes[2]["op"] if 2 in causes else None,
+        "weights_version": r.w["version"],
         "pagerank_impl": impl,
-        "hypotheses": len(all_hyps),
-        "statuses": {s: sum(h["status"] == s for h in all_hyps) for s in sorted({h["status"] for h in all_hyps})},
+        "hypotheses": len(final),
+        "statuses": {s: final.count(s) for s in sorted(set(final))},
         "ranking": [
             {
-                "id": h["id"].rsplit(":", 1)[-1],
+                "id": local_id(h["id"]),
                 "op": h["op"],
                 "status": h["status"],
                 "score": h["score"],
                 "coverage": h["coverage"],
             }
-            for h in ordered
+            for h in sc.ranking([h | {"score": h["score"] if h["score"] is not None else -9.0} for h in hyps])
         ],
     }
+
+
+def score_and_challenge(r: Run) -> list[dict]:
+    """Scorer ↔ skeptic loop: up to 2 skeptic challenges; after a refutation the scorer ranks again."""
+    for i in range(3):
+        ordered = score_round(r, 1)
+        top = pick(ordered)
+        if top is None or i == 2 or not skeptic(r, top):
+            return ordered
+    return ordered
+
+
+def diagnose(graph: Graph, env_name: str, incident: str, weights_path: str | None = None) -> dict:
+    """One full, deterministic diagnosis run, step by step in this process (the agent flow runs the same steps)."""
+    r = start_run(graph, env_name, incident, weights_path)
+    for h in triage(r):
+        investigate(r, h["id"])
+    ordered = score_and_challenge(r)
+    decision = decide(r, ordered)
+    if decision.get("second_seed"):
+        w = decision["winner"]
+        round2 = triage(r, 2, decision["second_seed"], decision["second_scope"], exclude=w["op"])
+        for h in round2:
+            investigate(r, h["id"])
+        if round2:
+            pick_second(r, w, score_round(r, 2))
+    finalize(r)
+    return read_verdict(r)
 
 
 def main(argv: list[str] | None = None) -> int:

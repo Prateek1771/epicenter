@@ -1,4 +1,4 @@
-"""FastAPI app: REST under /api/v1. SSE and the /mcp mount arrive in phases 5 and 6."""
+"""FastAPI app: REST under /api/v1, the typed tools over MCP at /mcp. SSE arrives in phase 6."""
 
 import json
 import logging
@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException
 from api.config import get_settings
 from api.graph import Graph, GraphUnavailable, query_stats
 from api.ingest.seed import seed_all
+from api.tools import mcp_server
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger("epicenter.api")
@@ -27,7 +28,11 @@ async def lifespan(app: FastAPI):
     except GraphUnavailable as e:
         # ponytail: seed runs once per start; restart the api after FalkorDB is back to seed
         log.warning(json.dumps({"event": "seed_skipped", "reason": str(e)}))
-    yield
+    # A session manager runs once, so each startup builds a fresh /mcp app (tests start the app many times)
+    mcp_app = mcp_server.asgi_app()
+    app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != "/mcp"] + list(mcp_app.routes)
+    async with mcp_server.server.session_manager.run():  # a mounted sub-app's own lifespan never runs
+        yield
 
 
 app = FastAPI(title="Epicenter", lifespan=lifespan)

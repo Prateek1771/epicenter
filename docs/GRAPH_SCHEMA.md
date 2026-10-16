@@ -134,8 +134,13 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `score` | float | after scoring | |
 | `score_parts` | str (JSON) | after scoring | feature values, `pagerank_impl` |
 | `round` | int | ✓ | 1 = ranked against the symptom; 2 = second-cause round seeded from the winner's unexplained symptoms |
+| `kinds`, `strength` | list<str>, float | ✓ | the target's anomaly kinds and max score (from Q1) |
+| `seed` | str | ✓ | operation the round searched from (the symptom, or the round-2 seed) |
+| `scope` | list<str> | round 2 | the unexplained ops a round-2 hypothesis is matched against |
+| `facts` | str (JSON) | after investigation | victim, self_caused, change, footprint, coverage, unexplained; read by the scorer |
 
-**`Evidence`**: key `id` (`<incident>:r<run>:E<n>`, e.g. `inc-1:r2:E3`; the API shows `E3`). Incidents share the env graph, so per-incident ids are scoped (`models.scoped_id` / `local_id`)
+**`Evidence`**: key `id` (`<incident>:r<run>:E<n>.<k>`, the k-th evidence of hypothesis n, e.g. `inc-1:r2:E3.1`;
+the API shows `E3.1`; the skeptic's is `E<n>.s`). Incidents share the env graph, so per-incident ids are scoped (`models.scoped_id` / `local_id`)
 | Property | Type | Req | Notes |
 |---|---|---|---|
 | `kind` | str | ✓ | `propagation` · `mechanism` · `change` · `victim` · `pagerank` · `footprint` · `log` · `history` |

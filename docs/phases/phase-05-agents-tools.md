@@ -26,18 +26,18 @@ tests/test_flow.py
 
 ## Tasks
 
-- [ ] `IncidentState` exactly as LLD §5.1: ids, flags, counters only. No evidence, no telemetry in state.
-- [ ] triage: `Incident {status:'diagnosing'}`, `TRIGGERED_BY`, hypotheses via `causal.hypotheses`; emits `hypothesis.created`.
-- [ ] investigator per hypothesis via `Send`: Q2, Q3, Fault Simulator; writes only under its own hypothesis; emits `evidence.added`, `footprint`, `hypothesis.status`. Optional LLM context calls (`recent_changes`, `who_knows`) never set status.
-- [ ] scorer: phase 3/4 scoring, `ROOT_CAUSE`, emits `verdict` (or `no_root_cause`).
-- [ ] skeptic: LLM chooses *which* alternative and *which* tool; deterministic tools decide. Leads with the winner's unexplained symptoms. Max 2 rounds back to scorer. Without an LLM it falls back to "test runner-up with its footprint".
-- [ ] Second-cause branch and `no_root_cause` branch as in the LLD §5.2 diagram.
-- [ ] Every step: structured log `{incident_id, agent, tool, query_id, duration_ms, rows}` ([HLD §10](../HLD.md#10-observability-of-epicenter-itself)); errors appended to `state.errors`.
-- [ ] Checkpointer (SQLite `./data/checkpoints.db`) so `diagnose` resumes after a crash; finished work is already in the graph, so a resumed step must be idempotent (`MERGE` on hypothesis/evidence ids).
-- [ ] Typed tools: plain Python functions with pydantic input/output models, each bound to one env (`tool(env, …)`); no tool accepts Cypher.
-- [ ] `why_not(incident, service)` answers `victim`, `later_onset`, `no_anomaly`, `not_upstream`, `small_footprint`, `lost_on_score`, `is_root_cause` ([API.md](../API.md#get-incidentsidwhy-notservice)).
-- [ ] MCP server at `/mcp` exposes the same functions (generated from the same signatures, not hand-duplicated).
-- [ ] `events.publish` is an interface with one in-process implementation.
+- [x] `IncidentState` exactly as LLD §5.1: ids, flags, counters only. No evidence, no telemetry in state.
+- [x] triage: `Incident {status:'diagnosing'}`, `TRIGGERED_BY`, hypotheses via `causal.hypotheses`; emits `hypothesis.created`.
+- [x] investigator per hypothesis via `Send`: Q2, Q3, Fault Simulator; writes only under its own hypothesis; emits `evidence.added`, `footprint`, `hypothesis.status`. Optional LLM context calls (`recent_changes`, `who_knows`) never set status.
+- [x] scorer: phase 3/4 scoring, `ROOT_CAUSE`, emits `verdict` (or `no_root_cause`).
+- [x] skeptic: LLM chooses *which* alternative and *which* tool; deterministic tools decide. Leads with the winner's unexplained symptoms. Max 2 rounds back to scorer. Without an LLM it falls back to "test runner-up with its footprint".
+- [x] Second-cause branch and `no_root_cause` branch as in the LLD §5.2 diagram.
+- [x] Every step: structured log `{incident_id, agent, tool, query_id, duration_ms, rows}` ([HLD §10](../HLD.md#10-observability-of-epicenter-itself)); errors appended to `state.errors`.
+- [x] Checkpointer (SQLite `./data/checkpoints.db`) so `diagnose` resumes after a crash; finished work is already in the graph, so a resumed step must be idempotent (`MERGE` on hypothesis/evidence ids).
+- [x] Typed tools: plain Python functions with pydantic input/output models, each bound to one env (`tool(env, …)`); no tool accepts Cypher.
+- [x] `why_not(incident, service)` answers `victim`, `later_onset`, `no_anomaly`, `not_upstream`, `small_footprint`, `lost_on_score`, `is_root_cause` ([API.md](../API.md#get-incidentsidwhy-notservice)).
+- [x] MCP server at `/mcp` exposes the same functions (generated from the same signatures, not hand-duplicated).
+- [x] `events.publish` is an interface with one in-process implementation.
 
 ## Acceptance
 
@@ -62,8 +62,20 @@ tests/test_flow.py
 ## Risks / open questions
 
 - ~~Q-c~~ closed in phase 3: `?force=true` starts a new run; earlier runs are kept ([LLD §8](../LLD.md#8-state-machines)).
-- LangGraph `Send` + checkpointer + resume needs a spike early in this phase.
+- ~~Spike~~ done on langgraph 1.2.15 + langgraph-checkpoint-sqlite 3.1.2: `Send` runs investigators on parallel
+  threads; after a crash the checkpoint keeps finished branches and resume re-runs only the cut-off one.
+- mcp 2.3.0 renamed FastMCP to `MCPServer`; its session manager runs once per instance, so the API builds a fresh
+  `/mcp` app on every startup.
+- The skeptic's LLM choice (which alternative / tool) moves to phase 7 with the OpenRouter client.
 
 ## Done when
 
 A full deterministic diagnosis runs through the agent flow, resumes after a crash, and the typed tools work both in-process and over MCP.
+
+## Results (2026-10-16)
+
+- Flow verdict == sequential `diagnose()` on mini_graph, multi_fault (second cause), healthy (`no_root_cause`), the
+  skeptic scenario, and 3 RE2-TT cases (AC@1 2/3, unchanged).
+- Investigators overlap in time; evidence `E<n>.<k>` always sits under hypothesis n.
+- Crash mid-investigation → `resume` finishes the same run with no duplicate hypothesis / evidence ids.
+- `/mcp`: `initialize`, `tools/list` (9 tools), `tools/call` return the same rows as the Python functions.

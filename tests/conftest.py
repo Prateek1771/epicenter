@@ -4,7 +4,7 @@ import pytest
 
 from api.config import get_settings
 from api.graph import Graph
-from api.ingest.seed import seed_indexes
+from api.ingest.seed import seed_indexes, seed_rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -19,7 +19,9 @@ def falkordb_url() -> str:
 
 @pytest.fixture(scope="session")
 def graph(falkordb_url) -> Graph:
-    return Graph(falkordb_url)
+    g = Graph(falkordb_url)
+    seed_rules(g.kb())  # diagnosis reads the propagation rules from kb; a fresh FalkorDB (CI) has none yet
+    return g
 
 
 @pytest.fixture(scope="module")
