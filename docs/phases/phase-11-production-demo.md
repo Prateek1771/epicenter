@@ -185,7 +185,8 @@ Fallbacks, in order: the laptop setup (identical topology), then the recorded vi
     environment).
   - **`--run --live`:** adds tiers 3–5. It asks `y/N` per environment and per scenario, undoes each fault, and
     waits for `run.py status` to be healthy before the next one.
-  - **Report:** a table on screen plus `data/syscheck/<n>-<utc>.json` and `.md`, numbered and never overwritten.
+  - **Report:** a table on screen plus `data/syscheck/<n>-<utc>.json`, and the same `findings.md` +
+    `agent-context.md` pair a test run writes (phase 12, `tests/report.py`), numbered and never overwritten.
     Exit code 0 = all checks passed, 1 = a check failed, 2 = the machine is below tier 1.
 - [ ] `api/selftest.py`: loads each `tests/fixtures/*.cypher` into its own `scratch:selftest-<name>` graph, diagnoses it,
   prints verdict / top suspect / footprint / ms against the expected answer, and deletes the graph in `finally`.

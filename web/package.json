@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "gen:api": "openapi-typescript http://localhost:8000/openapi.json -o lib/api-types.ts",
-    "test": "node --test --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"lib/**/*.test.ts\""
+    "test": "node scripts/test.mjs"
   },
   "dependencies": {
     "@xyflow/react": "12.12.0",

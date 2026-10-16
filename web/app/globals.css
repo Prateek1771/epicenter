@@ -5,17 +5,72 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Design system: design_reference/ ("Linear: midnight precision instrument"). Near-black surfaces, paper-white type,
+ * hairline borders instead of shadows, weights 400–590, three radii (6 / 12 / pill), and one acid-lime accent used only
+ * for the primary action, the active nav item and playheads. UI_SCREENS §1 has the rules.
+ */
+@theme {
+  /* raw palette (design_reference/tailwind_v4.md) */
+  --color-void: #08090a;
+  --color-carbon: #0f1011;
+  --color-obsidian: #161718;
+  --color-graphite: #23252a;
+  --color-smoke: #383b3f;
+  --color-ash: #62666d; /* decorative only: 3.4:1 on void */
+  --color-fog: #8a8f98;
+  --color-mist: #d0d6e0;
+  --color-bone: #e5e5e6;
+  --color-paper: #ffffff;
+  --color-acid-lime: #e4f222;
+  --color-pulse-green: #27a644;
+  --color-coral-red: #eb5757;
+  --color-signal-teal: #02b8cc;
+  --color-iris-violet: #6366f1;
+  --color-lavender: #8b5cf6;
+  /* Iris Violet lightened to 8.4:1 on void: links, citations, spotlight, "live" (lime stays for the one action) */
+  --color-signal: #9ea0f6;
+
+  /* type scale */
+  --text-caption: 13px;
+  --text-caption--line-height: 1.2;
+  --text-body-sm: 15px;
+  --text-body-sm--line-height: 1.6;
+  --text-body-sm--letter-spacing: -0.011em;
+  --text-body-lg: 20px;
+  --text-body-lg--line-height: 1.33;
+  --text-body-lg--letter-spacing: -0.012em;
+  --text-subheading: 24px;
+  --text-subheading--line-height: 1.33;
+  --text-subheading--letter-spacing: -0.012em;
+  --text-heading-sm: 32px;
+  --text-heading-sm--line-height: 1.13;
+  --text-heading-sm--letter-spacing: -0.022em;
+
+  /* weights cap at 590 ("no bold 700+"): every font-semibold / font-bold in the markup follows */
+  --font-weight-medium: 510;
+  --font-weight-semibold: 590;
+  --font-weight-bold: 590;
+
+  /* elevation is hairlines, not drop shadows; xl is for floating layers only */
+  --shadow-subtle: rgb(35, 37, 42) 0px 0px 0px 1px inset;
+  --shadow-subtle-4: rgba(255, 255, 255, 0.03) 0px 0px 0px 1px inset, rgba(255, 255, 255, 0.04) 0px 1px 0px 0px inset, rgba(0, 0, 0, 0.6) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 4px 0px;
+  --shadow-xl: rgba(8, 9, 10, 0.6) 0px 4px 32px 0px;
+  --shadow-cta: rgba(0, 0, 0, 0.01) 0px 5px 2px 0px, rgba(0, 0, 0, 0.04) 0px 3px 2px 0px, rgba(0, 0, 0, 0.07) 0px 1px 1px 0px, rgba(0, 0, 0, 0.08) 0px 0px 1px 0px;
+}
+
 @theme inline {
-  /* status + overlay colours (USER_FLOW Flow 1, LLD §7.8); text-st-confirmed, bg-ov-missed/15, … */
-  --color-st-open: oklch(0.72 0.03 255);
-  --color-st-supported: oklch(0.74 0.13 230);
-  --color-st-refuted: oklch(0.68 0.19 18);
-  --color-st-inconclusive: oklch(0.72 0.01 265);
-  --color-st-pruned: oklch(0.66 0.02 265);
-  --color-st-confirmed: oklch(0.78 0.17 155);
-  --color-ov-matched: oklch(0.78 0.17 155);
-  --color-ov-missed: oklch(0.8 0.15 80);
-  --color-ov-unexplained: oklch(0.68 0.19 18);
+  /* status + overlay colours (USER_FLOW Flow 1, LLD §7.8) on the token palette; amber is the one non-token hue,
+     kept because "predicted but quiet" (dashed amber) is the overlay's meaning */
+  --color-st-open: var(--color-fog);
+  --color-st-supported: var(--color-signal-teal);
+  --color-st-refuted: var(--color-coral-red);
+  --color-st-inconclusive: var(--color-fog);
+  --color-st-pruned: var(--color-fog);
+  --color-st-confirmed: var(--color-pulse-green);
+  --color-ov-matched: var(--color-pulse-green);
+  --color-ov-missed: #d9a33a;
+  --color-ov-unexplained: var(--color-coral-red);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -49,90 +104,58 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* three radii: 6 (buttons, inputs), 12 (cards; never 16+), pill; 4 for badges */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
 }
 
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
+/* The app is dark-only (<html class="dark">); :root mirrors it so nothing renders light by accident. */
+:root,
 .dark {
   color-scheme: dark; /* native scrollbars, inputs and selects follow the theme */
-  /* Epicenter dark: a deep blue-tinted neutral, one indigo accent, status colours reserved for meaning */
-  --background: oklch(0.155 0.008 265);
-  --foreground: oklch(0.965 0.004 265);
-  --card: oklch(0.195 0.01 265);
-  --card-foreground: oklch(0.965 0.004 265);
-  --popover: oklch(0.21 0.012 265);
-  --popover-foreground: oklch(0.965 0.004 265);
-  --primary: oklch(0.68 0.17 275);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.255 0.012 265);
-  --secondary-foreground: oklch(0.965 0.004 265);
-  --muted: oklch(0.235 0.01 265);
-  --muted-foreground: oklch(0.74 0.015 265);
-  --accent: oklch(0.27 0.02 270);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.68 0.2 22);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.68 0.17 275);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --radius: 6px;
+  --background: #08090a; /* void */
+  --foreground: #d0d6e0; /* mist: body text; headings are paper */
+  --card: #0f1011; /* carbon */
+  --card-foreground: #d0d6e0;
+  --popover: #161718; /* obsidian */
+  --popover-foreground: #d0d6e0;
+  --primary: #e4f222; /* acid lime: the one action per view */
+  --primary-foreground: #08090a;
+  --secondary: #161718;
+  --secondary-foreground: #d0d6e0;
+  --muted: #161718;
+  --muted-foreground: #8a8f98; /* fog */
+  --accent: rgb(255 255 255 / 5%); /* the pill / ghost fill */
+  --accent-foreground: #ffffff;
+  --destructive: #eb5757;
+  --border: #23252a; /* graphite hairline */
+  --input: rgb(255 255 255 / 8%);
+  --ring: #d0d6e0; /* focus: the edge brightens to mist */
+  --chart-1: #d0d6e0;
+  --chart-2: #8a8f98;
+  --chart-3: #62666d;
+  --chart-4: #383b3f;
+  --chart-5: #23252a;
+  --sidebar: #0f1011;
+  --sidebar-foreground: #d0d6e0;
+  --sidebar-primary: #e4f222;
+  --sidebar-primary-foreground: #08090a;
+  --sidebar-accent: rgb(255 255 255 / 5%);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #23252a;
+  --sidebar-ring: #d0d6e0;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
     @apply bg-background text-foreground;
   }
 }
@@ -140,29 +163,46 @@
 /* --- Epicenter --- */
 @layer base {
   html { font-size: 15px; }
-  ::selection { background: oklch(0.68 0.17 275 / 35%); }
-  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  body {
+    letter-spacing: -0.011em;
+    font-feature-settings: "cv01" on, "ss03" on, "zero" on; /* Inter's alternates: the reference's identity */
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { color: var(--color-paper); }
+  h1 { letter-spacing: -0.012em; }
+  .font-mono, code, kbd { letter-spacing: -0.013em; font-feature-settings: "zero" on; }
+  ::selection { background: rgb(158 160 246 / 30%); color: var(--color-paper); }
+  :focus-visible { outline: 1px solid var(--ring); outline-offset: 2px; }
 }
 
 .bg-grid {
-  background-image: radial-gradient(oklch(1 0 0 / 6%) 1px, transparent 1px);
+  background-image: radial-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 
-/* the winning path glows (canvas edges and nodes) */
+/* the winning path glows (canvas edges and nodes): a functional highlight, kept soft */
 @keyframes epi-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px oklch(0.78 0.17 155 / 55%)); }
-  50% { filter: drop-shadow(0 0 12px oklch(0.78 0.17 155 / 90%)); }
+  0%, 100% { filter: drop-shadow(0 0 3px rgb(39 166 68 / 45%)); }
+  50% { filter: drop-shadow(0 0 9px rgb(39 166 68 / 75%)); }
 }
 .epi-glow { animation: epi-glow 2.4s ease-in-out infinite; }
 @keyframes epi-in { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: none; } }
 .epi-in { animation: epi-in 280ms ease-out backwards; } /* not `both`: a held opacity:1 would override the dim classes */
 @media (prefers-reduced-motion: reduce) { .epi-glow, .epi-in { animation: none; } }
 
-/* React Flow, dark */
-.react-flow { --xy-background-color: transparent; --xy-edge-stroke: oklch(1 0 0 / 22%); --xy-minimap-background-color: var(--card);
+/* React Flow on void */
+.react-flow { --xy-background-color: transparent; --xy-edge-stroke: var(--color-smoke); --xy-minimap-background-color: var(--card);
   --xy-controls-button-background-color: var(--card); --xy-controls-button-color: var(--foreground);
-  --xy-controls-button-border-color: var(--border); --xy-controls-button-background-color-hover: var(--accent); }
+  --xy-controls-button-border-color: var(--border); --xy-controls-button-background-color-hover: var(--color-obsidian); }
+.react-flow__controls { box-shadow: var(--shadow-subtle); border-radius: 6px; overflow: hidden; }
 .react-flow__attribution { display: none; }
 
-* { scrollbar-width: thin; scrollbar-color: oklch(1 0 0 / 14%) transparent; }
+/* range inputs (the lanes slicer) are playheads: a graphite hairline track, a lime thumb */
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 14px; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 9999px; background: var(--color-graphite); }
+input[type="range"]::-moz-range-track { height: 3px; border-radius: 9999px; background: var(--color-graphite); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px; border: 0;
+  border-radius: 9999px; background: var(--color-acid-lime); box-shadow: 0 0 0 3px rgb(228 242 34 / 15%); }
+input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 9999px; background: var(--color-acid-lime); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--color-smoke) transparent; }

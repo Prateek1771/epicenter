@@ -52,6 +52,7 @@ graph-hacks/
       openconnector.py    # POST /v1/actions/{id} with an Idempotency-Key
     eval.py               # RCAEval replay + metrics
     smoke_falkordb.py     # FalkorDB feature check on the pinned tag (README §5)
+                          # graph.py also records per-run query receipts (`recording()`, phase 12)
     selftest.py           # phase 11: fixtures → scratch graphs → diagnose → verdict table (§13)
   web/                    # Next.js 15 app (React 19, Tailwind 4, shadcn, React Flow 12)
     app/                  # / incidents · incident/[id] canvas · blast-radius · simulate · ask · runs · eval
@@ -73,6 +74,7 @@ graph-hacks/
   deploy/                 # phase 11: compose.prod.yaml, Caddyfile, cloud-init.sh, aws.sh, demo.sh (ADR 0013)
   syscheck.py             # phase 11: host system evaluator, stdlib only (§13)
   tests/
+    report.py             # pytest plugin: data/reports/<n>-<utc>/findings.md + agent-context.md per run (phase 12)
 ```
 
 Dependency rule: `agents → tools → search → graph`, `ingest → graph`. Nothing imports `agents` except `main.py`.
@@ -745,7 +747,7 @@ hypothesis is refuted there is no `ROOT_CAUSE` and the incident stays `diagnosin
 |---|---|
 | `incident.status` | `{status}` |
 | `hypothesis.created` | `{id, target, hops, onset}` |
-| `evidence.added` | `{id, hypothesis_id, kind, verdict, path}` |
+| `evidence.added` | `{id, hypothesis_id, kind, verdict, path, summary}` (summary: the "Ruled out" line) |
 | `footprint` | `{hypothesis_id, coverage, precision, order, matched[], missed[], unexplained[]}` (drives the canvas overlay) |
 | `hypothesis.status` | `{id, status, score?}` |
 | `verdict` | `Verdict` (incl. `second_root_cause` when found) |
@@ -754,6 +756,7 @@ hypothesis is refuted there is no `ROOT_CAUSE` and the incident stays `diagnosin
 | `explanation` | `{claims, dropped}` |
 | `action` | `{id, name, delivery}` |
 | `error` | `{code, message}` |
+| `receipts` | once per run, at its end (also when it fails): `{run, queries: [{n, qid, ms, rows}], dropped, total_query_ms, verdict_ms, run_ms}`. Recorded by `graph.recording()` (a `contextvars` recorder that LangGraph's worker threads share) and also kept on `Incident.receipts`, so `GET /incidents/{id}/graph` serves them after a reload. Capped at 500 listed queries |
 
 **Storage (phase 6):** each incident's events go to a Redis Stream in FalkorDB's own Redis,
 `events:env:<name>:<incident>` (streams are per environment, like the graphs). One Lua script does `INCR
@@ -832,6 +835,8 @@ count grows past the pool.
 | Eval | `python -m api.eval --suite re2 --system tt` → AC@1, AC@3, ablations (no PageRank / no temporal / no mechanism / **no footprint**, i.e. weights v1 vs v2) |
 | End-to-end | flip-commerce: stop the Mongo primary → incident → verdict names `mongodb` with a `docker stop` change |
 | System evaluator (phase 11) | `tests/test_syscheck.py`: `pick_tier` on fake probes (2 CPU / 4 GB → 1; 16 GB host with an 8 GB Docker VM → 2; 8 / 32 / 60 + tools → 4; no Docker → 0) |
+| Investigation UI (phase 12) | `test_api`: verdict owner / change / found-in, canvas `alert_ts` / `changes` / `receipts`, action precedent, `GET /graph/topology`, blast-radius and what-if edges; `test_flow`: one numbered `receipts` event per run, investigators' threads included; web `graph-data.test.ts` / `investigation.test.ts`: tables, CSV, sort / filter, ruled out, lanes, slicer, T-minus, explainers |
+| Test reports (phase 12) | `test_report.py`: numbered, never overwritten; findings list failures and skips; agent context points each failure at its spec, code and rerun command |
 | Synthetic samples (phase 11) | `tests/test_synth.py`: same seed → byte-identical files; `small/cpu` → the labelled op; `small/healthy` → `no_root_cause` |
 
 ---
@@ -906,6 +911,9 @@ python syscheck.py [--run] [--live] [--tier N] [--minutes M] [--json] [--yes-env
 
 - **Screen:** probe summary, tier and why (which threshold capped it), one line per run (expected → got, ✓ / ✗,
   duration), then suggested next runs (the next tier's items, if the machine is close).
-- **Files:** `data/syscheck/<n>-<utc>.json` (full) and `.md` (the screen table). `n` is the next number, so reports are
-  never overwritten. `data/` is git-ignored. No secret values are written; `.env` keys are reported by name only.
+- **Files:** `data/syscheck/<n>-<utc>.json` (full), plus the same pair a test run writes (phase 12,
+  `tests/report.py`): `findings.md` (what ran, expected → got, timings) and `agent-context.md` (a guide a coding agent
+  can be pointed at: per failed check, the spec section, the code to look at and the exact rerun command). `n` is the
+  next number, so reports are never overwritten. `data/` is git-ignored. No secret values are written; `.env` keys are
+  reported by name only.
 - **Exit codes:** 0 all passed, 1 a check failed or a verdict differed, 2 below tier 1 or Docker missing.

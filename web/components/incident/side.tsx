@@ -17,7 +17,7 @@ const TONE: Record<TimelineItem["tone"], string> = {
   neutral: "bg-muted-foreground/60",
   good: "bg-st-confirmed",
   bad: "bg-st-refuted",
-  info: "bg-primary",
+  info: "bg-signal",
   warn: "bg-ov-missed",
 };
 
@@ -33,7 +33,7 @@ function SuspectRows({ hyps, selected, onSelect, label }: { hyps: Hyp[]; selecte
             aria-pressed={selected === h.id}
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent/60",
-              selected === h.id && "bg-accent ring-1 ring-primary/50",
+              selected === h.id && "bg-accent ring-1 ring-signal/50",
             )}
           >
             <span className="w-9 shrink-0 font-mono text-muted-foreground">{h.id}</span>
@@ -164,7 +164,7 @@ export function WhyNot({
       >
         <Input list="why-not-services" aria-label="Service" placeholder="why not… cart" value={q} onChange={(e) => setQ(e.target.value)} className="h-8 font-mono text-sm" />
         <datalist id="why-not-services">{opts.map((s) => <option key={s} value={s} />)}</datalist>
-        <Button size="sm" type="submit" disabled={!q.trim() || busy} aria-label="Ask why not">
+        <Button size="sm" variant="secondary" type="submit" disabled={!q.trim() || busy} aria-label="Ask why not">
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
         </Button>
       </form>

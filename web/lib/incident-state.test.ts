@@ -14,6 +14,7 @@ const snapshot = {
   hypotheses: [],
   nodes: [{ id: "frontend/GET /checkout", service: "frontend", service_kind: "app", anomaly: null }],
   edges: [],
+  changes: [],
 };
 
 const run: StreamEvent[] = [

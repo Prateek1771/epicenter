@@ -47,6 +47,7 @@ type OpData = {
   lit: boolean;
   overlay: "matched" | "missed" | "unexplained" | "predicted" | null;
   selected: boolean;
+  later: boolean; // the onset slicer is before this operation went bad
 };
 
 const RING: Record<string, string> = {
@@ -66,22 +67,23 @@ const OVERLAY: Record<string, string> = {
 };
 
 const OpNode = memo(function OpNode({ data }: NodeProps<FlowNode<OpData>>) {
-  const { node, hyp, symptom, root, second, dim, lit, overlay, selected } = data;
+  const { node, hyp, symptom, root, second, dim, lit, overlay, selected, later } = data;
   const [svc, name] = splitOp(node.id);
   const status = hyp?.status;
   return (
     <div
       className={cn(
-        "epi-in relative flex h-16 w-[236px] items-stretch overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-[opacity,box-shadow] duration-300",
+        "epi-in relative flex h-16 w-[236px] items-stretch overflow-hidden rounded-lg border border-graphite bg-carbon text-left transition-[opacity,box-shadow] duration-300",
         hyp && "ring-1 ring-offset-0",
         status && RING[status],
-        node.anomaly && "bg-[color-mix(in_oklch,var(--card),var(--color-st-refuted)_9%)]",
+        node.anomaly && "bg-[color-mix(in_srgb,var(--card),var(--color-st-refuted)_9%)]",
         root && "epi-glow",
         overlay && OVERLAY[overlay],
         overlay && "outline-offset-2",
         selected && "shadow-[0_0_0_3px_var(--ring)]",
         dim && "opacity-30",
-        lit && "opacity-100 shadow-[0_0_0_2px_var(--color-primary)]",
+        lit && "opacity-100 shadow-[0_0_0_2px_var(--color-signal)]",
+        later && "opacity-15 grayscale",
       )}
       title={`${node.id}${hyp ? ` · ${STATUS_LABEL[hyp.status]}` : ""}${node.anomaly ? ` · ${node.anomaly.kind}` : ""}`}
     >
@@ -91,7 +93,7 @@ const OpNode = memo(function OpNode({ data }: NodeProps<FlowNode<OpData>>) {
         <span className="flex items-center gap-1.5">
           <span className="truncate font-mono text-[11px] text-muted-foreground">{svc}</span>
           {symptom && (
-            <span className="ml-auto inline-flex items-center gap-0.5 rounded bg-primary/15 px-1 text-[10px] font-medium text-primary">
+            <span className="ml-auto inline-flex items-center gap-0.5 rounded bg-signal/15 px-1 text-[10px] font-medium text-signal">
               <BellRing className="size-3" aria-hidden /> alert
             </span>
           )}
@@ -126,10 +128,11 @@ interface Props {
   overlay: Overlay | null;
   spotlight: Spotlight | null;
   selected: string | null;
-  onSelect: (hypothesisId: string | null) => void;
+  later?: Set<string>; // operations not yet anomalous at the slicer's time
+  onSelect: (hypothesisId: string | null, op: string | null) => void;
 }
 
-function Canvas({ view, overlay, spotlight, selected, onSelect }: Props) {
+function Canvas({ view, overlay, spotlight, selected, later, onSelect }: Props) {
   const [pos, setPos] = useState<Record<string, XY>>({});
   const posRef = useRef(pos);
   posRef.current = pos;
@@ -211,10 +214,11 @@ function Canvas({ view, overlay, spotlight, selected, onSelect }: Props) {
               lit,
               overlay: ov,
               selected: !!hyp && hyp.id === selected,
+              later: !!later?.has(n.id),
             },
           };
         }),
-    [view.nodes, view.symptom, view.rootCause, view.secondCause, pos, overlay, spotlight, hypByOp, selected],
+    [view.nodes, view.symptom, view.rootCause, view.secondCause, pos, overlay, spotlight, hypByOp, selected, later],
   );
 
   const edges: FlowEdge[] = useMemo(
@@ -223,7 +227,7 @@ function Canvas({ view, overlay, spotlight, selected, onSelect }: Props) {
         const k = edgeKey(e.src, e.dst);
         const onWin = win.edges.has(k) && !spotlight;
         const lit = spotlight?.edges.has(k) ?? false;
-        const color = lit ? "var(--color-primary)" : onWin ? "var(--color-st-confirmed)" : "oklch(1 0 0 / 22%)";
+        const color = lit ? "var(--color-signal)" : onWin ? "var(--color-st-confirmed)" : "var(--color-smoke)";
         return {
           id: k,
           source: e.src,
@@ -251,11 +255,11 @@ function Canvas({ view, overlay, spotlight, selected, onSelect }: Props) {
       minZoom={0.15}
       maxZoom={1.6}
       proOptions={{ hideAttribution: true }}
-      onNodeClick={(_, n) => onSelect((n.data as OpData).hyp?.id ?? null)}
-      onPaneClick={() => onSelect(null)}
+      onNodeClick={(_, n) => onSelect((n.data as OpData).hyp?.id ?? null, n.id)}
+      onPaneClick={() => onSelect(null, null)}
       aria-label="Incident graph: operations, calls and suspects"
     >
-      <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="oklch(1 0 0 / 7%)" />
+      <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgb(255 255 255 / 5%)" />
       <Controls showInteractive={false} position="bottom-right" />
       <MiniMap
         pannable
@@ -267,9 +271,9 @@ function Canvas({ view, overlay, spotlight, selected, onSelect }: Props) {
           const d = n.data as OpData;
           if (d.root) return "var(--color-st-confirmed)";
           if (d.hyp?.status === "refuted") return "var(--color-st-refuted)";
-          return d.node.anomaly ? "oklch(0.6 0.08 20)" : "oklch(0.45 0.01 265)";
+          return d.node.anomaly ? "rgb(235 87 87 / 55%)" : "var(--color-smoke)";
         }}
-        maskColor="oklch(0.155 0.008 265 / 70%)"
+        maskColor="rgb(8 9 10 / 72%)"
       />
     </ReactFlow>
   );

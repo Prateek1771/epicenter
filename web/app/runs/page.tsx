@@ -32,7 +32,7 @@ const KIND: Record<Scenario["kind"], { label: string; Icon: typeof Radio; cls: s
   fault: { label: "fault", Icon: CircleAlert, cls: "text-st-refuted bg-st-refuted/10" },
   load: { label: "load", Icon: Gauge, cls: "text-ov-missed bg-ov-missed/10" },
   baseline: { label: "baseline", Icon: ShieldCheck, cls: "text-st-confirmed bg-st-confirmed/10" },
-  replay: { label: "replay", Icon: RotateCcw, cls: "text-primary bg-primary/10" },
+  replay: { label: "replay", Icon: RotateCcw, cls: "text-signal bg-signal/10" },
 };
 
 function useNow(ms = 1000) {
@@ -53,7 +53,7 @@ function RunCard({ run, now, onUndo, busy }: { run: Run; now: number; onUndo: ()
   const undone = run.status === "undone";
   const canUndo = !undone && (run.kind === "fault" || run.kind === "load");
   return (
-    <div className="epi-in rounded-xl border border-primary/30 bg-primary/[0.05] p-4">
+    <div className="epi-in rounded-xl border border-signal/30 bg-signal/[0.05] p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">{run.title}</span>
         <span className="font-mono text-xs text-muted-foreground">{run.env} · {run.run_id}</span>
@@ -79,7 +79,7 @@ function RunCard({ run, now, onUndo, busy }: { run: Run; now: number; onUndo: ()
             {run.kind === "baseline" ? " on a healthy system: Epicenter should answer “no root cause”." : ", once the symptoms have spread; then Epicenter ingests the window and diagnoses."}
           </p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(pct * 100)} aria-label="Until the alert">
-            <div className="h-full bg-primary transition-[width] duration-1000" style={{ width: `${pct * 100}%` }} />
+            <div className="h-full bg-signal transition-[width] duration-1000" style={{ width: `${pct * 100}%` }} />
           </div>
         </>
       ) : (
@@ -159,11 +159,11 @@ export default function RunsPage() {
   const live = runs.filter((r) => (r.status === "started" && r.kind !== "replay") || new Date(r.started_at).getTime() > now - 15 * 60_000).slice(0, 4);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 lg:px-6">
+    <main className="mx-auto w-full max-w-[1200px] px-4 py-8 lg:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <PlayCircle className="size-6 text-primary" aria-hidden /> Example runs
+          <h1 className="flex items-center gap-2 text-2xl font-medium tracking-[-0.012em]">
+            <PlayCircle className="size-6 text-fog" aria-hidden /> Example runs
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Break a real system on purpose and watch Epicenter find the cause. Each fault records its change first, fires
@@ -197,7 +197,7 @@ export default function RunsPage() {
           return (
             <section key={env} className="overflow-hidden rounded-xl border border-border bg-card/40" aria-labelledby={`env-${env}`}>
               <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3">
-                {replay ? <RotateCcw className="size-4 text-primary" aria-hidden /> : <FlaskConical className="size-4 text-primary" aria-hidden />}
+                {replay ? <RotateCcw className="size-4 text-signal" aria-hidden /> : <FlaskConical className="size-4 text-signal" aria-hidden />}
                 <h2 id={`env-${env}`} className="font-semibold">{info?.title ?? env}</h2>
                 <span className="font-mono text-xs text-muted-foreground">env:{env}</span>
                 <span className={cn("ml-auto inline-flex items-center gap-1.5 text-xs", up ? "text-st-confirmed" : "text-muted-foreground")}>
@@ -231,7 +231,7 @@ export default function RunsPage() {
                       <p className="text-xs text-muted-foreground max-sm:hidden">
                         Expect <span className="font-mono text-foreground">{x.expected}</span>
                       </p>
-                      <Button size="sm" variant={x.kind === "fault" ? "default" : "outline"} disabled={!x.ready || busy !== null} onClick={() => start(x)} aria-label={`Run ${x.title}`}>
+                      <Button size="sm" variant={x.kind === "fault" ? "secondary" : "outline"} disabled={!x.ready || busy !== null} onClick={() => start(x)} aria-label={`Run ${x.title}`}>
                         {busy === key ? <Loader2 className="size-3.5 animate-spin" /> : <PlayCircle className="size-3.5" />} Run
                       </Button>
                     </li>

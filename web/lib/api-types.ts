@@ -300,6 +300,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Topology
+         * @description The service map (/map): services or operations with their calls, plus anomalies and root causes of recent
+         *     unresolved incidents. Capped at MAP_LIMIT nodes and edges; `truncated` says when the cap was hit.
+         */
+        get: operations["topology_api_v1_graph_topology_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/services": {
         parameters: {
             query?: never;
@@ -407,6 +428,11 @@ export interface components {
              * @enum {string}
              */
             chosen_by: "history" | "runbook" | "demoted";
+            /**
+             * Precedent
+             * @default []
+             */
+            precedent: string[];
             /** P */
             p: number | null;
             /** Runbook */
@@ -502,6 +528,16 @@ export interface components {
             };
             /** Past Incidents */
             past_incidents: string[];
+            /**
+             * Sources
+             * @default []
+             */
+            sources: string[];
+            /**
+             * Edges
+             * @default []
+             */
+            edges: components["schemas"]["GraphCall"][];
         };
         /** ChangeNote */
         ChangeNote: {
@@ -514,6 +550,22 @@ export interface components {
              * Format: date-time
              */
             ts: string;
+        };
+        /** ChangeRef */
+        ChangeRef: {
+            /** Id */
+            id: string;
+            /** Service */
+            service: string;
+            /** Type */
+            type: string;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** Summary */
+            summary: string | null;
         };
         /** ClaimOut */
         ClaimOut: {
@@ -673,6 +725,19 @@ export interface components {
             err_rate: number | null;
             /** P95 Ms */
             p95_ms: number | null;
+        };
+        /** GraphChange */
+        GraphChange: {
+            /** Id */
+            id: string;
+            /** Service */
+            service: string;
+            /** Type */
+            type: string;
+            /** Ts */
+            ts: number;
+            /** Summary */
+            summary: string | null;
         };
         /** GraphEdge */
         GraphEdge: {
@@ -842,6 +907,17 @@ export interface components {
             nodes: components["schemas"]["GraphOp"][];
             /** Edges */
             edges: components["schemas"]["GraphCall"][];
+            /** Alert Ts */
+            alert_ts?: number | null;
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["GraphChange"][];
+            /** Receipts */
+            receipts?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** IncidentOut */
         IncidentOut: {
@@ -1111,6 +1187,11 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+            /**
+             * Edges
+             * @default []
+             */
+            edges: components["schemas"]["GraphCall"][];
         };
         /** SimulatedOp */
         SimulatedOp: {
@@ -1145,6 +1226,58 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** Topology */
+        Topology: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "service" | "operation";
+            /** Nodes */
+            nodes: components["schemas"]["TopologyNode"][];
+            /** Edges */
+            edges: components["schemas"]["TopologyEdge"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** TopologyEdge */
+        TopologyEdge: {
+            /** Src */
+            src: string;
+            /** Dst */
+            dst: string;
+            /** Rps */
+            rps: number | null;
+            /** Err Rate */
+            err_rate: number | null;
+            /** P95 Ms */
+            p95_ms: number | null;
+        };
+        /** TopologyNode */
+        TopologyNode: {
+            /** Id */
+            id: string;
+            /** Service */
+            service: string;
+            /** Kind */
+            kind: string | null;
+            /** Owner */
+            owner: string | null;
+            /** Ops */
+            ops?: number | null;
+            /**
+             * Anomalies
+             * @default []
+             */
+            anomalies: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Root Cause Of
+             * @default []
+             */
+            root_cause_of: string[];
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1163,6 +1296,11 @@ export interface components {
             root_cause: components["schemas"]["HypothesisOut"];
             /** Confidence */
             confidence: number;
+            /** Owner */
+            owner?: string | null;
+            change?: components["schemas"]["ChangeRef"] | null;
+            /** Found In Ms */
+            found_in_ms?: number | null;
             footprint: components["schemas"]["FootprintSummary"] | null;
             second_root_cause: components["schemas"]["HypothesisOut"] | null;
             runner_up: components["schemas"]["HypothesisRef"] | null;
@@ -1748,6 +1886,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimulateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    topology_api_v1_graph_topology_get: {
+        parameters: {
+            query?: {
+                level?: "service" | "operation";
+                /** @description halos / crowns from unresolved incidents this recent */
+                hours?: number;
+                env?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Topology"];
                 };
             };
             /** @description Validation Error */

@@ -8,6 +8,9 @@ import json
 import logging
 import time
 from collections import defaultdict, deque
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 
@@ -634,6 +637,65 @@ QUERIES: dict[str, str] = {
         WHERE b.id IN $ops
         RETURN a.id AS src, b.id AS dst, c.rps AS rps, c.err_rate AS err_rate, c.p95_ms AS p95_ms
         ORDER BY src, dst""",
+    # --- Investigation UI (phase 12) ---
+    # Changes on the canvas's services in the window the engine attributes from (lookback before the alert → window
+    # end): timeline lanes and the T-minus strip. Starts from indexed Service names.
+    "incident_changes": """
+        UNWIND $svcs AS x
+        MATCH (c:Change)-[:CHANGED]->(s:Service {name: x})
+        WHERE c.ts >= $since AND c.ts <= $until
+        RETURN c.id AS id, s.name AS service, c.type AS type, c.ts AS ts, c.summary AS summary
+        ORDER BY ts, id""",
+    "change_by_id": """
+        MATCH (c:Change {id: $id})-[:CHANGED]->(s:Service)
+        RETURN c.id AS id, s.name AS service, c.type AS type, c.ts AS ts, c.summary AS summary""",
+    "incident_set_timing": "MATCH (i:Incident {id: $inc}) SET i.found_in_ms = $found_in_ms",
+    "incident_timing": "MATCH (i:Incident {id: $inc}) RETURN i.found_in_ms AS found_in_ms, i.receipts AS receipts",
+    "incident_set_receipts": "MATCH (i:Incident {id: $inc}) SET i.receipts = $receipts",
+    # Precedent on a proposed fix: which incidents an action with this name resolved (newest first, ≤ 5 per name)
+    "fix_incidents": """
+        MATCH (i:Incident)-[:RESOLVED_BY]->(a:Action)
+        WHERE a.name IN $names
+        WITH a.name AS name, i.id AS incident ORDER BY incident DESC
+        RETURN name, collect(DISTINCT incident)[..5] AS incidents
+        ORDER BY name""",
+    # Service map (/map). ponytail: a full scan of the env's CALLS, capped by $limit; past a few thousand operations
+    # serve it from a periodic roll-up (the topology tick could write per-service CALLS) instead.
+    "topology_services": """
+        MATCH (s:Service)
+        OPTIONAL MATCH (s)-[:OWNED_BY]->(t:Team)
+        OPTIONAL MATCH (s)-[:HAS_OP]->(o:Operation)
+        RETURN s.name AS id, s.kind AS kind, t.name AS owner, count(DISTINCT o) AS ops
+        ORDER BY id
+        LIMIT $limit""",
+    "topology_service_calls": """
+        MATCH (a:Service)-[:HAS_OP]->(:Operation)-[c:CALLS]->(:Operation)<-[:HAS_OP]-(b:Service)
+        WHERE a.name <> b.name
+        RETURN a.name AS src, b.name AS dst, sum(c.rps) AS rps, max(c.err_rate) AS err_rate, max(c.p95_ms) AS p95_ms
+        ORDER BY src, dst
+        LIMIT $limit""",
+    "topology_ops": """
+        MATCH (s:Service)-[:HAS_OP]->(o:Operation)
+        RETURN o.id AS id, s.name AS service, s.kind AS kind
+        ORDER BY id
+        LIMIT $limit""",
+    "topology_op_calls": """
+        MATCH (a:Operation)-[c:CALLS]->(b:Operation)
+        RETURN a.id AS src, b.id AS dst, c.rps AS rps, c.err_rate AS err_rate, c.p95_ms AS p95_ms
+        ORDER BY src, dst
+        LIMIT $limit""",
+    # Halos and crowns on the map: anomalies and root causes of unresolved incidents opened since $since
+    "map_anomalies": """
+        MATCH (i:Incident)
+        WHERE i.opened_at >= $since AND i.status <> 'resolved'
+        MATCH (a:Anomaly {incident: i.id})-[:ON]->(o:Operation)
+        RETURN o.id AS op, i.id AS incident, a.kind AS kind, max(a.score) AS score
+        ORDER BY op, incident""",
+    "map_root_causes": """
+        MATCH (i:Incident)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE rc.run = i.run AND rc.rank = 1 AND i.opened_at >= $since AND i.status <> 'resolved'
+        RETURN o.id AS op, i.id AS incident
+        ORDER BY op, incident""",
     # --- Seed (GRAPH_SCHEMA §5, LLD §7.1) ---
     "idx_service": "CREATE INDEX FOR (s:Service) ON (s.name)",
     "idx_operation": "CREATE INDEX FOR (o:Operation) ON (o.id)",
@@ -701,6 +763,50 @@ class GraphUnavailable(Exception):
 _timings: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=200))
 
 
+class Receipts:
+    """Numbered receipts of every query one diagnosis run made (UI_SCREENS §4.10): `#3 Q2 · 14 ms · 6 rows`.
+    LangGraph runs parallel steps in threads with a copy of this context, so they append to the same list."""
+
+    MAX = 500  # a run makes ~100–300 queries; the rest is counted, not listed
+
+    def __init__(self) -> None:
+        self.t0 = time.perf_counter()
+        self.items: list[dict] = []
+        self.dropped = 0
+        self.verdict_ms: int | None = None
+
+    def add(self, qid: str, ms: float, rows: int) -> None:
+        if len(self.items) < self.MAX:
+            self.items.append({"n": len(self.items) + 1, "qid": qid, "ms": round(ms, 1), "rows": rows})
+        else:
+            self.dropped += 1
+
+    def elapsed_ms(self) -> int:
+        return round((time.perf_counter() - self.t0) * 1000)
+
+    def summary(self) -> dict:
+        total = round(sum(x["ms"] for x in self.items), 1)
+        return {"queries": list(self.items), "dropped": self.dropped, "total_query_ms": total,
+                "verdict_ms": self.verdict_ms, "run_ms": self.elapsed_ms()}  # fmt: skip
+
+
+_receipts: ContextVar[Receipts | None] = ContextVar("receipts", default=None)
+
+
+@contextmanager
+def recording() -> Iterator[Receipts]:
+    rc = Receipts()
+    token = _receipts.set(rc)
+    try:
+        yield rc
+    finally:
+        _receipts.reset(token)
+
+
+def current_receipts() -> Receipts | None:
+    return _receipts.get()
+
+
 def query_stats() -> dict[str, dict[str, float]]:
     """p50/p95 in ms per query id over its last 200 calls."""
     out = {}
@@ -758,6 +864,8 @@ class EnvGraph:
         cols = [h[1] for h in res.header]
         rows = [dict(zip(cols, r, strict=True)) for r in res.result_set]
         _timings[qid].append(ms)
+        if (rc := _receipts.get()) is not None:
+            rc.add(qid, ms, len(rows))
         log.info(json.dumps({"qid": qid, "graph": self.key, "duration_ms": round(ms, 1), "rows": len(rows)}))
         return rows
 

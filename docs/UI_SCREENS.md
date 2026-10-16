@@ -30,24 +30,46 @@ How competitors build the same screens: [COMPETITOR_UI_RESEARCH.md](COMPETITOR_U
 
 ## 1. Visual language
 
-| Token | Meaning | Used on |
+**Source:** [`design_reference/`](../design_reference/design.md), the Linear style reference ("midnight precision
+instrument"), applied to the whole UI in the phase 12 follow-up (2026-10-17). Tokens live in `web/app/globals.css`
+(`@theme`, copied from `design_reference/tailwind_v4.md`); the shadcn primitives in `web/components/ui/` follow the
+reference's component specs.
+
+| Layer | Token | Value | Used for |
+|---|---|---|---|
+| Surface 0 | `void` | `#08090a` | page canvas (`--background`) |
+| Surface 1 | `carbon` | `#0f1011` | cards, canvas nodes, verdict card (`--card`) |
+| Surface 2 | `obsidian` | `#161718` | popovers, tooltips, tab lists, muted fills |
+| Hairline | `graphite` / `smoke` | `#23252a` / `#383b3f` | every border, idle canvas edges, active tab fill |
+| Text | `paper` · `mist` · `fog` · `ash` | `#fff` · `#d0d6e0` · `#8a8f98` · `#62666d` | headings · body · secondary (`--muted-foreground`) · decorative only (3.4:1) |
+| Action | `acid-lime` | `#e4f222` | **only** the one primary action per view, the active nav indicator, playheads (lanes slider, Play) |
+| Signal | `signal` | `#9ea0f6` | Iris Violet lightened to 8.4:1: links, citations, spotlight, "live", selection |
+
+| Status token | → | Meaning |
 |---|---|---|
-| `st-open` | hypothesis open, not yet checked | canvas ring, pills |
-| `st-supported` | evidence supports it | canvas ring, pills |
-| `st-refuted` (red) | refuted / anomaly / error | ring, anomaly badge, `% err` edge label |
-| `st-inconclusive` (grey) | a query timed out or data missing | grey branch |
-| `st-pruned` | lost on score | dim ring |
-| `st-confirmed` (green) | root cause, winning path | glow, crown badge, verdict card |
-| `ov-matched` (green, solid outline) | predicted and observed | Fault Simulator overlay |
-| `ov-missed` (amber, dashed outline) | predicted, but stayed quiet | overlay, warnings |
-| `ov-unexplained` (red, solid outline) | observed, not predicted | overlay |
-| `primary` | interactive, spotlight, live | citations, spotlight path |
+| `st-confirmed`, `ov-matched` | pulse green `#27a644` | root cause, winning path, predicted and observed |
+| `st-refuted`, `ov-unexplained` | coral red `#eb5757` | refuted, anomaly, errors, observed but not predicted |
+| `st-supported` | signal teal `#02b8cc` | evidence supports it |
+| `st-open`, `st-pruned`, `st-inconclusive` | fog `#8a8f98` | not decided / lost on score / data missing |
+| `ov-missed` | amber `#d9a33a` | predicted but quiet, warnings: the one non-token hue, kept because the dashed amber outline is the overlay's meaning |
+
+Type: Inter (variable) with `cv01`, `ss03` and `zero` on, body 15px / −0.011em, weights 400 / 510 / 590 (Tailwind's
+`semibold` and `bold` are capped at 590). Mono is JetBrains Mono (the reference's substitute for Berkeley Mono), for
+ids, operations, numbers and kbd only. Radii: 6px (buttons, inputs), 12px (cards; never more), pill, and 4px badges.
+Elevation comes from hairlines and the inset `shadow-subtle`; `shadow-xl` only on floating layers. No decorative
+gradients. Icons are single-colour line art in fog.
 
 Rules the UI keeps:
-- **Status is colour + icon + word**, never colour alone (`StatusPill`).
+- **Status is colour + icon + word**, never colour alone (`StatusPill`: a Linear pill, white / 5% fill, mist word,
+  the colour on the icon).
+- **One lime per view.** Every other button is ghost, outline (graphite hairline) or the graphite pill; segmented
+  controls (Graph | Data, Services | Operations, kinds) use graphite + paper for the active option.
 - Operation ids render as `service/name`: service in foreground, `/name` muted, coloured dot per service (`OpLabel`).
 - Numbers are mono and tabular. Scores show 2 decimals, confidence as a percent.
 - Skeletons while loading; no layout jump as SSE events arrive.
+- **Every graph has a `Graph | Data` toggle** (phase 12): the same nodes and edges as sortable, filterable tables plus
+  the raw JSON, with CSV / JSON download. The choice lives in the URL (`?view=data`), and clicking a row jumps back to
+  the graph with that node selected. Used on the incident canvas, `/map`, blast radius and what-if.
 
 Status pill legend (ASCII stand-ins used in the mockups below):
 
@@ -424,6 +446,42 @@ SSE events: `incident.status`, `hypothesis.created`, `evidence.added`, `footprin
 ```
 API: `POST /notes {by, text, change?}` → `Decision` (+ `Change`).
 
+### 4.11b Phase 12 additions (from [COMPETITOR_UI_RESEARCH §8.1](COMPETITOR_UI_RESEARCH.md#81-incident-page-ui_screens-4))
+
+Built:
+
+```
+┌ ♛ ROOT CAUSE ───────────────────────── ( 83% ⓘ ) ┐   ⓘ = "deterministic score, 6 weighted parts, weights
+│ payment/Charge                                    │        2026-10-16.v3; same input → same score"
+│ explains 2 of 3 · precision 0.74 · order 0.50     │
+│ [👥 payments] [⎇ flag paymentFailure → 50%]       │   owner · contributing change · found in
+│ [⏱ found in 658 ms]                               │
+│ … path, score parts, runner-up …                  │
+│  ●───────────────●──────────────●                 │   T-minus strip: change → root onset → alert
+│ −1m 30s        −26s             0                 │
+│ ✕ RULED OUT · 2                                   │   each loser with the engine's refuting evidence;
+│  h-2 checkout/PlaceOrder   pruned                 │   click → its path on the canvas
+│      lost on score to the root cause              │
+│ ⊘ COULDN'T SEE                                    │   Incident.gaps and what each one hides
+│  logs: no log-pattern evidence; …                 │
+└───────────────────────────────────────────────────┘
+
+ canvas  ─────────────────────────────────────────── [Graph | Data]
+ ▾ TIMELINE LANES  3 anomalous · 2 changes   [▶ Play spread] ━━━━●━━  −2m 41s ↺
+   postgresql/astronomy-db   │        ▕▓▓▓▓▓ latency          │alert
+   checkout/PlaceOrder       │                    ▓▓ errors   │
+   payment/Charge ♛          │ (blue tick = change)  ▓▓ errors │
+```
+
+- **Lanes + slicer:** one lane per anomalous operation (onset bar coloured by kind), changes as blue ticks, the alert as
+  a line. Drag the slider or press Play, and operations whose anomaly hasn't started fade on the canvas. Clicking a
+  lane spotlights the node and opens "Who explains this symptom?".
+- **Who explains this symptom?** Click a broken operation that isn't a suspect, or any lane, and every suspect is
+  listed with ✓ / ✕ for whether its predicted footprint includes it. This is the reverse of the Fault Simulator overlay.
+- **Query receipts** (Timeline tab): `#3 Q1 · 3.6 ms · 3 rows` for every graph query of the run, plus the graph time,
+  the time to verdict and the whole run. Slow ones (≥ 50 ms) are amber. They come from the `receipts` event.
+- **Proposed fixes cite precedent:** "fixed inc-17 inc-9" under an action chosen by history.
+
 ### 4.12 Error page
 
 ```
@@ -708,6 +766,17 @@ from [COMPETITORS](COMPETITORS.md) and general knowledge; check them against cur
 
 ### 12.1 Service map `/map`
 
+**Built in phase 12** (`GET /graph/topology`):
+- Services / Operations toggle;
+- traffic bar on each node (inbound rps, instead of node size, so the elk layout keeps fixed node boxes);
+- edge width = rps, red / amber = errors;
+- red ring = anomaly in an unresolved incident in the last 24 h, ♛ = its root cause;
+- side panel with blast radius / what-if / past incidents;
+- find-to-centre;
+- Graph | Data.
+
+Recent changes in the side panel and double-click expand are not built yet.
+
 **Why:** only one screen draws a graph today, in a graph hackathon. **Data:** `GET /graph/subgraph`, `GET /services`
 (both exist). **Ref:** Datadog Service Map, Coroot, Traversal "production world model".
 
@@ -737,6 +806,11 @@ search to centre, live anomaly halos from open incidents. Above a few hundred no
 (sigma.js / Cosmograph) behind the same props (phase 8 note).
 
 ### 12.2 Graph-mode Blast radius / What-if
+
+**Built in phase 12.**
+- **Blast radius:** draws right to left: the failing service's operations on the left, callers spreading right by hops.
+- **What-if:** tints each card by `p` and has **Play**, which reveals operations in `expected_delay_s` order.
+- **Both:** get Graph | Data; Data keeps the old grouped list plus the shared tables.
 
 **Why:** both pages are lists; drawing them reuses the incident canvas. **Data:** existing endpoints.
 **Ref:** Causely impact view.
@@ -940,8 +1014,8 @@ the `who_knows` tool already exists. **Ref:** PagerDuty service directory, Rootl
 |---|---|---|---|---|
 | P0 | Runs: start / undo / opens incident | finish (phase 9) | very high | backend first |
 | P0 | Eval: real numbers + per-case table | finish (phase 10) | very high | backend first |
-| P1 | Service map `/map` | new | very high | medium, reuses canvas |
-| P1 | Graph-mode What-if with "Play" | new | high | low–medium |
+| ~~P1~~ | Service map `/map`: **built (phase 12)** | new | very high | medium, reuses canvas |
+| ~~P1~~ | Graph-mode What-if with "Play" + blast radius graph: **built (phase 12)** | new | high | low–medium |
 | P1 | G1 prediction vs reality | gap | high | medium |
 | P2 | Run compare | new | high (trust story) | medium |
 | P2 | System / trust page | new | medium–high | low |

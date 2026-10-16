@@ -78,16 +78,16 @@ export default function IncidentsPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 lg:px-6">
+    <main className="mx-auto w-full max-w-[1200px] px-4 py-8 lg:px-6">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Incidents</h1>
+          <h1 className="text-2xl font-medium tracking-[-0.012em]">Incidents</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Every alert becomes a live investigation: suspects, evidence, a verdict you can check.
             {cause && (
               <>
                 {" "}Filtered to root cause in <span className="font-mono text-foreground">{cause}</span>.{" "}
-                <Link className="text-primary underline-offset-4 hover:underline" href={withEnv("/", env)}>
+                <Link className="text-signal underline-offset-4 hover:underline" href={withEnv("/", env)}>
                   Clear
                 </Link>
               </>
@@ -137,7 +137,7 @@ export default function IncidentsPage() {
             <p className="font-medium">No incidents here yet</p>
             <p className="max-w-md text-sm text-muted-foreground">
               Fire an alert with <span className="font-mono text-foreground">POST /api/v1/alerts</span>, replay an RCAEval case,
-              or start a scripted fault from <Link href={withEnv("/runs", env)} className="text-primary hover:underline">Runs</Link>.
+              or start a scripted fault from <Link href={withEnv("/runs", env)} className="text-signal hover:underline">Runs</Link>.
             </p>
           </div>
         )}

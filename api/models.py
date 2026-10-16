@@ -92,9 +92,20 @@ class FootprintSummary(BaseModel):
     unexplained: list[str]
 
 
+class ChangeRef(BaseModel):
+    id: str
+    service: str
+    type: str
+    ts: datetime
+    summary: str | None
+
+
 class Verdict(BaseModel):
     root_cause: HypothesisOut
     confidence: float
+    owner: str | None = None  # team owning the root cause's service
+    change: ChangeRef | None = None  # the change the `change` evidence attributes, if any
+    found_in_ms: int | None = None  # run start → verdict published
     footprint: FootprintSummary | None
     second_root_cause: HypothesisOut | None
     runner_up: HypothesisRef | None
@@ -137,6 +148,7 @@ class ActionOut(BaseModel):
     status: Literal["proposed", "done"]
     rank: int
     chosen_by: Literal["history", "runbook", "demoted"]
+    precedent: list[str] = []  # incidents an action with this name resolved (newest first)
     # p: Jev relevance (does the action address the cause the evidence shows?)
     p: float | None
     runbook: str | None
@@ -288,6 +300,14 @@ class GraphCall(BaseModel):
     p95_ms: float | None
 
 
+class GraphChange(BaseModel):
+    id: str
+    service: str
+    type: str
+    ts: int  # epoch s, like anomaly onsets on the canvas
+    summary: str | None
+
+
 class IncidentGraph(BaseModel):
     """Everything the incident canvas draws for the current run; SSE events patch the same shape by id."""
 
@@ -301,6 +321,9 @@ class IncidentGraph(BaseModel):
     hypotheses: list[GraphHypothesis]
     nodes: list[GraphOp]
     edges: list[GraphCall]
+    alert_ts: int | None = None  # epoch s, like anomaly onsets: the canvas's time axis
+    changes: list[GraphChange] = []  # on the canvas's services, from lookback before the alert to the window end
+    receipts: dict | None = None  # the last run's numbered graph queries (the `receipts` event's payload)
 
 
 # --- graph views ---
@@ -326,6 +349,31 @@ class Subgraph(BaseModel):
     edges: list[GraphEdge]
 
 
+class TopologyNode(BaseModel):
+    id: str  # service name, or operation id at level=operation
+    service: str
+    kind: str | None
+    owner: str | None
+    ops: int | None = None
+    anomalies: list[dict] = []  # [{incident, kind, score}] from unresolved incidents in the window
+    root_cause_of: list[str] = []
+
+
+class TopologyEdge(BaseModel):
+    src: str
+    dst: str
+    rps: float | None
+    err_rate: float | None
+    p95_ms: float | None
+
+
+class Topology(BaseModel):
+    level: Literal["service", "operation"]
+    nodes: list[TopologyNode]
+    edges: list[TopologyEdge]
+    truncated: bool
+
+
 class Affected(BaseModel):
     service: str
     operation: str
@@ -338,6 +386,8 @@ class BlastRadius(BaseModel):
     affected: list[Affected]
     counts: dict[str, int]
     past_incidents: list[str]
+    sources: list[str] = []  # the failing service's own operations
+    edges: list[GraphCall] = []  # CALLS among sources + affected: the graph view
 
 
 class SimulateIn(BaseModel):
@@ -370,6 +420,7 @@ class SimulateOut(BaseModel):
     rules_version: str
     predicted: list[SimulatedOp]
     counts: dict[str, int]
+    edges: list[GraphCall] = []  # CALLS among the predicted ops: the graph view
 
 
 class ServiceItem(BaseModel):

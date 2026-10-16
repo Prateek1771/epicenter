@@ -269,3 +269,45 @@ def test_incident_graph_has_everything_the_canvas_draws(client):
     assert next(s for s in svcs.items if s.name == "redis").kind == "datastore"
     envs = m.Envs(**client.get("/api/v1/envs").json())
     assert ENV in envs.items and envs.default
+
+
+def test_verdict_card_and_canvas_extras(client):
+    """Phase 12: owner, contributing change, found-in on the verdict; changes + alert time on the canvas; precedent."""
+    body = _diagnosed(client)
+    v = m.Verdict(**body["verdict"])
+    assert v.owner == "payments" and v.change and v.change.id == "ch-1" and v.change.service == "payment"
+    assert v.found_in_ms is not None and v.found_in_ms > 0
+    fix = next(a for a in body["actions"] if a["name"] == "disable flag paymentFailure")  # chosen by history
+    assert fix["chosen_by"] == "history" and fix["precedent"] == ["inc-0"]
+    g = m.IncidentGraph(**client.get("/api/v1/incidents/inc-1/graph", params=Q).json())
+    assert g.alert_ts == 130 and [(c.id, c.service, c.ts) for c in g.changes] == [("ch-1", "payment", 60)]
+
+
+def test_service_map_topology(client):
+    s = m.Topology(**client.get("/api/v1/graph/topology", params=Q).json())
+    by = {n.id: n for n in s.nodes}
+    assert s.level == "service" and not s.truncated
+    assert by["payment"].owner == "payments" and by["payment"].ops == len(client.g.ro("service_ops", svc="payment"))
+    assert any(e.src == "checkout" and e.dst == "payment" for e in s.edges)
+    assert all(e.src != e.dst for e in s.edges)  # calls inside one service aren't service edges
+    o = m.Topology(**client.get("/api/v1/graph/topology", params=Q | {"level": "operation"}).json())
+    assert {n.id for n in o.nodes} >= {"payment/Charge", "checkout/PlaceOrder"}
+    assert any(e.src == "checkout/PlaceOrder" and e.dst == "payment/Charge" for e in o.edges)
+    # the fixture's incidents are from 1970, so "recent" halos come from the query with an old cutoff
+    halos = client.g.ro("map_anomalies", since=0)
+    assert {(h["op"], h["incident"]) for h in halos} >= {("payment/Charge", "inc-1")}
+    assert all(h["incident"] != "inc-0" for h in halos)  # resolved incidents leave no halo
+
+
+def test_blast_radius_and_what_if_carry_their_edges(client):
+    br = m.BlastRadius(**client.get("/api/v1/blast-radius/redis", params=Q).json())
+    drawn = set(br.sources) | {a.operation for a in br.affected}
+    assert br.sources == ["redis/GET"] and br.edges and all({e.src, e.dst} <= drawn for e in br.edges)
+    sim = m.SimulateOut(**client.post("/api/v1/simulate", params=Q, json={"service": "redis", "kind": "down"}).json())
+    assert sim.edges and all({e.src, e.dst} <= {p.op for p in sim.predicted} for e in sim.edges)
+
+
+def test_canvas_snapshot_carries_the_runs_receipts(client):
+    body = _diagnosed(client)
+    g = m.IncidentGraph(**client.get("/api/v1/incidents/inc-1/graph", params=Q).json())
+    assert g.receipts and g.receipts["run"] == body["run"] and g.receipts["queries"][0]["n"] == 1

@@ -1187,27 +1187,30 @@ proves it, what each suspect would have explained, and why every other one lost.
 Each row names its competitor source, its target screen in [UI_SCREENS.md](UI_SCREENS.md), and any constraint from the
 AGENTS.md hard rules. P0 = demo-critical; P3 = nice to have.
 
+**Status (2026-10-16):** rows marked ✅ were built in [phase 12](phases/phase-12-ui-upgrades.md), along with the
+Graph | Data toggle on every graph view. P0 #33 (eval per-case table) waits for phase 10's eval runner.
+
 ### 8.1 Incident page ([UI_SCREENS §4](UI_SCREENS.md#4-incident-incidentid))
 
 | # | Borrow | From | Where | Priority | Constraint |
 |---|---|---|---|---|---|
-| 1 | Confidence tooltip that **defines** the number ("deterministic score from 6 parts, weights v…") | Traversal | Verdict ring | P1 | rule 5: show weights version |
-| 2 | Owner + contributing change + "found in Ns" on the verdict card | Causely, NeuBird | Verdict card | P1 | data exists (`OWNED_BY`, `Change`) |
-| 3 | **"Ruled out"** section on the verdict: refuted / pruned suspects, each with a one-line why-not | Cleric, incident.io | Verdict card | **P0** | from why-not answers; no LLM |
-| 4 | **"Couldn't see"** section (`Incident.gaps`) next to the verdict, not just a banner | Cleric (Access limitations) | Verdict card | P1 | — |
+| 1 | Confidence tooltip that **defines** the number ("deterministic score from 6 parts, weights v…") | Traversal | Verdict ring | P1 ✅ built (phase 12) | rule 5: show weights version |
+| 2 | Owner + contributing change + "found in Ns" on the verdict card | Causely, NeuBird | Verdict card | P1 ✅ built (phase 12) | data exists (`OWNED_BY`, `Change`) |
+| 3 | **"Ruled out"** section on the verdict: refuted / pruned suspects, each with a one-line why-not | Cleric, incident.io | Verdict card | **P0** ✅ built (phase 12) | from why-not answers; no LLM |
+| 4 | **"Couldn't see"** section (`Incident.gaps`) next to the verdict, not just a banner | Cleric (Access limitations) | Verdict card | P1 ✅ built (phase 12) | — |
 | 5 | Three-state badge wording on suspects: supported / refuted / inconclusive, already in place; add "validated, alternatives ruled out" for confirmed | Datadog, incident.io | Suspect list | P2 | status set by the engine only (rule 4) |
-| 6 | **Numbered query receipts** in the timeline: `#3 Q2 propagation · 14 ms · 6 rows` | HolmesGPT | Timeline tab | P1 | log fields already in the design (`query_id`, `duration_ms`, `rows`) |
+| 6 | **Numbered query receipts** in the timeline: `#3 Q2 propagation · 14 ms · 6 rows` | HolmesGPT | Timeline tab | P1 ✅ built (phase 12) | log fields already in the design (`query_id`, `duration_ms`, `rows`) |
 | 7 | Source chips while diagnosing (traces, metrics, logs, changes; grey if in gaps) | NeuBird | Header strip | P2 | — |
 | 8 | Live steps that become a hypothesis tree when done | Datadog | Right rail: a "Tree" view of suspects → evidence | P2 | — |
-| 9 | **Per-entity timeline lanes** under the canvas (anomaly onset bars, changes as blue ticks) | Asserts, Dynatrace | New canvas footer | **P0** | uses `anomaly.onset`, `Change.ts` |
-| 10 | T-minus change strip (change −Nm → onset → alert) | Rootly | Verdict card | P1 | — |
+| 9 | **Per-entity timeline lanes** under the canvas (anomaly onset bars, changes as blue ticks) | Asserts, Dynatrace | New canvas footer | **P0** ✅ built (phase 12) | uses `anomaly.onset`, `Change.ts` |
+| 10 | T-minus change strip (change −Nm → onset → alert) | Rootly | Verdict card | P1 ✅ built (phase 12) | — |
 | 11 | **Gray context nodes** (on the call path but not anomalous) | Dynatrace | Canvas | P2 | — |
 | 12 | Problem drawn as a group around the anomalous region | Dynatrace | Canvas | P3 | — |
-| 13 | Time slicer with **playback** of onsets on the canvas | Neo4j Bloom | Canvas | P1 (demo wow) | — |
-| 14 | Diagnosis ↔ Signals both ways: click a symptom → which suspects explain it | Causely | Canvas overlay | P1 | from footprint `matched` |
+| 13 | Time slicer with **playback** of onsets on the canvas | Neo4j Bloom | Canvas | P1 (demo wow) ✅ built (phase 12) | — |
+| 14 | Diagnosis ↔ Signals both ways: click a symptom → which suspects explain it | Causely | Canvas overlay | P1 ✅ built (phase 12) | from footprint `matched` |
 | 15 | "Was this the cause? Yes / No" after the verdict → feeds resolve | Grafana | Verdict card | P2 | feedback never changes the score (rule 4) |
 | 16 | Disprove / Reopen on suspects | Grafana | Suspect list | P3 | a human note, not a status change (rule 4); goes into `POST /notes` |
-| 17 | Fix lines that cite precedent ("fixed inc-17, inc-9") | Cleric | Proposed actions | P1 | `RESOLVED_BY` exists |
+| 17 | Fix lines that cite precedent ("fixed inc-17, inc-9") | Cleric | Proposed actions | P1 ✅ built (phase 12) | `RESOLVED_BY` exists |
 | 18 | Action card fields: rationale, risk, revertible, **"proposal only"** badge | Resolve, NeuBird | Proposed actions | P2 | rule 9: never executes |
 | 19 | Memory proposal **Remember / Reject** at resolve | Traversal, Cleric | Resolve dialog | P3 | — |
 | 20 | Mandatory note on resolve | Dynatrace | Resolve dialog | P3 | — |
@@ -1226,8 +1229,8 @@ AGENTS.md hard rules. P0 = demo-critical; P3 = nice to have.
 
 | # | Borrow | From | Screen | Priority |
 |---|---|---|---|---|
-| 26 | Inspect layout: upstream left, selected centre, downstream right | Datadog | Blast radius (graph mode) | P1 |
-| 27 | Probability shown as node intensity + **playback in expected-delay order** | Bloom, Asserts | What-if | P1 |
+| 26 | Inspect layout: upstream left, selected centre, downstream right | Datadog | Blast radius (graph mode) | P1 ✅ built (phase 12) |
+| 27 | Probability shown as node intensity + **playback in expected-delay order** | Bloom, Asserts | What-if | P1 ✅ built (phase 12) |
 | 28 | "Predicted vs observed" after a saved simulation (UI_SCREENS G1) | nobody does this | Incident | P1 |
 | 29 | Nudge chips (suggested questions) under the composer, aware of the incident | PagerDuty | Ask | P2 |
 | 30 | Show the query behind the answer (already done) + a **"Sources" tab** | New Relic, Grafana | Ask | done / P3 |
@@ -1241,8 +1244,8 @@ AGENTS.md hard rules. P0 = demo-critical; P3 = nice to have.
 
 | Screen | Competitor evidence | Verdict |
 |---|---|---|
-| Service map `/map` | Datadog Service Map, Coroot, Dynatrace Smartscape, Grafana Knowledge Graph: **table stakes** for graph tools | **P1**: build. Health on node borders, animated edges, upstream-left inspect |
-| Graph What-if with playback | nobody animates predicted spread | **P1**: differentiator |
+| Service map `/map` | Datadog Service Map, Coroot, Dynatrace Smartscape, Grafana Knowledge Graph: **table stakes** for graph tools | ✅ **built (phase 12)**. **P1**: build. Health on node borders, animated edges, upstream-left inspect |
+| Graph What-if with playback | nobody animates predicted spread | ✅ **built (phase 12)**. **P1**: differentiator |
 | Run compare | nobody | **P2**: unique trust proof, cheap if a runs endpoint exists |
 | System / trust page | Coroot shows tokens and cost; NeuBird model spend; nobody shows weights | **P2**: show weights, rules, query latency, LLM spend |
 | Changes feed | Anyshift (whole product), Rootly strip, Asserts blue bars | **P3** as a page; **P0 as canvas lanes (#9)** |

@@ -23,6 +23,7 @@ def investigate(r: causal.Run, hypothesis_id: str) -> dict:
                 "kind": e["kind"],
                 "verdict": "supports" if e["rel"] == "support" else "refutes",
                 "path": e["path"],
+                "summary": e["summary"],  # the "Ruled out" line on the verdict card (phase 12)
             },
         )
     if out["footprint"] is not None:

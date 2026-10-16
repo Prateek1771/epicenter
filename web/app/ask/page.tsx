@@ -76,7 +76,7 @@ export default function AskPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col px-4 py-8 lg:px-6">
-      <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><MessageSquareText className="size-6 text-primary" aria-hidden /> Ask the graph</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-medium tracking-[-0.012em]"><MessageSquareText className="size-6 text-fog" aria-hidden /> Ask the graph</h1>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
         GPT-4o answers with the typed graph tools first, and falls back to a read-only Cypher query. Every answer shows the path it rests on.
       </p>
@@ -84,12 +84,12 @@ export default function AskPage() {
       <div className="space-y-6">
         {turns.map((t, i) => (
           <div key={i} className="epi-in space-y-3">
-            <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-primary/15 px-4 py-2 text-sm">{t.q}</p>
+            <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-signal/15 px-4 py-2 text-sm">{t.q}</p>
             {!t.a && !t.err && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> walking the graph…</p>}
             {t.err && <p className="text-sm text-st-refuted">{t.err}</p>}
             {t.a && (
               <div className="rounded-2xl rounded-bl-sm border border-border bg-card/60 p-4">
-                <p className="flex gap-2 text-sm leading-relaxed"><Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden /> {t.a.answer}</p>
+                <p className="flex gap-2 text-sm leading-relaxed"><Sparkles className="mt-0.5 size-4 shrink-0 text-signal" aria-hidden /> {t.a.answer}</p>
                 <PathView path={t.a.path} />
                 {t.a.tools_used.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -116,7 +116,7 @@ export default function AskPage() {
       {turns.length === 0 && (
         <div className="grid gap-2 sm:grid-cols-2">
           {EXAMPLES.map((e) => (
-            <button key={e} onClick={() => ask(e)} className="rounded-xl border border-border bg-card/40 p-3 text-left text-sm hover:border-primary/50 hover:bg-accent/40">
+            <button key={e} onClick={() => ask(e)} className="rounded-xl border border-border bg-card/40 p-3 text-left text-sm hover:border-signal/50 hover:bg-accent/40">
               {e}
             </button>
           ))}

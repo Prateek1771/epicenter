@@ -141,3 +141,22 @@ def test_skeptic_refutes_a_winner_that_does_not_explain_the_alert(graph, env, tm
     assert charge["status"] == "refuted" and agents["root_cause"] != "payment/Charge"  # … and refuted
     why = graph_tools.why_not("inc-1", "payment", env="test-flow")
     assert why.answer == "small_footprint" and "does not explain the alerting operation" in why.summary
+
+
+def test_receipts_number_every_query_of_the_run(graph, env, monkeypatch):
+    """One `receipts` event per run: numbered queries (parallel investigators included), timings, verdict time."""
+    env("mini_graph.cypher")
+    seen = []
+    real = causal.investigate
+    monkeypatch.setattr(causal, "investigate", lambda r, h: seen.append(h) or real(r, h))
+    before = bus.history("env:test-flow", "inc-1")
+    last = before[-1]["seq"] if before else 0
+    v = flow.run("inc-1", "test-flow", db_path=env.db)
+    ev = bus.history("env:test-flow", "inc-1", after_seq=last)
+    [rc] = [e["data"] for e in ev if e["event"] == "receipts"]
+    assert ev[-1]["event"] == "receipts" and rc["run"] == v["run"]
+    qs = rc["queries"]
+    assert [q["n"] for q in qs] == list(range(1, len(qs) + 1))
+    assert {"Q1", "Q2", "Q3"} <= {q["qid"] for q in qs}  # Q2/Q3 come from the investigators' threads
+    assert len(seen) >= 2 and 0 < rc["verdict_ms"] <= rc["run_ms"]
+    assert rc["total_query_ms"] == round(sum(q["ms"] for q in qs), 1)

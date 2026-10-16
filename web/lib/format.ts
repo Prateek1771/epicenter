@@ -27,7 +27,7 @@ export function serviceHue(service: string): number {
   return (h >>> 0) % 360;
 }
 
-export const serviceColor = (service: string, alpha = 1) => `oklch(0.72 0.12 ${serviceHue(service)} / ${alpha})`;
+export const serviceColor = (service: string, alpha = 1) => `oklch(0.72 0.09 ${serviceHue(service)} / ${alpha})` // quiet hues: colour is for status;
 
 export const STATUS_LABEL: Record<string, string> = {
   open: "Open",

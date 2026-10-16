@@ -6,16 +6,23 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { DataView } from "@/components/graph/data-view";
 import { IncidentCanvas, type Overlay, type Spotlight } from "@/components/graph/incident-canvas";
+import { useGraphMode, ViewToggle } from "@/components/graph/view-toggle";
 import { ActionsPanel, MemoryPanel, NotesBox, ResolveDialog } from "@/components/incident/act";
+import { ExplainersCard } from "@/components/incident/explainers";
+import { Lanes } from "@/components/incident/lanes";
+import { QueryReceipts } from "@/components/incident/receipts";
 import { IncidentFacts, OverlayLegend, SuspectList, Timeline, WhyNot } from "@/components/incident/side";
-import { ExplanationPanel, NoRootCauseCard, OpLabel, VerdictCard } from "@/components/incident/verdict";
+import { CouldntSee, ExplanationPanel, NoRootCauseCard, OpLabel, RuledOutList, TMinusStrip, VerdictCard } from "@/components/incident/verdict";
 import { StatusPill } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError, call, type S } from "@/lib/api";
+import { fromView } from "@/lib/graph-data";
 import { apply, evidenceIndex, type Footprint, hydrate, merge, pathSets, type StreamEvent, type View } from "@/lib/incident-state";
+import { notYet, ruledOut, tMinus } from "@/lib/investigation";
 import { useEnv, useQuery, withEnv } from "@/lib/hooks";
 import { useIncidentStream } from "@/lib/useIncidentStream";
 
@@ -47,6 +54,11 @@ export default function IncidentPage() {
   const [spot, setSpot] = useState<Spotlight | null>(null);
   const [activeCite, setActiveCite] = useState<string | null>(null);
   const [fp, setFp] = useState<S["FootprintOut"] | null>(null);
+  const [mode, setMode] = useGraphMode();
+  const [cutoff, setCutoff] = useState<number | null>(null); // onset slicer
+  const [explainOp, setExplainOp] = useState<string | null>(null); // symptom → suspects
+  const [fps, setFps] = useState<Record<string, S["FootprintOut"]>>({}); // every suspect's footprint, fetched lazily
+  const [fpsLoading, setFpsLoading] = useState(false);
   const [lastEventAt, setLastEventAt] = useState(Date.now());
   const [now, setNow] = useState(Date.now());
 
@@ -122,6 +134,38 @@ export default function IncidentPage() {
     };
   }, [selected, view, fp]);
 
+  // symptom → suspects: every suspect's footprint, fetched once per run when first needed
+  useEffect(() => setFps({}), [view?.run]);
+  useEffect(() => {
+    if (!explainOp || !view) return;
+    const missing = Object.keys(view.hyps).filter((h) => !fps[h]);
+    if (!missing.length) return;
+    let live = true;
+    setFpsLoading(true);
+    Promise.all(
+      missing.map((hid) =>
+        call(api.GET("/api/v1/incidents/{incident_id}/hypotheses/{hid}/footprint", { params: { path: { incident_id: incident, hid }, query: { env: env ?? undefined } } }))
+          .then((f) => [hid, f] as const)
+          .catch(() => null),
+      ),
+    ).then((rows) => {
+      if (!live) return;
+      setFps((cur) => ({ ...cur, ...Object.fromEntries(rows.filter((r) => r !== null)) }));
+      setFpsLoading(false);
+    });
+    return () => {
+      live = false;
+    };
+  }, [explainOp, view, fps, incident, env]);
+
+  const ruled = useMemo(() => (view ? ruledOut(view) : []), [view]);
+  const later = useMemo(() => (view ? notYet(view, cutoff) : undefined), [view, cutoff]);
+  const strip = useMemo(() => {
+    const c = detail.data?.verdict?.change;
+    return view ? tMinus(view, c ? { ts: Math.round(Date.parse(c.ts) / 1000), summary: c.summary, type: c.type } : null) : null;
+  }, [view, detail.data?.verdict?.change]);
+  const data = useMemo(() => (view && mode === "data" ? fromView(view) : null), [view, mode]);
+
   const evIdx = useMemo(() => (view ? evidenceIndex(view) : {}), [view]);
   const cite = (eid: string) => {
     const e = evIdx[eid];
@@ -187,7 +231,7 @@ export default function IncidentPage() {
         <StatusPill status={status} />
         {view?.symptom && (
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <BellRing className="size-3.5 text-primary" aria-hidden /> alert on <OpLabel op={view.symptom} className="text-foreground" />
+            <BellRing className="size-3.5 text-signal" aria-hidden /> alert on <OpLabel op={view.symptom} className="text-foreground" />
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
@@ -197,8 +241,8 @@ export default function IncidentPage() {
             </span>
           )}
           {stream === "live" && status === "diagnosing" && (
-            <span className="flex items-center gap-1.5 text-xs text-primary" role="status">
-              <span className="size-2 animate-pulse rounded-full bg-primary" aria-hidden /> live
+            <span className="flex items-center gap-1.5 text-xs text-signal" role="status">
+              <span className="size-2 animate-pulse rounded-full bg-signal" aria-hidden /> live
             </span>
           )}
           {quiet ? (
@@ -206,7 +250,7 @@ export default function IncidentPage() {
               <Play className="size-3.5" /> Resume diagnosis
             </Button>
           ) : (
-            <Button size="sm" variant="outline" disabled={status === "diagnosing"} onClick={() => diagnose(status !== "open")}>
+            <Button size="sm" variant={status === "open" ? "default" : "outline"} disabled={status === "diagnosing"} onClick={() => diagnose(status !== "open")}>
               {status === "diagnosing" ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
               {status === "open" ? "Diagnose" : "Rerun"}
             </Button>
@@ -216,7 +260,7 @@ export default function IncidentPage() {
       </div>
       {inc?.gaps && inc.gaps.length > 0 && (
         <div className="border-b border-ov-missed/30 bg-ov-missed/10 px-6 py-1.5 text-xs text-ov-missed" role="status">
-          {inc.gaps.join(", ")} unavailable for this window: suspects that needed them may end inconclusive.
+          {inc.gaps.join(", ")} unavailable for this window: see &ldquo;Couldn&apos;t see&rdquo; on the verdict.
         </div>
       )}
 
@@ -226,12 +270,20 @@ export default function IncidentPage() {
           {!inc ? (
             <Skeleton className="h-64 w-full rounded-xl" />
           ) : inc.verdict ? (
-            <VerdictCard v={inc.verdict} onPath={(p) => spotlightPath(p, "winning path")} />
+            <VerdictCard v={inc.verdict} weights={inc.weights_version} onPath={(p) => spotlightPath(p, "winning path")}>
+              {strip && <TMinusStrip t={strip} />}
+              <RuledOutList items={ruled} onPath={spotlightPath} />
+              <CouldntSee gaps={inc.gaps} />
+            </VerdictCard>
           ) : inc.no_root_cause ? (
-            <NoRootCauseCard n={inc.no_root_cause} />
+            <NoRootCauseCard n={inc.no_root_cause}>
+              <RuledOutList items={ruled} onPath={spotlightPath} />
+              <CouldntSee gaps={inc.gaps} />
+            </NoRootCauseCard>
           ) : (
             <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
               {status === "diagnosing" ? "Investigating: suspects are being checked against the graph…" : "No verdict yet."}
+              <CouldntSee gaps={inc.gaps} />
             </div>
           )}
           <Section title="Explanation">
@@ -254,42 +306,89 @@ export default function IncidentPage() {
           </Section>
         </aside>
 
-        {/* canvas */}
-        <div className="relative min-h-[420px] bg-grid max-lg:order-1">
-          {view ? (
-            Object.keys(view.nodes).length ? (
+        {/* canvas (Graph) or its tables (Data), with the timeline lanes underneath */}
+        <div className="flex min-h-[420px] flex-col max-lg:order-1">
+          <div className="relative min-h-0 flex-1 bg-grid">
+            {!view ? (
+              <div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading graph" /></div>
+            ) : !Object.keys(view.nodes).length ? (
+              <div className="grid h-full place-items-center text-sm text-muted-foreground">Nothing on the canvas yet: start a diagnosis.</div>
+            ) : mode === "data" && data ? (
+              <div className="h-full p-3 pt-14">
+                <DataView
+                  data={data}
+                  name={`${incident}-run${view.run ?? 0}`}
+                  selected={selected ? view.hyps[selected]?.op : null}
+                  onNode={(op) => {
+                    const h = Object.values(view.hyps).find((x) => x.op === op);
+                    setSpot(h ? null : { ...pathSets([op]), label: op });
+                    setSelected(h?.id ?? null);
+                    setMode("graph");
+                  }}
+                  className="h-full"
+                />
+              </div>
+            ) : (
               <IncidentCanvas
                 view={view}
                 overlay={overlay}
                 spotlight={spot}
                 selected={selected}
-                onSelect={(h) => {
+                later={later}
+                onSelect={(h, op) => {
                   setSpot(null);
                   setActiveCite(null);
                   setSelected(h);
+                  // a broken operation that isn't a suspect: which suspects would explain it?
+                  setExplainOp(!h && op && view.nodes[op]?.anomaly ? op : null);
                 }}
               />
-            ) : (
-              <div className="grid h-full place-items-center text-sm text-muted-foreground">Nothing on the canvas yet: start a diagnosis.</div>
-            )
-          ) : (
-            <div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading graph" /></div>
-          )}
-          <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-2">
-            {selHyp && (
-              <div className="pointer-events-auto w-[330px]">
-                <OverlayLegend hyp={selHyp} fp={fp ? { ...(fp as unknown as Footprint), missedOffCanvas: offCanvas } : null} onClear={() => setSelected(null)} />
+            )}
+            <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-2">
+              {mode === "graph" && selHyp && (
+                <div className="pointer-events-auto w-[330px]">
+                  <OverlayLegend hyp={selHyp} fp={fp ? { ...(fp as unknown as Footprint), missedOffCanvas: offCanvas } : null} onClear={() => setSelected(null)} />
+                </div>
+              )}
+              {mode === "graph" && !selHyp && explainOp && view && (
+                <div className="pointer-events-auto w-[330px]">
+                  <ExplainersCard
+                    view={view}
+                    op={explainOp}
+                    footprints={fps}
+                    loading={fpsLoading}
+                    onPick={(hid) => { setExplainOp(null); setSelected(hid); }}
+                    onClose={() => setExplainOp(null)}
+                  />
+                </div>
+              )}
+              <div className="pointer-events-auto ml-auto flex items-center gap-2">
+                {spot && mode === "graph" && (
+                  <button
+                    onClick={() => { setSpot(null); setActiveCite(null); }}
+                    className="rounded-full bg-signal/15 px-3 py-1 text-xs text-signal ring-1 ring-signal/40 hover:bg-signal/25"
+                  >
+                    Showing {spot.label} · clear ✕
+                  </button>
+                )}
+                {view && Object.keys(view.nodes).length > 0 && <ViewToggle mode={mode} onChange={setMode} />}
               </div>
-            )}
-            {spot && (
-              <button
-                onClick={() => { setSpot(null); setActiveCite(null); }}
-                className="pointer-events-auto ml-auto rounded-full bg-primary/15 px-3 py-1 text-xs text-primary ring-1 ring-primary/40 hover:bg-primary/25"
-              >
-                Showing {spot.label} · clear ✕
-              </button>
-            )}
+            </div>
           </div>
+          {view && mode === "graph" && (
+            <Lanes
+              view={view}
+              cutoff={cutoff}
+              onCutoff={setCutoff}
+              active={spot && spot.ops.size === 1 ? [...spot.ops][0] : null}
+              onLane={(op) => {
+                setSelected(null);
+                setActiveCite(null);
+                setSpot({ ...pathSets([op]), label: op });
+                setExplainOp(op); // every lane is a symptom: which suspects predicted it?
+              }}
+            />
+          )}
         </div>
 
         {/* right rail: suspects, why-not, timeline, notes */}
@@ -313,7 +412,8 @@ export default function IncidentPage() {
                 </Section>
               )}
             </TabsContent>
-            <TabsContent value="timeline" className="mt-4">
+            <TabsContent value="timeline" className="mt-4 space-y-4">
+              <QueryReceipts r={view?.receipts ?? null} />
               <Timeline items={view?.timeline ?? []} />
             </TabsContent>
             <TabsContent value="notes" className="mt-4">

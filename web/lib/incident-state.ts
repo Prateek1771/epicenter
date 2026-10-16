@@ -66,6 +66,24 @@ export interface TimelineItem {
   tone: "neutral" | "good" | "bad" | "info" | "warn";
 }
 
+export interface Change {
+  id: string;
+  service: string;
+  type: string;
+  ts: number;
+  summary?: string | null;
+}
+
+/** One `receipts` event per run (phase 12): every graph query, numbered, with its time and row count. */
+export interface Receipts {
+  run: number;
+  queries: { n: number; qid: string; ms: number; rows: number }[];
+  dropped: number;
+  total_query_ms: number;
+  verdict_ms: number | null;
+  run_ms: number;
+}
+
 export interface View {
   incident: string;
   run: number | null;
@@ -85,6 +103,9 @@ export interface View {
   actions: Record<string, { id: string; name: string; rank: number; chosen_by: string }>;
   errors: { code: string; message: string }[];
   timeline: TimelineItem[];
+  alertTs: number | null; // epoch s, the time axis of lanes and the slicer
+  changes: Change[];
+  receipts: Receipts | null;
 }
 
 export interface StreamEvent {
@@ -121,6 +142,9 @@ export function hydrate(g: S["IncidentGraph"]): View {
     actions: {},
     errors: [],
     timeline: [],
+    alertTs: g.alert_ts ?? null,
+    changes: (g.changes ?? []) as Change[],
+    receipts: (g.receipts as Receipts | null | undefined) ?? null,
   };
 }
 
@@ -138,6 +162,7 @@ export function merge(v: View, g: S["IncidentGraph"]): View {
     actions: g.run === v.run ? v.actions : {},
     errors: v.errors,
     timeline: v.timeline,
+    receipts: fresh.receipts ?? (v.receipts && v.receipts.run === g.run ? v.receipts : null),
   };
 }
 
@@ -181,6 +206,8 @@ export function describe(e: StreamEvent): Omit<TimelineItem, "seq" | "event"> {
       return { text: `Proposed: ${d.name}`, tone: "neutral" };
     case "error":
       return { text: `Error: ${d.code}`, tone: "bad" };
+    case "receipts":
+      return { text: `Receipts: ${(d.queries as unknown[] | undefined)?.length ?? 0} graph queries · ${fmt(d.total_query_ms)} ms`, tone: "info" };
     default:
       return { text: e.event, tone: "neutral" };
   }
@@ -232,7 +259,8 @@ export function apply(v: View, e: StreamEvent): View {
           if (!edges[k]) edges = { ...edges, [k]: { src: path[i], dst: path[i + 1], rps: null, err_rate: null } };
         }
       }
-      const ev: Evidence = { id: String(d.id), kind: String(d.kind), verdict: d.verdict as Evidence["verdict"], path };
+      const ev: Evidence = { id: String(d.id), kind: String(d.kind), verdict: d.verdict as Evidence["verdict"], path,
+                             summary: typeof d.summary === "string" ? d.summary : undefined }; // prettier-ignore
       return { ...next, nodes, edges, hyps: { ...next.hyps, [hid]: { ...h, evidence: { ...h.evidence, [ev.id]: ev } } } };
     }
     case "footprint": {
@@ -265,6 +293,8 @@ export function apply(v: View, e: StreamEvent): View {
     }
     case "error":
       return { ...next, errors: [...next.errors, { code: String(d.code), message: String(d.message ?? "") }] };
+    case "receipts":
+      return { ...next, receipts: d as unknown as Receipts };
     default:
       return next;
   }

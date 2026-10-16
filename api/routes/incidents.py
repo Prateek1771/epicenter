@@ -8,16 +8,19 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
 from fastapi.responses import StreamingResponse
 
+from api.config import get_settings
 from api.events import bus
 from api.graph import EnvGraph
 from api.models import (
     Accepted,
     ActionOut,
+    ChangeRef,
     EvidenceOut,
     ExplanationOut,
     FootprintOut,
     FootprintSummary,
     GraphCall,
+    GraphChange,
     GraphEvidence,
     GraphHypothesis,
     GraphOp,
@@ -41,6 +44,7 @@ from api.models import (
 )
 from api.routes.deps import ApiError, Env, decode_cursor, encode_cursor, env_name, epoch, incident_or_404, iso
 from api.search import causal
+from api.search.score import load_weights
 from api.tools import graph_tools
 
 router = APIRouter()
@@ -92,9 +96,17 @@ def _verdict(env: EnvGraph, incident_id: str, ranking: list[dict]) -> Verdict | 
     fp = next((json.loads(e["value"]) for e in ev if e["kind"] == "footprint" and e["value"]), None)
     path = next((e["path"] for e in ev if e["kind"] == "propagation" and e["rel"] == "SUPPORTED_BY"), None)
     runner = next((h for h in ranking if h["id"] != local_id(top) and h["status"] != "refuted"), None)
+    owners = env.ro("op_owners", ops=[causes[1]["op"]])
+    ch = next((json.loads(e["value"]) for e in ev
+               if e["kind"] == "change" and e["rel"] == "SUPPORTED_BY" and e["value"]), None)  # fmt: skip
+    change = env.ro("change_by_id", id=ch["change"]) if ch else []
+    timing = env.ro("incident_timing", inc=incident_id)
     return Verdict(
         root_cause=_hypothesis(env, top),
         confidence=causes[1]["confidence"],
+        owner=owners[0]["team"] if owners else None,
+        change=ChangeRef(**(change[0] | {"ts": iso(change[0]["ts"])})) if change else None,
+        found_in_ms=timing[0]["found_in_ms"] if timing else None,
         footprint=FootprintSummary(
             coverage=fp["coverage"],
             precision=fp["precision"],
@@ -162,7 +174,11 @@ def get_incident(incident_id: str, env: Env, request: Request) -> IncidentOut:
         )
     out.similar = [SimilarOut(**{k: s[k] for k in ("incident", "score", "cause", "fixes")})
                    for s in env.ro("similar_of_run", inc=incident_id)]  # fmt: skip
-    out.actions = [ActionOut(**(a | {"id": local_id(a["id"])})) for a in env.ro("run_actions", inc=incident_id)]
+    acts = env.ro("run_actions", inc=incident_id)
+    precedent = {x["name"]: [i for i in x["incidents"] if i != incident_id]
+                 for x in env.ro("fix_incidents", names=sorted({a["name"] for a in acts}))} if acts else {}  # fmt: skip
+    out.actions = [ActionOut(**(a | {"id": local_id(a["id"]), "precedent": precedent.get(a["name"], [])}))
+                   for a in acts]  # fmt: skip
     out.delivery = json.loads(inc["delivery"]) if inc["delivery"] else None
     return out
 
@@ -179,6 +195,13 @@ def incident_graph(incident_id: str, env: Env) -> IncidentGraph:
     if inc["symptom"]:
         ops.add(inc["symptom"])
     ops = sorted(ops)
+    nodes = [GraphOp(**n) for n in env.ro("graph_nodes", ops=ops, inc=incident_id)] if ops else []
+    t = inc["opened_at"]
+    changes = []
+    if t is not None and nodes:
+        since = t - load_weights(get_settings().weights_path)["lookback_s"]
+        until = t + get_settings().window_after_s
+        changes = env.ro("incident_changes", svcs=sorted({n.service for n in nodes}), since=since, until=until)
     return IncidentGraph(
         incident=incident_id,
         run=inc["run"],
@@ -208,9 +231,18 @@ def incident_graph(incident_id: str, env: Env) -> IncidentGraph:
             )
             for h in hyps
         ],
-        nodes=[GraphOp(**n) for n in env.ro("graph_nodes", ops=ops, inc=incident_id)] if ops else [],
+        nodes=nodes,
         edges=[GraphCall(**c) for c in env.ro("graph_edges", ops=ops)] if ops else [],
+        alert_ts=t,
+        changes=[GraphChange(**c) for c in changes],
+        receipts=_receipts(env, incident_id, inc["run"]),
     )
+
+
+def _receipts(env: EnvGraph, incident_id: str, run: int | None) -> dict | None:
+    row = env.ro("incident_timing", inc=incident_id)
+    rc = json.loads(row[0]["receipts"]) if row and row[0]["receipts"] else None
+    return rc if rc and rc.get("run") == run else None
 
 
 @router.post("/incidents/{incident_id}/diagnose", status_code=202, response_model=Accepted)

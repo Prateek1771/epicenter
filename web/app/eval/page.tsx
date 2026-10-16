@@ -17,8 +17,8 @@ export default function EvalPage() {
     return r.ok ? r.json() : null;
   });
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-8 lg:px-6">
-      <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Gauge className="size-6 text-primary" aria-hidden /> Eval</h1>
+    <main className="mx-auto w-full max-w-[1200px] px-4 py-8 lg:px-6">
+      <h1 className="flex items-center gap-2 text-2xl font-medium tracking-[-0.012em]"><Gauge className="size-6 text-fog" aria-hidden /> Eval</h1>
       <p className="mt-1 text-sm text-muted-foreground">Root-cause accuracy on the RCAEval benchmark (AC@1, AC@3), with ablations.</p>
       {e.loading && <Skeleton className="mt-6 h-40 w-full rounded-xl" />}
       {!e.loading && !e.data && <ComingSoon phase={10} what="The eval runner replays every RE2 case and scores the verdicts." endpoint="GET /eval" />}

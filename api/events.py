@@ -25,6 +25,7 @@ EVENTS = {
     "explanation",
     "action",
     "error",
+    "receipts",  # once per run: every graph query it made, numbered, with timings (phase 12)
 }
 
 

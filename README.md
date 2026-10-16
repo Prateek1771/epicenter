@@ -152,6 +152,13 @@ docker compose exec api python -m api.eval --suite re2 --system tt
 ```
 Prints AC@1 / AC@3 and the ablations (no PageRank, no temporal rule, no mechanism rule, no Fault Simulator footprint).
 
+## 7b. Test reports
+
+Every `pytest` run writes `data/reports/<n>-<utc>/findings.md` (what passed, failed, timings) and
+`agent-context.md` (a guide you can hand to Claude Code, Codex or Cursor: per failure, the spec section, the code under
+test and the exact rerun command). `cd web && npm test` appends the web results to the newest report. Reports are
+numbered and kept; `pytest --no-report` skips writing one.
+
 ## 8. Troubleshooting
 
 | Symptom | Fix |

@@ -29,13 +29,14 @@ async function engine(): Promise<Elk> {
   return elk;
 }
 
-export async function layout(input: LayoutInput, prev: Record<string, XY> = {}): Promise<Record<string, XY>> {
+/** `direction` LEFT puts callees on the left: blast radius reads failing service → its callers, left to right. */
+export async function layout(input: LayoutInput, prev: Record<string, XY> = {}, direction: "RIGHT" | "LEFT" = "RIGHT"): Promise<Record<string, XY>> {
   const ids = new Set(input.nodes.map((n) => n.id));
   const graph = {
     id: "root",
     layoutOptions: {
       "elk.algorithm": "layered",
-      "elk.direction": "RIGHT",
+      "elk.direction": direction,
       "elk.layered.spacing.nodeNodeBetweenLayers": "90",
       "elk.spacing.nodeNode": "28",
       "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",

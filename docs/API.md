@@ -70,6 +70,10 @@ Query: `status`, `cause` (service name), `limit`, `cursor`.
                     "score_parts": { "onset_earliness": 1.0, "strength": 0.9, "mechanism_fit": 1.0,
                                      "pagerank": 0.71, "change_match": 1.0, "footprint": 0.85, "refuted": 0 } },
     "confidence": 0.91,
+    "owner": "team-payments",
+    "change": { "id": "chg-91", "service": "payment", "type": "flag", "ts": "2026-10-16T14:03:31Z",
+                "summary": "flag paymentFailure → on" },
+    "found_in_ms": 658,
     "footprint": { "coverage": 0.86, "precision": 0.82, "order": 0.9, "summary": "explains 6 of 7 symptoms",
                    "unexplained": ["ad/GetAds"] },
     "second_root_cause": null,
@@ -87,7 +91,7 @@ Query: `status`, `cause` (service name), `limit`, `cursor`.
                    "dropped": 1, "verified": true, "source": "llm",
                    "ai_calls": [ { "agent": "narrator", "model": "openai/gpt-4o-2024-11-20", "prompt_tokens": 1575, "completion_tokens": 210, "ms": 2053 } ] },
   "similar": [ { "incident": "inc-17", "score": 0.93, "cause": "payment/Charge", "fixes": ["turn off flag paymentFailure"] } ],
-  "actions": [ { "id": "a-1", "name": "turn off flag paymentFailure", "status": "proposed", "rank": 1, "chosen_by": "history", "p": null, "runbook": "rb-flag-rollback" } ],
+  "actions": [ { "id": "a-1", "name": "turn off flag paymentFailure", "status": "proposed", "rank": 1, "chosen_by": "history", "p": null, "runbook": "rb-flag-rollback", "precedent": ["inc-17", "inc-9"] } ],
   "delivery": { "slack": { "ok": true, "url": "https://…", "error": null, "message": null, "ts": 1792159512, "run": 2 } }
 }
 ```
@@ -96,7 +100,12 @@ invalid output; the UI shows "AI explanation unavailable"). Claim `status`: `ver
 calibrated `min_support`, 0.65),
 `unverified` (Jev down), `template` (a fact the engine always states itself). `actions[].chosen_by`: `history` (it
 fixed earlier incidents), `runbook` (runbook order), `demoted` (Jev judged it unrelated to the cause the evidence
-shows; listed last). `p` is Jev's relevance score. Action ids are per run.
+shows; listed last). `p` is Jev's relevance score. Action ids are per run. `precedent`: incidents an action with
+this name resolved, newest first (≤ 5), so a proposed fix cites where it worked before.
+
+Verdict facts (phase 12): `owner` is the team owning the root cause's service; `change` is the `Change` the root
+cause's `change` evidence attributes (null when no change preceded it); `found_in_ms` is diagnosis start → verdict
+published, measured by the run that produced the current verdict.
 
 When nothing explains the alert, `status` is `no_root_cause`, `verdict` is `null`, and the response has
 `"no_root_cause": { "summary": "Nothing in the graph explains this alert", "checked": ["h-1", "h-2"], "max_coverage": 0.31 }`.
@@ -128,8 +137,20 @@ Everything the incident canvas draws, in one load, for the current run. The UI t
                                     "path": ["frontend/GET /cart", "checkout/PlaceOrder", "payment/Charge"] } ] } ],
   "nodes": [ { "id": "payment/Charge", "service": "payment", "service_kind": "app",
                "anomaly": { "kind": "errors", "onset": 1705918110, "score": 0.95 } } ],
-  "edges": [ { "src": "checkout/PlaceOrder", "dst": "payment/Charge", "rps": 1.05, "err_rate": 0.31, "p95_ms": 610.4 } ] }
+  "edges": [ { "src": "checkout/PlaceOrder", "dst": "payment/Charge", "rps": 1.05, "err_rate": 0.31, "p95_ms": 610.4 } ],
+  "alert_ts": 1705918170,
+  "changes": [ { "id": "chg-91", "service": "payment", "type": "flag", "ts": 1705918011, "summary": "flag paymentFailure → on" } ],
+  "receipts": { "run": 3, "queries": [ { "n": 1, "qid": "incident", "ms": 3.5, "rows": 1 } ], "dropped": 0,
+                "total_query_ms": 622.0, "verdict_ms": 658, "run_ms": 4970 } }
 ```
+Phase 12 fields:
+- `alert_ts` (epoch s, like anomaly onsets) is the time axis of the timeline lanes, the onset slicer and the T-minus
+  strip.
+- `changes` are the changes on the canvas's services from `lookback_s` (weights.json) before the alert to the window
+  end.
+- `receipts` is the current run's numbered graph queries (the `receipts` SSE event, kept on the incident so a reload
+  shows them).
+
 `round: 2` hypotheses are the second-cause search ([LLD §7.5](LLD.md)): scored on the symptoms the root cause leaves
 unexplained, so their scores aren't comparable with round 1's.
 
@@ -192,6 +213,19 @@ Query: `center` (node id), `hops` (1–3, default 2), `incident` (optional: incl
   "edges": [ { "from": "checkout/PlaceOrder", "to": "payment/Charge", "type": "CALLS", "props": { "p95_ms": 840, "err_rate": 0.31 } } ] }
 ```
 
+### `GET /graph/topology`
+The service map (`/map`). Query: `level` = `service` (default) or `operation`; `hours` (1–168, default 24): halos
+and crowns come from unresolved incidents opened that recently. Capped at 2000 nodes / edges (`truncated: true` when
+hit).
+```json
+{ "level": "service", "truncated": false,
+  "nodes": [ { "id": "payment", "service": "payment", "kind": "app", "owner": "payments", "ops": 1,
+               "anomalies": [ { "incident": "inc-42", "kind": "errors", "score": 0.99 } ], "root_cause_of": ["inc-42"] } ],
+  "edges": [ { "src": "checkout", "dst": "payment", "rps": 0.02, "err_rate": 0.5, "p95_ms": 610.4 } ] }
+```
+At `level=service`, an edge sums `rps` and takes the max `err_rate` / `p95_ms` over the operation calls between two
+services; calls inside one service aren't edges.
+
 ### `GET /services`
 Services in the env graph with their kind and operation count (the UI's service pickers).
 ```json
@@ -202,8 +236,12 @@ Services in the env graph with their kind and operation count (the UI's service 
 ### `GET /blast-radius/{service}`
 ```json
 { "service": "redis", "affected": [ { "service": "cart", "operation": "cart/GetCart", "hops": 1, "owner": "team-cart" } ],
-  "counts": { "services": 3, "operations": 9 }, "past_incidents": ["inc-11"] }
+  "counts": { "services": 3, "operations": 9 }, "past_incidents": ["inc-11"],
+  "sources": ["redis/GET"],
+  "edges": [ { "src": "cart/GetCart", "dst": "redis/GET", "rps": 3.1, "err_rate": 0.0, "p95_ms": 2.1 } ] }
 ```
+`sources` are the failing service's own operations; `edges` are the `CALLS` among sources and affected operations
+(the graph view).
 
 ### `POST /simulate`
 What-if mode of the Fault Simulator ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)): "what breaks if X fails?",
@@ -216,9 +254,10 @@ no incident needed. Give either `operation` or `service`.
   "predicted": [
     { "op": "cart/GetCart", "service": "cart", "kind": "errors", "p": 0.95, "hops": 1, "expected_delay_s": 15, "owner": "team-cart" },
     { "op": "checkout/PlaceOrder", "service": "checkout", "kind": "errors", "p": 0.61, "hops": 2, "expected_delay_s": 45, "owner": "team-payments" } ],
-  "counts": { "services": 3, "operations": 9 } }
+  "counts": { "services": 3, "operations": 9 },
+  "edges": [ { "src": "checkout/PlaceOrder", "dst": "cart/GetCart", "rps": 0.4, "err_rate": 0.0, "p95_ms": 12.0 } ] }
 ```
-`kind` ∈ `errors`, `latency`, `cpu`, `mem`, `saturation`, `down`. `save: true` writes a `Simulation` node, so a later
+`edges` are the `CALLS` among the predicted operations (the graph view and its Play). `kind` ∈ `errors`, `latency`, `cpu`, `mem`, `saturation`, `down`. `save: true` writes a `Simulation` node, so a later
 incident can be compared with this prediction.
 
 ### `POST /ask`

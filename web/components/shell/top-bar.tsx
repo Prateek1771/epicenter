@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Crosshair, FlaskConical, GitFork, Gauge, MessageSquareText, PlayCircle, Search } from "lucide-react";
+import { Activity, Crosshair, FlaskConical, GitFork, Gauge, MessageSquareText, Network, PlayCircle, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 export const NAV = [
   { href: "/", label: "Incidents", Icon: Activity },
+  { href: "/map", label: "Map", Icon: Network },
   { href: "/blast-radius", label: "Blast radius", Icon: GitFork },
   { href: "/simulate", label: "What-if", Icon: FlaskConical },
   { href: "/ask", label: "Ask", Icon: MessageSquareText },
@@ -95,10 +96,10 @@ function CommandPalette() {
   };
   return (
     <>
-      <Button variant="outline" size="sm" className="h-8 gap-2 text-muted-foreground" onClick={() => setOpen(true)}>
+      <Button variant="outline" size="sm" className="h-8 gap-2 text-fog" onClick={() => setOpen(true)}>
         <Search className="size-3.5" aria-hidden />
         <span className="sr-only md:not-sr-only">Jump to…</span>
-        <kbd className="hidden rounded border border-border bg-muted px-1 font-mono text-[10px] md:inline">⌘K</kbd>
+        <kbd className="hidden rounded-sm bg-white/5 px-1 font-mono text-[10px] text-fog md:inline">⌘K</kbd>
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen} title="Jump to" description="Incidents and pages">
         <CommandInput placeholder="Incident id, symptom, page…" />
@@ -130,11 +131,11 @@ export function TopBar() {
   const pathname = usePathname();
   const [env] = useEnv();
   return (
-    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-border bg-void/85 backdrop-blur-xl">
       <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
-        <Link href={withEnv("/", env)} className="flex items-center gap-2 font-semibold tracking-tight" aria-label="Epicenter home">
-          <span className="grid size-7 place-items-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/30">
-            <Crosshair className="size-4" aria-hidden />
+        <Link href={withEnv("/", env)} className="flex items-center gap-2 text-base font-medium tracking-[-0.012em] text-paper" aria-label="Epicenter home">
+          <span className="grid size-6 place-items-center rounded-md bg-paper text-void">
+            <Crosshair className="size-3.5" aria-hidden />
           </span>
           <span className="hidden sm:inline">Epicenter</span>
         </Link>
@@ -148,8 +149,8 @@ export function TopBar() {
                 aria-current={active ? "page" : undefined}
                 aria-label={label} // the text label is hidden below md
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                  active && "bg-accent text-foreground",
+                  "relative flex h-14 items-center gap-1.5 px-2.5 text-[13px] text-fog transition-colors hover:text-mist",
+                  active && "text-paper after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-acid-lime",
                 )}
               >
                 <Icon className="size-4" aria-hidden />

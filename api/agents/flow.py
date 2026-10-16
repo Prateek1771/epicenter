@@ -17,7 +17,8 @@ import operator
 import sqlite3
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, TypedDict
 
@@ -28,7 +29,7 @@ from langgraph.types import Send
 from api.agents import historian, investigator, narrator, responder, skeptic, triage
 from api.config import get_settings
 from api.events import publish
-from api.graph import GraphUnavailable
+from api.graph import GraphUnavailable, current_receipts, recording
 from api.models import local_id
 from api.search import causal
 from api.tools.graph_tools import get_graph
@@ -160,6 +161,9 @@ def n_finalize(state: dict) -> dict:
         )
     else:
         publish(r.env.key, r.incident, "verdict", v)
+    if (rc := current_receipts()) is not None:  # "found in Ns" on the verdict card (from run start, or from resume)
+        rc.verdict_ms = rc.elapsed_ms()
+        r.env.rw("incident_set_timing", inc=r.incident, found_in_ms=rc.verdict_ms)
     publish(r.env.key, r.incident, "incident.status", {"status": v["status"], "run": r.run})
     return {}
 
@@ -244,6 +248,21 @@ def _thread(env: str, incident_id: str, run: int) -> dict:
     return {"configurable": {"thread_id": f"{env}:{incident_id}:r{run}"}}
 
 
+@contextmanager
+def _receipts(env: str, incident_id: str, run_no: int) -> Iterator[None]:
+    """Record every graph query of the run; one `receipts` event at the end, also when the run fails midway."""
+    with recording() as rc:
+        try:
+            yield
+        finally:
+            data = rc.summary() | {"run": run_no}
+            try:  # kept on the incident too: the canvas snapshot carries it, the stream only replays newer events
+                get_graph().env(env).rw("incident_set_receipts", inc=incident_id, receipts=json.dumps(data))
+                publish(f"env:{env}", incident_id, "receipts", data)
+            except Exception:  # never mask the run's own outcome
+                log.exception(json.dumps({"incident_id": incident_id, "event": "receipts_failed"}))
+
+
 def run(incident_id: str, env: str | None = None, weights_path: str | None = None, db_path: str | None = None) -> dict:
     """Start a new, kept diagnosis run of `incident_id` through the agent flow and return its verdict."""
     env = env or get_settings().env_name
@@ -258,7 +277,8 @@ def run(incident_id: str, env: str | None = None, weights_path: str | None = Non
         "errors": [],
         "action_ids": [],
     }
-    build(_checkpointer(db_path)).invoke(state, _thread(env, incident_id, r.run))
+    with _receipts(env, incident_id, r.run):
+        build(_checkpointer(db_path)).invoke(state, _thread(env, incident_id, r.run))
     return causal.read_verdict(causal.open_run(get_graph(), env, incident_id, weights_path))
 
 
@@ -272,7 +292,8 @@ def resume(
     app = build(_checkpointer(db_path))
     cfg = _thread(env, incident_id, r.run)
     if app.get_state(cfg).next:
-        app.invoke(None, cfg)
+        with _receipts(env, incident_id, r.run):
+            app.invoke(None, cfg)
     return causal.read_verdict(causal.open_run(get_graph(), env, incident_id, weights_path))
 
 

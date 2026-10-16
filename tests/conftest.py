@@ -8,6 +8,8 @@ from api.ingest.seed import seed_indexes, seed_rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+pytest_plugins = ["tests.report"]  # findings.md + agent-context.md per run (phase 12)
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "live: calls the real OpenRouter (GPT-4o + Jev); needs OPENROUTER_API_KEY")

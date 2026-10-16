@@ -30,8 +30,8 @@ export function MemoryPanel({ similar, env }: { similar: S["IncidentOut"]["simil
       {similar.map((s) => (
         <li key={s.incident} className="rounded-lg border border-border bg-background/40 p-2.5">
           <div className="flex items-center gap-2">
-            <History className="size-3.5 text-primary" aria-hidden />
-            <Link href={withEnv(`/incident/${encodeURIComponent(s.incident)}`, env)} className="truncate font-mono text-xs text-primary hover:underline">
+            <History className="size-3.5 text-signal" aria-hidden />
+            <Link href={withEnv(`/incident/${encodeURIComponent(s.incident)}`, env)} className="truncate font-mono text-xs text-signal hover:underline">
               {s.incident}
             </Link>
             <span className="ml-auto font-mono text-[11px] text-muted-foreground" title="similarity (vector distance + graph overlap)">
@@ -107,6 +107,16 @@ export function ActionsPanel({
                   {a.p != null && <span className="text-muted-foreground" title="Jev: does it address the cause?">relevance {a.p.toFixed(2)}</span>}
                   {a.status === "done" && <span className="text-st-confirmed">✓ fixed it</span>}
                 </span>
+                {a.precedent && a.precedent.length > 0 && (
+                  <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                    fixed
+                    {a.precedent.map((i) => (
+                      <Link key={i} href={withEnv(`/incident/${encodeURIComponent(i)}`, env)} className="font-mono text-signal hover:underline">
+                        {i}
+                      </Link>
+                    ))}
+                  </span>
+                )}
               </span>
             </li>
           ))}
@@ -127,7 +137,7 @@ export function ActionsPanel({
         Object.entries(delivery).map(([t, d]) =>
           d.ok ? (
             d.url && (
-              <a key={t} href={d.url} target="_blank" rel="noreferrer" className="block truncate text-xs text-primary hover:underline">
+              <a key={t} href={d.url} target="_blank" rel="noreferrer" className="block truncate text-xs text-signal hover:underline">
                 {t}: {d.url}
               </a>
             )
@@ -193,8 +203,8 @@ export function ResolveDialog({
         <fieldset className="space-y-1.5">
           <legend className="mb-1 text-sm font-medium">What fixed it?</legend>
           {[...actions.map((a) => ({ id: a.id, name: a.name })), { id: "", name: "Something else / not listed" }].map((a) => (
-            <label key={a.id || "none"} className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-              <input type="radio" name="fix" className="accent-[var(--primary)]" checked={(action ?? "") === a.id} onChange={() => setAction(a.id || null)} />
+            <label key={a.id || "none"} className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm has-[:checked]:border-signal has-[:checked]:bg-signal/10">
+              <input type="radio" name="fix" className="accent-[var(--color-signal)]" checked={(action ?? "") === a.id} onChange={() => setAction(a.id || null)} />
               {a.name}
             </label>
           ))}
@@ -250,7 +260,7 @@ export function NotesBox({ incident, env, services, onChanged }: { incident: str
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Switch checked={isChange} onCheckedChange={setIsChange} aria-label="This was a change" /> a change
         </label>
-        <Button size="sm" className="ml-auto" disabled={!text.trim() || !by.trim() || busy || (isChange && !service)} onClick={submit}>
+        <Button size="sm" variant="secondary" className="ml-auto" disabled={!text.trim() || !by.trim() || busy || (isChange && !service)} onClick={submit}>
           <MessageSquarePlus className="size-3.5" /> Add
         </Button>
       </div>
