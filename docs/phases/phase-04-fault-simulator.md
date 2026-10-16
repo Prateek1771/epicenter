@@ -23,17 +23,17 @@ tests/fixtures/multi_fault.cypher  tests/fixtures/healthy.cypher
 
 ## Tasks
 
-- [ ] `load_rules(kb)`: read `Rule` nodes once per diagnosis, sorted by id; carry `rules_version`.
-- [ ] `simulate(env, cand_op, cause_kind, rules, min_p)`: self predictions (cause itself p = 1, plus `direction:self` rules); Q6 rows; per hop `p_hop = rule.p × share`, `share = min(1, call.rps / caller_total_in_rps)`; hop n treats hop n−1's symptom as the new cause; best path = max product; keep `p ≥ min_p`; onset window `[t_cause, t_cause + hops × delay_s_max]`. Output sorted by `(hops, op)`.
-- [ ] Respect `service_kind` on rules (datastore `down` rule).
-- [ ] `observed_set(incident)`: ops with an anomaly, strongest kind, earliest onset; always includes the symptom.
-- [ ] `match`: matched / missed / unexplained; `coverage`, `precision`, `order` (Spearman of hops vs onset mapped to [0, 1], 0.5 if < 3 matched); `footprint = 0.5·cov + 0.3·prec + 0.2·order`.
-- [ ] Write `Evidence {kind:'footprint', summary:'explains X of Y symptoms', value:{…}}`: `SUPPORTED_BY` if `coverage ≥ refute_below_coverage`, else `REFUTED_BY`.
-- [ ] Add `footprint` to the phase 3 feature set (weights v2). Keep v1 runnable for the ablation.
-- [ ] Second root cause: after scoring, winner's unexplained set `U`; if `|U| ≥ min_unexplained_ops` or any op in `U` has score ≥ `strong_anomaly`, run Q1 → checks → score once from the earliest-onset op in `U`; write `ROOT_CAUSE {rank:2}`. At most one extra round.
-- [ ] `no_root_cause`: no hypothesis with `coverage ≥ max_coverage` and strongest anomaly `< max_anomaly` → incident status `no_root_cause`, no `ROOT_CAUSE` edge, summary lists what was checked.
-- [ ] `what_if(env, target, kind, save)`: operation or service (service = every op, merged on max p); attach owners via `OWNED_BY`; `save` writes `Simulation -[:PREDICTS {p, hops, kind}]-> Operation`.
-- [ ] All thresholds come from `weights.json → simulator`.
+- [x] `load_rules(kb)`: read `Rule` nodes once per diagnosis, sorted by id; carry `rules_version`.
+- [x] `simulate(env, cand_op, cause_kind, rules, min_p)`: self predictions (cause itself p = 1, plus `direction:self` rules); Q6 rows; per hop `p_hop = rule.p × share`, `share = min(1, call.rps / caller_total_in_rps)`; hop n treats hop n−1's symptom as the new cause; best path = max product; keep `p ≥ min_p`; onset window `[t_cause, t_cause + hops × delay_s_max]`. Output sorted by `(hops, op)`.
+- [x] Respect `service_kind` on rules (datastore `down` rule).
+- [x] `observed_set(incident)`: ops with an anomaly, strongest kind, earliest onset; always includes the symptom.
+- [x] `match`: matched / missed / unexplained; `coverage`, `precision`, `order` (Spearman of hops vs onset mapped to [0, 1], 0.5 if < 3 matched); `footprint = 0.5·cov + 0.3·prec + 0.2·order`.
+- [x] Write `Evidence {kind:'footprint', summary:'explains X of Y symptoms', value:{…}}`: `SUPPORTED_BY` if `coverage ≥ refute_below_coverage`, else `REFUTED_BY`.
+- [x] Add `footprint` to the phase 3 feature set (weights v2). Keep v1 runnable for the ablation.
+- [x] Second root cause: after scoring, winner's unexplained set `U`; if `|U| ≥ min_unexplained_ops` or any op in `U` has score ≥ `strong_anomaly`, run Q1 → checks → score once from the earliest-onset op in `U`; write `ROOT_CAUSE {rank:2}`. At most one extra round.
+- [x] `no_root_cause`: no hypothesis with `coverage ≥ max_coverage` and strongest anomaly `< max_anomaly` → incident status `no_root_cause`, no `ROOT_CAUSE` edge, summary lists what was checked.
+- [x] `what_if(env, target, kind, save)`: operation or service (service = every op, merged on max p); attach owners via `OWNED_BY`; `save` writes `Simulation -[:PREDICTS {p, hops, kind}]-> Operation`.
+- [x] All thresholds come from `weights.json → simulator`.
 
 ## Acceptance (LLD §12)
 
@@ -60,3 +60,15 @@ tests/fixtures/multi_fault.cypher  tests/fixtures/healthy.cypher
 ## Done when
 
 Footprint evidence exists for every hypothesis, the footprint feature is in the score, the three special outcomes (second cause, `no_root_cause`, what-if) have passing tests.
+
+## Results (2026-10-16, 3 RE2-TT cases)
+
+| Case | v1 (no simulator) | v2, spec (refute < 0.2) | v2, footprint as a feature (shipped) |
+|---|---|---|---|
+| `ts-auth-service_cpu_1` | ✅ auth | ❌ false `no_root_cause` | ✅ auth |
+| `ts-auth-service_cpu_2` | ❌ seat (rank 3) | ❌ false `no_root_cause` | ❌ seat (rank 5) |
+| `ts-order-service_delay_1` | ❌ its caller (rank 2) | ✅ order-service | ✅ order-service (explains 30% vs 3%) |
+
+AC@1: 1/3 → 2/3. No spurious second causes after the independence gate. Fixtures: mini_graph → Charge (3 of 4) over the
+victim (2 of 4); multi_fault → db + cache (rank 2); healthy → `no_root_cause`. Q6 p95 < 5 ms. Three cases are a smoke
+check, not the eval: phase 10 runs all 90 and tunes `refute_below_coverage`, `min_p` and the rule `p` values.

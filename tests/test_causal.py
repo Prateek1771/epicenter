@@ -72,7 +72,7 @@ def test_mini_graph_root_cause_and_victim(graph, causal_env):
     rows = {r["op"]: r for r in causal_env.ro("run_hypotheses", inc="inc-1", run=2)}
     assert rows["payment/Charge"]["status"] == "confirmed"
     charge_ev = {(rel, kind) for rel, kind, _ in rows["payment/Charge"]["evidence"]}
-    assert charge_ev == {("SUPPORTED_BY", "propagation"), ("SUPPORTED_BY", "change")}
+    assert charge_ev == {("SUPPORTED_BY", "propagation"), ("SUPPORTED_BY", "change"), ("SUPPORTED_BY", "footprint")}
     # the loudest downstream victim is refuted by the victim rule
     assert rows["checkout/PlaceOrder"]["status"] == "refuted"
     assert ("REFUTED_BY", "victim") in {(rel, kind) for rel, kind, _ in rows["checkout/PlaceOrder"]["evidence"]}

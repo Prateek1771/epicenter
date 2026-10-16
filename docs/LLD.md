@@ -394,9 +394,9 @@ confidence = 1 / (1 + exp(−k · (score₁ − score₂)))
   "w": { "onset_earliness": 0.25, "strength": 0.20, "mechanism_fit": 0.15, "pagerank": 0.10,
          "change_match": 0.10, "footprint": 0.20 },
   "k": 8.0, "skew_s": 15, "lookback_s": 600, "max_hops": 6,
-  "simulator": { "rules_version": "2026-10-15", "min_p": 0.3, "refute_below_coverage": 0.2,
+  "simulator": { "rules_version": "2026-10-15", "min_p": 0.3, "refute_below_coverage": 0.0,
                  "no_root_cause": { "max_coverage": 0.5, "max_anomaly": 0.6 },
-                 "second_cause": { "min_unexplained_ops": 2, "strong_anomaly": 0.8 } } }
+                 "second_cause": { "min_unexplained_ops": 2, "strong_anomaly": 0.8, "min_coverage": 0.5 } } }
 ```
 v1 (before the Fault Simulator) had no `footprint` term. Both versions are kept so the ablation table can compare them.
 
@@ -465,16 +465,21 @@ def simulate(env: EnvGraph, cand_op: str, cause_kind: str, rules: list[Rule], mi
 1. Self predictions: `direction: self` rules on `cand_op` (plus the cause itself, `p = 1`).
 2. Q6 rows → for each dependent, walk its path from the candidate outwards. At each hop
    `p_hop = rule.p × share`, with `share = min(1, call.rps / caller_total_in_rps)`: the fraction of the caller's work that
-   depends on this call. The caller's incoming rps is the sum of `CALLS.rps` into it, or its own `rps` for entry points.
-3. `p = Π p_hop` along the best path (max over paths); keep `p ≥ min_p`.
-4. Expected onset window per prediction: `[t_cause, t_cause + hops × delay_s_max]`.
+   depends on this call. The caller's incoming rps is the sum of `CALLS.rps` into it. `Operation` stores no rps of its
+   own, so an **entry point** (no incoming calls) gets `share = 1`: its whole load is taken to depend on the call.
+   A rule with `service_kind` applies only when the op the cause sits on at that hop belongs to such a service.
+3. `p = Π p_hop` along the best path (max over paths and over intermediate kinds); prune below `min_p` hop by hop.
+4. Expected onset window per prediction: `[t_cause − skew_s, t_cause + Σ delay_s_max along the path]` (the same
+   clock-skew tolerance as Q2). Q6 rows and per-op traffic (`op_info`) are fetched once per diagnosis and reused by
+   the second-cause round (`search/simulate.py: Simulator`).
 
 `Prediction = {op, kind, p, hops, path, onset_window}`.
 
 ### 7.3 Observed set
 
-`O` = operations with an `Anomaly` in this incident, each with its strongest kind and earliest onset. Datastore and
-proxy operations are included; the symptom operation always is.
+`O` = operations with an `Anomaly` in this incident, each with all its kinds, its highest score and earliest onset.
+Datastore and proxy operations are included; the symptom is included when it has an anomaly (RCAEval's virtual
+`client/load` has none). An observed op is matched when **any** of its kinds is predicted on it in time.
 
 ### 7.4 Match and footprint score
 
@@ -490,7 +495,13 @@ footprint = 0.5 · coverage + 0.3 · precision + 0.2 · order
 ```
 
 Written as `Evidence {kind:'footprint', summary:'explains 6 of 7 symptoms', value:{coverage, precision, order, matched,
-missed, unexplained}}`: `SUPPORTED_BY` if `coverage ≥ 0.2`, else `REFUTED_BY` (it can't explain the incident).
+missed, unexplained, predictions, rules_version}}`, `ABOUT` the matched anomalies: `SUPPORTED_BY` if
+`coverage ≥ refute_below_coverage`, else `REFUTED_BY`.
+
+**`refute_below_coverage` is 0 (footprint is a scoring feature, not a refuter).** The design started at 0.2. On real
+RE2-TT incidents the observed set holds 14–16 anomalies, most of them unrelated noise on other services, so even the
+true cause explains only ~7% and every hypothesis was refuted → false `no_root_cause` on 2 of 3 cases. As a feature
+it took AC@1 from 1/3 (weights v1) to 2/3, and all fixtures still pass. Phase 10 tunes the threshold on a dev split.
 
 **Why it beats symptom anchoring:** a downstream victim (e.g. `frontend`) predicts a footprint of its own callers only, and
 the deeper anomalies (`cart`, `valkey`) land in `unexplained`, so coverage stays low. The true cause predicts the whole
@@ -499,14 +510,19 @@ chain.
 ### 7.5 Second root cause (multi-fault)
 
 After the skeptic, take the winner's `unexplained` set `U`. If `|U| ≥ 2`, or any op in `U` has anomaly score ≥ 0.8,
-run triage once more seeded from the earliest-onset op in `U` (Q1 from that op), investigate, score, and write a second
-`(Incident)-[:ROOT_CAUSE {rank: 2}]->(Hypothesis)`. One extra round at most.
+run triage once more seeded from the earliest-onset op in `U` (Q1 from that op), investigate, score (footprint against
+`U` only), and write a second `(Incident)-[:ROOT_CAUSE {rank: 2}]->(Hypothesis)`. One extra round at most; its
+hypotheses carry `round: 2` in the same run. The second cause must be an **independent** fault: on a different service
+than the winner, and explaining at least `second_cause.min_coverage` (0.5) of `U`. Without that gate, scattered noise
+(almost always ≥ 2 unexplained anomalies on real data) produced a "second cause" on the winner's own service.
 
 ### 7.6 Typed negative answer: `no_root_cause`
 
 If **no** hypothesis has `coverage ≥ 0.5` **and** the strongest anomaly score in the incident is `< 0.6`, the incident ends
 in status `no_root_cause` with summary "Nothing in the graph explains this alert", listing what was checked. No root cause
-is invented, and the responder proposes "check the alert threshold" from the runbook instead.
+is invented, and the responder proposes "check the alert threshold" from the runbook instead. The same status is used
+when every hypothesis is refuted (nothing left to name). Weights without a `footprint` weight (v1) skip the simulator,
+the second round and the coverage test, which keeps the ablation clean.
 
 ### 7.7 What-if mode (no incident)
 
@@ -625,7 +641,7 @@ sends `Last-Event-ID` and gets the replay from the graph.
 | Query unit tests | `tests/fixtures/mini_graph.cypher` (8 ops, a known root cause) loaded into `env:test`; assert Q1–Q5 rows |
 | Rule tests | victim rule, onset-order rule, change lookback: table-driven with hand-made rows |
 | Slow burn | synthetic memory series climbing linearly for 3 h before the alert: short pass alone → **missed**; with the slow-burn pass → detected, onset within 5 min of the climb's start |
-| Fault Simulator | `mini_graph` with a known cause: the true cause's footprint has coverage ≥ 0.8 and beats the loudest victim; hand-computed `p` for a 2-hop path matches |
+| Fault Simulator | `mini_graph` with a known cause: the true cause explains 3 of 4 symptoms (the 4th, `cart/GetCart`, is deliberately unrelated) and beats the loudest victim (2 of 4); hand-computed `p` for a 2-hop path with a partial traffic share matches |
 | Multi-fault | fixture with two independent faults → second `ROOT_CAUSE {rank: 2}` |
 | Healthy baseline | fixture with weak, unrelated anomalies → status `no_root_cause`, no `ROOT_CAUSE` edge |
 | What-if | `POST /simulate` on `redis` returns the same ops as reverse `CALLS*` with traffic, sorted, with owners |

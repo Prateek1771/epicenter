@@ -162,7 +162,7 @@ QUERIES: dict[str, str] = {
         MATCH (i:Incident {id: $inc})
         UNWIND $rows AS r
         MATCH (o:Operation {id: r.op})
-        CREATE (h:Hypothesis {id: r.id, run: $run, ingest: $ingest, status: 'open', hops: r.hops})
+        CREATE (h:Hypothesis {id: r.id, run: $run, ingest: $ingest, round: r.round, status: 'open', hops: r.hops})
         SET h.onset = r.onset
         CREATE (i)-[:HAS_HYPOTHESIS]->(h)
         CREATE (h)-[:BLAMES]->(o)""",
@@ -199,7 +199,7 @@ QUERIES: dict[str, str] = {
         MATCH (h:Hypothesis {id: $hyp})
         CREATE (i)-[:ROOT_CAUSE {rank: $rank, run: $run, ingest: $ingest, confidence: $confidence, weights_version: $wv,
                                  ts: $ts}]->(h)
-        SET i.status = 'diagnosed', i.confidence = $confidence, i.weights_version = $wv""",
+        SET i.status = 'diagnosed', i.confidence = $confidence, i.weights_version = $wv, i.summary = null""",
     "run_hypotheses": """
         MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
         WHERE h.run = $run
@@ -209,6 +209,68 @@ QUERIES: dict[str, str] = {
                h.score_parts AS score_parts,
                [x IN collect([type(r), e.kind, e.summary]) WHERE x[0] IS NOT NULL] AS evidence
         ORDER BY id""",
+    # --- Fault Simulator (phase 4, LLD §7) ---
+    "rules": """
+        MATCH (r:Rule)
+        RETURN r.id AS id, r.cause_kinds AS cause_kinds, r.symptom_kind AS symptom_kind, r.direction AS direction,
+               r.p AS p, r.delay_s_max AS delay_s_max, r.service_kind AS service_kind, r.version AS version
+        ORDER BY id""",
+    "op_info": """
+        UNWIND $ops AS x
+        MATCH (s:Service)-[:HAS_OP]->(o:Operation {id: x})
+        OPTIONAL MATCH ()-[c:CALLS]->(o)
+        RETURN o.id AS op, s.kind AS service_kind, sum(c.rps) AS in_rps
+        ORDER BY op""",
+    "observed": """
+        MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation)
+        RETURN o.id AS op, collect(DISTINCT a.kind) AS kinds, min(a.onset) AS onset, max(a.score) AS score,
+               collect(a.id) AS anomalies
+        ORDER BY op""",
+    "service_ops": "MATCH (:Service {name: $svc})-[:HAS_OP]->(o:Operation) RETURN o.id AS op ORDER BY op",
+    "op_owners": """
+        UNWIND $ops AS x
+        MATCH (s:Service)-[:HAS_OP]->(o:Operation {id: x})
+        OPTIONAL MATCH (s)-[:OWNED_BY]->(t:Team)
+        RETURN o.id AS op, s.name AS service, t.name AS team
+        ORDER BY op""",
+    "save_simulation": """
+        CREATE (sim:Simulation {id: $id, target: $target, kind: $kind, ts: $ts, rules_version: $rules_version})
+        WITH sim
+        UNWIND $rows AS r
+        MATCH (o:Operation {id: r.op})
+        CREATE (sim)-[:PREDICTS {p: r.p, hops: r.hops, kind: r.kind}]->(o)""",
+    "simulation_predictions": """
+        MATCH (:Simulation {id: $id})-[p:PREDICTS]->(o:Operation)
+        RETURN o.id AS op, p.kind AS kind, p.p AS p, p.hops AS hops
+        ORDER BY hops, op, kind""",
+    "incident_no_root_cause": """
+        MATCH (i:Incident {id: $inc})
+        SET i.status = 'no_root_cause', i.summary = $summary, i.confidence = null, i.weights_version = $wv""",
+    "second_cause": """
+        MATCH (i:Incident {id: $inc})
+        MATCH (h:Hypothesis {id: $hyp})
+        CREATE (i)-[:ROOT_CAUSE {rank: 2, run: $run, ingest: $ingest, confidence: $confidence, weights_version: $wv,
+                                 ts: $ts}]->(h)""",
+    "footprint_values": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
+        WHERE h.run = $run AND e.kind = 'footprint'
+        MATCH (h)-[:BLAMES]->(o:Operation)
+        RETURN h.id AS hypothesis, o.id AS op, e.value AS value
+        ORDER BY hypothesis""",
+    "run_rounds": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)
+        WHERE h.run = $run
+        RETURN DISTINCT h.round AS round
+        ORDER BY round""",
+    "incident": """
+        MATCH (i:Incident {id: $inc})
+        RETURN i.status AS status, i.summary AS summary, i.run AS run, i.ingest AS ingest,
+               i.confidence AS confidence""",
+    "root_causes": """
+        MATCH (i:Incident {id: $inc})-[r:ROOT_CAUSE]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE r.run = i.run
+        RETURN r.rank AS rank, o.id AS op, h.id AS hypothesis, r.confidence AS confidence
+        ORDER BY rank""",
     # Anomalies one run's evidence cites; for an older run they may be retired ("<inc>@i<k>") ingests
     "run_evidence_about": """
         MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)-[:SUPPORTED_BY|REFUTED_BY]->(e:Evidence)
