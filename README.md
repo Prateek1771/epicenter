@@ -124,7 +124,7 @@ If something fails, fix the query in [LLD §2](docs/LLD.md#2-graphpy) before bui
 
 **Fastest (no extra containers): RCAEval replay**
 ```bash
-docker compose exec api python -m api.ingest.rcaeval --case re2-tt/<case-id> --env rcaeval-tt
+docker compose exec api python -m api.ingest.rcaeval --case re2tt_ts-auth-service_cpu_2 --env rcaeval-tt --download
 ```
 Then open http://localhost:3001 and the new incident.
 

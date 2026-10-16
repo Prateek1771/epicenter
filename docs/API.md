@@ -195,7 +195,7 @@ incident can be compared with this prediction.
 ```json
 { "items": [ { "env": "flip-commerce", "id": "mongo-primary-down", "title": "Kill the Mongo primary" },
              { "env": "astronomy-shop", "id": "paymentFailure", "title": "flagd: paymentFailure" },
-             { "env": "rcaeval-tt", "id": "re2-tt/ts-auth-service_cpu_1", "title": "RCAEval case" } ] }
+             { "env": "rcaeval-tt", "id": "re2tt_ts-auth-service_cpu_1", "title": "RCAEval case" } ] }
 ```
 
 ### `POST /runs`

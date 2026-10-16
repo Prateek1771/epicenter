@@ -59,7 +59,7 @@ examples/flip-commerce/      collector.yaml, run scripts (auto-instrumented star
 - OTel Demo needs ~6 GB RAM; record a backup video ([ARCHITECTURE §7](../ARCHITECTURE.md#7-risks-and-open-questions)).
 - Port 8080 is shared by both environments: one at a time.
 - flip-commerce is shallow (~2 hops); use it for the "real failure" story, not multi-hop.
-- **Q-d:** add `api/runs.py` and `api/ingest/topology.py` to [LLD §1](../LLD.md#1-package-layout).
+- **Q-d:** add `api/runs.py` (and the 30 s roll-up loop over `write.write_topology`) to [LLD §1](../LLD.md#1-package-layout).
 
 ## Done when
 

@@ -121,10 +121,17 @@ both run together. Stop the OTel Demo first (it also wants 8080).
 ## 3. RCAEval replay (offline, measured)
 
 ```bash
-docker compose exec api python -m api.ingest.rcaeval --case re2-tt/<case-id> --env rcaeval-tt
+docker compose exec api python -m api.ingest.rcaeval --case re2tt_ts-auth-service_cpu_2 --env rcaeval-tt --download
 docker compose exec api python -m api.eval --suite re2 --system tt
 ```
 
+- Cases come from Hugging Face `phamquiluan/RCAEval` (Parquet layout, ~25 MB each); `--download` fetches one into
+  `RCAEVAL_DIR` (`./data/rcaeval`, git-ignored). Names are `re2tt_<service>_<fault>_<n>`; faults are cpu, mem, disk,
+  delay, loss, socket.
+- RCAEval has no alert, so the symptom is the root operation (a span with no `parentSpanID`; orphans whose parent is
+  missing from the data don't count) with the strongest
+  latency/errors/down anomaly, else the busiest root operation. The incident id is `rc-<case>`.
+- Replaying a case again replaces that incident's anomalies, so a replay is idempotent. One case takes ~15 s.
 - Uses the same writers and the same causal search; only the adapter differs.
 - `inject_time.txt` is used as the alert time only, never as a `Change`, so the answer can't leak into the graph.
 - Report AC@1 / AC@3 and the ablations whatever they are, including losses.

@@ -40,6 +40,47 @@ QUERIES: dict[str, str] = {
         MATCH (s:Service {name: $service})
         MERGE (c:Change {id: $id}) ON CREATE SET c.type = $type, c.ts = $ts, c.summary = $summary, c.ref = $ref
         MERGE (c)-[:CHANGED {ts: $ts}]->(s)""",
+    # Batched forms for ingest (one round trip per tick; rows sorted by the caller)
+    "U1_batch": """
+        UNWIND $rows AS r
+        MERGE (cs:Service {name: r.caller_svc}) ON CREATE SET cs.kind = 'app'
+        MERGE (co:Operation {id: r.caller_op}) ON CREATE SET co.name = r.caller_name
+        MERGE (cs)-[:HAS_OP]->(co)
+        MERGE (ss:Service {name: r.callee_svc}) ON CREATE SET ss.kind = r.callee_kind
+        MERGE (so:Operation {id: r.callee_op}) ON CREATE SET so.name = r.callee_name
+        MERGE (ss)-[:HAS_OP]->(so)
+        MERGE (co)-[c:CALLS]->(so)
+        SET c.rps = r.rps, c.p95_ms = r.p95_ms, c.err_rate = r.err_rate, c.last_seen = $ts,
+            co.last_seen = $ts, so.last_seen = $ts, cs.last_seen = $ts, ss.last_seen = $ts""",
+    "U2_batch": """
+        UNWIND $rows AS r
+        MATCH (o:Operation {id: r.op})
+        CREATE (a:Anomaly {id: r.id, incident: $incident, kind: r.kind, onset: r.onset, score: r.score,
+                           detector: r.detector})-[:ON]->(o)
+        SET a.self_ratio = r.self_ratio, a.child_ratio = r.child_ratio, a.ref = r.ref""",
+    # Operations seen only in signals (no caller→callee pair yet), so U2's MATCH never silently drops an anomaly
+    "U6_ops": """
+        UNWIND $rows AS r
+        MERGE (s:Service {name: r.svc}) ON CREATE SET s.kind = 'app'
+        MERGE (o:Operation {id: r.op}) ON CREATE SET o.name = r.name
+        MERGE (s)-[:HAS_OP]->(o)""",
+    "U4_open_incident": """
+        MERGE (i:Incident {id: $id})
+        SET i.status = 'open', i.symptom = $symptom, i.opened_at = $opened_at,
+            i.weights_version = $weights_version, i.gaps = $gaps""",
+    "U5_signal": """
+        UNWIND $rows AS r
+        MERGE (s:Signal {id: r.signal}) ON CREATE SET s.type = 'log_template', s.text = r.text
+        WITH s, r
+        MATCH (a:Anomaly {incident: $incident, id: r.anomaly})
+        MERGE (a)-[:IN_SIGNAL]->(s)""",
+    "clear_incident_anomalies": "MATCH (a:Anomaly {incident: $inc}) DETACH DELETE a",
+    "incident_anomalies": """
+        MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation)
+        RETURN a.id AS id, o.id AS op, a.kind AS kind, a.onset AS onset, a.score AS score, a.detector AS detector,
+               a.self_ratio AS self_ratio, a.child_ratio AS child_ratio, a.ref AS ref
+        ORDER BY id""",
+    "label_counts": "MATCH (n) RETURN labels(n)[0] AS label, count(*) AS n ORDER BY label",
     # --- Causal search (LLD §2.2) ---
     "Q1": """
         MATCH p = (sym:Operation {id: $symptom})-[:CALLS*1..6]->(cand:Operation)
@@ -141,6 +182,7 @@ QUERIES: dict[str, str] = {
     "idx_hypothesis": "CREATE INDEX FOR (h:Hypothesis) ON (h.id)",
     "idx_person": "CREATE INDEX FOR (p:Person) ON (p.handle)",
     "idx_simulation": "CREATE INDEX FOR (s:Simulation) ON (s.id)",
+    "idx_signal": "CREATE INDEX FOR (s:Signal) ON (s.id)",
     "idx_signal_text": "CALL db.idx.fulltext.createNodeIndex('Signal', 'text')",
     "idx_incident_signature": "CREATE VECTOR INDEX FOR (i:Incident) ON (i.signature) "
     "OPTIONS {dimension: 64, similarityFunction: 'cosine'}",

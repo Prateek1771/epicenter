@@ -216,6 +216,7 @@ CREATE INDEX FOR (p:Person) ON (p.handle)
 CREATE INDEX FOR (s:Simulation) ON (s.id)
 // on kb:propagation
 CREATE INDEX FOR (r:Rule) ON (r.id)
+CREATE INDEX FOR (s:Signal) ON (s.id)
 CALL db.idx.fulltext.createNodeIndex('Signal', 'text')
 CREATE VECTOR INDEX FOR (i:Incident) ON (i.signature) OPTIONS {dimension: 64, similarityFunction: 'cosine'}
 ```

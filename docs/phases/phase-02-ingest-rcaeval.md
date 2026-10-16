@@ -21,25 +21,26 @@ api/ingest/base.py        Adapter Protocol + CallAgg, Series, LogLine, ChangeEve
 api/ingest/rcaeval.py     file adapter + `python -m api.ingest.rcaeval --case … --env …`
 api/ingest/logs.py        Drain3 template mining (shared by all adapters)
 api/ingest/detect.py      robust z, PELT onset, self/child ratios, log anomalies, slow burn
-api/ingest/topology.py    (or inside base) 30 s roll-up loop: adapter.calls() → U1
+api/ingest/write.py       the only ingest → graph writer; write_topology = one roll-up tick (U1 batched).
+                          The periodic 30 s loop for live sources lands in phase 9.
 tests/test_detect.py
 ```
 
 ## Tasks
 
-- [ ] `Adapter` protocol with `calls / series / logs / changes` exactly as LLD §3.1. Adapters return plain dataclasses; they never import `graph.py`.
-- [ ] Writer functions (U1 per `CallAgg`, U2 per anomaly, U3 per change) live in one place and take dataclasses. All adapters share them.
-- [ ] Operation ids `<service>/<operation>`; datastores → `Service {kind:'datastore'}` from `db.system` ([LLD §2.1](../LLD.md#21-upserts-ingest)).
-- [ ] RCAEval adapter: `traces.csv` → `CallAgg`, metrics parquet → `Series`, `logs.csv` → `LogLine`. `inject_time.txt` is the **alert time only**, never a `Change` (no answer leak).
-- [ ] Snapshot window: baseline `[t − BASELINE_S − 120 s, t − 120 s]`, window `[t − 120 s, t + WINDOW_AFTER_S]` from config.
-- [ ] Robust z (median / MAD, ε), anomaly if `max |z| ≥ 4`; onset = first PELT change point (`ruptures`, `model="rbf"`) in the window, fallback = first `|z| ≥ 4`.
-- [ ] Self vs child time from spans → `self_ratio`, `child_ratio` on latency anomalies.
-- [ ] Drain3 per service: `new_template` and `log_burst` (ratio ≥ 5 and ≥ 10 occurrences). Write `Signal` nodes and `IN_SIGNAL` edges.
-- [ ] `down`: had traffic in baseline, no spans and no metrics in the window.
-- [ ] Slow-burn pass for `SLOW_BURN_KINDS`: 1-min series over `SLOW_BURN_LOOKBACK_S`, Mann-Kendall p < 0.01 + Theil-Sen, ≥ 1.5× or > 80% of limit, PELT onset; merge with a short-pass anomaly on the same op+kind (earlier onset, higher score).
-- [ ] Sort every input by key before processing; anomaly ids `an-<incident>-<n>` assigned in sorted order (N3).
-- [ ] Score normalized to 0..1 (document the mapping from z in `detect.py`).
-- [ ] Unavailable source → append to `Incident.gaps`, keep going ([HLD §7](../HLD.md#7-failure-modes)).
+- [x] `Adapter` protocol with `calls / series / logs / changes` exactly as LLD §3.1. Adapters return plain dataclasses; they never import `graph.py`.
+- [x] Writer functions (U1 per `CallAgg`, U2 per anomaly, U3 per change) live in one place and take dataclasses. All adapters share them.
+- [x] Operation ids `<service>/<operation>`; datastores → `Service {kind:'datastore'}` from `db.system` ([LLD §2.1](../LLD.md#21-upserts-ingest)).
+- [x] RCAEval adapter: `traces.csv` → `CallAgg`, metrics parquet → `Series`, `logs.csv` → `LogLine`. `inject_time.txt` is the **alert time only**, never a `Change` (no answer leak).
+- [x] Snapshot window: baseline `[t − BASELINE_S − 120 s, t − 120 s]`, window `[t − 120 s, t + WINDOW_AFTER_S]` from config.
+- [x] Robust z (median / MAD, ε), anomaly if `max |z| ≥ 4`; onset = first PELT change point (`ruptures`, `model="rbf"`) in the window, fallback = first `|z| ≥ 4`.
+- [x] Self vs child time from spans → `self_ratio`, `child_ratio` on latency anomalies.
+- [x] Drain3 per service: `new_template` and `log_burst` (ratio ≥ 5 and ≥ 10 occurrences). Write `Signal` nodes and `IN_SIGNAL` edges.
+- [x] `down`: had traffic in baseline, no spans and no metrics in the window.
+- [x] Slow-burn pass for `SLOW_BURN_KINDS`: 1-min series over `SLOW_BURN_LOOKBACK_S`, Mann-Kendall p < 0.01 + Theil-Sen, ≥ 1.5× or > 80% of limit, PELT onset; merge with a short-pass anomaly on the same op+kind (earlier onset, higher score).
+- [x] Sort every input by key before processing; anomaly ids `an-<incident>-<n>` assigned in sorted order (N3).
+- [x] Score normalized to 0..1 (document the mapping from z in `detect.py`).
+- [x] Unavailable source → append to `Incident.gaps`, keep going ([HLD §7](../HLD.md#7-failure-modes)).
 
 ## Acceptance
 
@@ -65,8 +66,9 @@ tests/test_detect.py
 ## Risks / open questions
 
 - RCAEval file formats differ between RE1/RE2 and systems; pin the dataset version and write the column mapping at the top of `rcaeval.py`.
-- PELT penalty value isn't specified; pick on a few cases, put it in `weights.json`-style config, freeze in phase 10.
+- ~~PELT penalty~~: `weights.json → detect.pelt_pen` (10), with `sustain` 3 and `eps_rel` 0.1 picked on one case
+  (`re2tt_ts-auth-service_cpu_2`); phase 10 tunes them on a dev split and freezes them.
 
 ## Done when
 
-`python -m api.ingest.rcaeval --case re2-tt/<id> --env rcaeval-tt` fills the graph deterministically and the detector tests pass.
+`python -m api.ingest.rcaeval --case re2tt_<service>_<fault>_<n> --env rcaeval-tt --download` fills the graph deterministically and the detector tests pass.

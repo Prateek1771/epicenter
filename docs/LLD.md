@@ -23,7 +23,8 @@ graph-hacks/
       logs.py             # Drain3 over log lines (OpenSearch, winston JSON, nginx access)
       changes.py          # flagd events, git log, docker events, manual changes
       rcaeval.py          # RCAEval file adapter
-      detect.py           # robust z, PELT onset, self/child time → Anomaly
+      detect.py           # robust z, PELT onset, self/child time, slow burn → AnomalyRow (pure)
+      write.py            # the only ingest → graph writer (U1–U5, batched)
       seed.py             # indexes, owners.yaml, runbooks.yaml
     search/
       causal.py           # hypotheses from Q1, checks Q2/Q3, projection + Q4
@@ -212,32 +213,43 @@ ORDER BY hops, op
 ### 3.1 Adapter protocol
 
 ```python
-class Adapter(Protocol):
+class Adapter(Protocol):           # times are epoch seconds (int), like the graph
     env: str
-    def calls(self, since: datetime, until: datetime) -> Iterable[CallAgg]        # aggregated per (caller_op, callee_op)
-    def series(self, start: datetime, end: datetime) -> Iterable[Series]          # (op_or_pod, metric, kind, points)
-    def logs(self, start: datetime, end: datetime) -> Iterable[LogLine]           # (service, ts, level, text)
-    def changes(self, since: datetime) -> Iterable[ChangeEvent]
+    def calls(self, since: int, until: int) -> Iterable[CallAgg]        # aggregated per (caller_op, callee_op)
+    def series(self, start: int, end: int) -> Iterable[Series]          # (op, metric, kind, ts[], values[]); kind 'aux'
+                                                                        # = helper series: count, self_ms, child_ms
+    def logs(self, start: int, end: int) -> Iterable[LogLine]           # (service, ts, level, text)
+    def changes(self, since: int) -> Iterable[ChangeEvent]
 ```
+Adapters return plain dataclasses (`api/ingest/base.py`) and never import `graph.py`; `api/ingest/write.py` is the
+only ingest code that writes (U1–U6, batched with `UNWIND` in chunks of 500). `U6_ops` upserts every operation an
+anomaly points at before U2 runs, so an anomaly on an operation with no call pair yet is never silently dropped.
 
 | Adapter | calls | series | logs | changes |
 |---|---|---|---|---|
 | `otel` (OTel Demo) | Jaeger `/api/traces` | Prometheus `query_range` | OpenSearch | flagd flag changes |
 | `otel` (flip-commerce) | OTel Collector file exporter (JSON lines) | span-derived latency/error series; k6 summary for load | winston JSON + nginx access log | `examples/flip-commerce/faults.py` journal |
-| `rcaeval` | `traces.csv` | `metrics` parquet | `logs.csv` | `inject_time.txt` as a marker only (not a `Change`, so it can't leak the answer) |
+| `rcaeval` | `traces.parquet` (span parent joins → pairs over the baseline) | span-derived per-op latency p95 / error rate / self / child in 5 s buckets, plus `metrics.parquet` (per **service**, averaged to 5 s, attached to the service's busiest inbound op; `ts-*-mongo` have no traced ops and are skipped) | `logs.parquet` (`timestamp, container_name, message`; missing in a few cases → `Incident.gaps`) | none: `inject_time.txt` is the alert time only (not a `Change`, so it can't leak the answer) |
 
 ### 3.2 Detectors (`detect.py`)
 
 - **Baseline:** `[t_alert - 10 min, t_alert - 2 min]`. **Window:** `[t_alert - 2 min, t_alert + 5 min]`.
-- **Robust z:** `z = (x - median_base) / (1.4826 · MAD_base + ε)`. Anomaly if `max |z| ≥ 4` in the window.
-- **Onset:** first change point from `ruptures.Pelt(model="rbf").fit(x).predict(pen=…)` inside the window; fallback =
-  first sample with `|z| ≥ 4`.
+- **Robust z:** `z = (x - median_base) / (1.4826 · MAD_base + ε)`, `ε = eps_abs + eps_rel · |median_base|`. Anomaly
+  if `z ≥ 4` **upwards** (a drop in latency or CPU isn't a fault) and held for `sustain` (3) consecutive points, so one
+  noisy bucket doesn't count. On RE2-TT this cut anomalies per case from ~90 to ~20 with the injected service on top.
+- **Score:** `1 − exp(−z / 8)` (z 4 → 0.39, 8 → 0.63, 16 → 0.86); log and slow-burn detectors map a ratio onto the same curve.
+- **Onset:** the last `ruptures.Pelt(model="rbf")` change point between the window start and the first sustained
+  crossing (PELT fitted on that stretch only, it's O(n²)); fallback = the crossing itself.
+- **Parameters** (`z`, `sustain`, `eps_*`, `pelt_pen`, `bucket_s`, log and slow-burn thresholds) live in
+  `weights.json → "detect"`, so phase 10 tunes and freezes them with the weights.
 - **Self vs child time** (latency anomalies): from spans, `self = duration − Σ child durations`.
   `self_ratio = p95_self_window / p95_self_base`, `child_ratio = p95_child_window / p95_child_base`.
 - **Logs:** Drain3 templates per service; anomaly if a template is **new** in the window or its rate ratio ≥ 5 with ≥ 10
-  occurrences. Kind `new_template` or `log_burst`.
-- **Kinds:** `latency`, `errors`, `cpu`, `mem`, `saturation`, `log_burst`, `new_template`, `down` (no spans and no metrics
-  from an operation that had traffic in the baseline).
+  occurrences. Kind `new_template` (onset = first line) or `log_burst` (onset = first bucket whose count reaches 5× the
+  baseline rate, not the template's first line in the window).
+- **Kinds:** `latency`, `errors`, `cpu`, `mem`, `saturation`, `log_burst`, `new_template`, `down` (an operation that had
+  traffic in the baseline goes silent after the alert for long enough that its baseline rate would have produced
+  ≥ `down_min_base` calls in the gap; sparse operations don't count).
 
 All detectors sort inputs by key before processing so the output order is stable (N3).
 
@@ -252,7 +264,8 @@ metrics when present), a second pass runs:
 2. **Trend test:** Mann-Kendall for a monotonic increase (p < 0.01) plus the Theil-Sen slope.
 3. **Anomaly if** the trend is significant **and** either the value at `t_alert` is ≥ 1.5× the value at the start of
    the lookback, or it crosses 80% of a known limit (e.g. `container_spec_memory_limit_bytes`).
-4. **Onset** = first change point from PELT on the 1-minute series, i.e. when the climb started, not the alert time.
+4. **Onset** = hinge fit (the split that best fits "flat, then linear"), i.e. when the climb started, not the alert
+   time. PELT's rbf cost places the start of a gentle ramp tens of minutes late, so it isn't used here.
 5. Written as `Anomaly {…, detector: 'slow_burn'}`; the existing pass writes `detector: 'short'`. If both fire on the
    same operation and kind, keep one node with the earlier onset and the higher score.
 

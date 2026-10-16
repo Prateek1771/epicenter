@@ -37,6 +37,8 @@ services:
       FALKORDB_MCP_URL: http://falkordb-mcp:8080/mcp
       OPENCONNECTOR_URL: http://open-connector:3000
     extra_hosts: ["host.docker.internal:host-gateway"]   # reach example environments on the host
+    volumes:
+      - ./data:/app/data                                  # RCAEVAL_DIR=./data/rcaeval (git-ignored)
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
       interval: 10s

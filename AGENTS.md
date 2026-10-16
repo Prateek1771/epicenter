@@ -54,7 +54,7 @@ cp .env.example .env                                   # fill FALKORDB_PASSWORD,
 docker compose up -d                                   # falkordb, falkordb-mcp, api, web, open-connector
 docker compose exec api python -m api.smoke_falkordb   # FalkorDB feature check on the pinned tag
 docker compose exec api pytest                         # tests (FalkorDB must be up)
-docker compose exec api python -m api.ingest.rcaeval --case re2-tt/<case-id> --env rcaeval-tt
+docker compose exec api python -m api.ingest.rcaeval --case re2tt_ts-auth-service_cpu_2 --env rcaeval-tt --download
 docker compose exec api python -m api.eval --suite re2 --system tt
 ```
 

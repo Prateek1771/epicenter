@@ -23,6 +23,7 @@ ENV_INDEXES = [
     "idx_hypothesis",
     "idx_person",
     "idx_simulation",
+    "idx_signal",
     "idx_signal_text",
     "idx_incident_signature",
 ]
