@@ -1,0 +1,20 @@
+# Prompt evals for the narrator (GPT-4o) + jev_gate (Jev), run by tests/test_prompt_evals.py against the live model.
+# Opt-in only (EPICENTER_LIVE=1 and OPENROUTER_API_KEY): they cost money and depend on a remote model.
+# Each case diagnoses a fixture deterministically, then checks the explanation against these expectations.
+cases:
+  - name: mini_graph flag change
+    fixture: mini_graph.cypher
+    incident: inc-1
+    expect:
+      source: llm
+      min_claims: 2
+      sections_present: [what, why]
+      mention_any: {what: ["payment/Charge"], why: ["flag", "paymentFailure", "ch-1"]}
+      forbid: ["restart", "rollback", "I recommend", "you should"]   # no remediation advice in the explanation
+  - name: healthy baseline (no root cause)
+    fixture: healthy.cypher
+    incident: inc-h
+    expect:
+      min_claims: 1
+      mention_any: {what: ["nothing", "Nothing", "no root cause", "not explain", "doesn't explain"]}
+      forbid: ["is the root cause"]

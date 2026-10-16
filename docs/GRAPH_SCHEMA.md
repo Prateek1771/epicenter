@@ -42,7 +42,8 @@ flowchart LR
     I -->|HAS_EXPLANATION| X[Explanation]
     I -->|HAS_DECISION| D[Decision]
     I -->|SIMILAR_TO| I
-    I -->|RESOLVED_BY| AC[Action]
+    I -->|HAS_ACTION| AC[Action]
+    I -->|RESOLVED_BY| AC
     AC -->|FROM| RB[Runbook]
     RB -->|FOR| S
     S -->|OWNED_BY| T[Team]
@@ -123,6 +124,7 @@ Types: `str`, `int`, `float`, `bool`, `ts` (epoch seconds, `int`), `list<…>`, 
 | `gaps` | list<str> | | sources that were unavailable |
 | `summary` | str | | set for `no_root_cause`: what was checked and why nothing explains the alert |
 | `resolved_at` | ts | when resolved | `POST /resolve` |
+| `delivery` | str (JSON) | after `POST /deliver` | per target: `{ok, url, error, message, ts, run}` |
 
 **`Hypothesis`**: key `id` (`<incident>:r<run>:h-<n>`, e.g. `inc-1:r2:h-3`; the API shows `h-3`)
 | Property | Type | Req | Notes |
@@ -150,13 +152,17 @@ the API shows `E3.1`; the skeptic's is `E<n>.s`). Incidents share the env graph,
 | `value` | str (JSON) | | numbers behind it (onsets, ratios; for `footprint`: coverage, precision, order, matched, missed, unexplained) |
 | `ref` | str | | source pointer |
 
-**`Explanation`**: `claims` str (JSON: `[{section, text, cites, support_p}]`) · `dropped` int · `verified` bool · `ai_calls` str (JSON: model, tokens, ms)
+**`Explanation`**: key `id` (`<incident>:r<run>:X`, one per run) · `run` int · `claims` str (JSON: `[{section, text, cites,
+support_p, status}]`, status `verified` · `unverified` · `template`) · `dropped` int · `verified` bool · `source`
+(`llm` · `template`) · `ai_calls` str (JSON: agent, model, tokens, cost, ms)
 **`Decision`**: key `id` (`<incident>:d-<n>`; the API shows `d-<n>`) · `by` str · `text` str · `ts` ts. Human notes
 during an incident (`POST /notes`); a note's optional change is a `Change {id: 'chg-manual-<incident>-<n>'}`.
 **`Simulation`**: key `id` · `target` str (operation or service) · `kind` str · `ts` ts · `rules_version` str. A saved
 what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)).
 
-**`Action`**: key `id` (`<incident>:a-<n>`) · `name` str · `status` (`proposed` · `done`) · `delivery` str (JSON per target)
+**`Action`**: key `id` (`<incident>:r<run>:a-<n>`; the API shows `a-<n>`) · `run` int · `name` str · `status`
+(`proposed` · `done`) · `rank` int · `chosen_by` (`history` · `runbook` · `demoted`) · `p` float (Jev relevance to the
+cause)
 
 ### Knowledge base (`kb:propagation` graph only)
 
@@ -205,7 +211,8 @@ Rule ids in `kb:propagation` come from the rule's content (`errors+down->errors:
 | `PREDICTS` | Simulation → Operation | `p` float, `hops` int, `kind` str | what-if prediction |
 | `HAS_EXPLANATION` | Incident → Explanation | | |
 | `HAS_DECISION` | Incident → Decision | | |
-| `SIMILAR_TO` | Incident → Incident | `score` float | written by the historian |
+| `SIMILAR_TO` | Incident → Incident | `score` float, `run` int | written by the historian, per diagnosis run |
+| `HAS_ACTION` | Incident → Action | | proposed by the responder |
 | `RESOLVED_BY` | Incident → Action | | |
 | `FROM` | Action → Runbook | `step` int | |
 | `FOR` | Runbook → Service | | |

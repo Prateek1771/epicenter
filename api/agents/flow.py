@@ -28,6 +28,7 @@ from langgraph.types import Send
 from api.agents import historian, investigator, narrator, responder, skeptic, triage
 from api.config import get_settings
 from api.events import publish
+from api.graph import GraphUnavailable
 from api.models import local_id
 from api.search import causal
 from api.tools.graph_tools import get_graph
@@ -163,6 +164,46 @@ def n_finalize(state: dict) -> dict:
     return {}
 
 
+# --- after the verdict (phase 7): memory, explanation, actions. None of them can change the verdict (N7). ---
+
+
+def _after_verdict(agent: str, fn: Callable[[dict], dict]) -> Callable[[dict], dict]:
+    """A failure here costs the explanation or the actions, never the verdict, which is already written and published.
+    Graph outages still propagate, so the checkpoint keeps the step resumable."""
+
+    def wrapped(state: dict) -> dict:
+        try:
+            return fn(state)
+        except GraphUnavailable:
+            raise
+        except Exception as e:
+            log.exception(json.dumps({"incident_id": state.get("incident_id"), "agent": agent, "event": "failed"}))
+            env_key = f"env:{state['env']}"
+            publish(env_key, state["incident_id"], "error", {"code": f"{agent}_failed", "message": str(e)[:300]})
+            return {"errors": [f"{agent}: {type(e).__name__}"]}
+
+    return wrapped
+
+
+def n_historian(state: dict) -> dict:
+    return historian.remember(_run(state))
+
+
+def n_narrator(state: dict) -> dict:
+    return narrator.narrate(_run(state))
+
+
+def n_jev_gate(state: dict) -> dict:
+    if not state.get("explanation_id"):
+        return {}
+    r = _run(state)
+    return narrator.jev_gate(r, state["explanation_id"], r.w["explanation"]["min_support"])
+
+
+def n_responder(state: dict) -> dict:
+    return responder.respond(_run(state))
+
+
 def build(checkpointer=None):
     g = StateGraph(IncidentState)
     g.add_node("triage", _node("triage", n_triage))
@@ -173,10 +214,10 @@ def build(checkpointer=None):
     g.add_node("investigator2", _node("investigator", n_investigator))
     g.add_node("scorer2", _node("scorer", n_scorer2))
     g.add_node("finalize", _node("finalize", n_finalize))
-    g.add_node("historian", _node("historian", historian.remember))
-    g.add_node("narrator", _node("narrator", narrator.narrate))
-    g.add_node("jev_gate", _node("jev_gate", narrator.jev_gate))
-    g.add_node("responder", _node("responder", responder.respond))
+    g.add_node("historian", _node("historian", _after_verdict("historian", n_historian)))
+    g.add_node("narrator", _node("narrator", _after_verdict("narrator", n_narrator)))
+    g.add_node("jev_gate", _node("jev_gate", _after_verdict("jev_gate", n_jev_gate)))
+    g.add_node("responder", _node("responder", _after_verdict("responder", n_responder)))
     g.add_edge(START, "triage")
     g.add_conditional_edges("triage", fan_out("hypothesis_ids", "investigator"), ["investigator", "scorer"])
     g.add_edge("investigator", "scorer")

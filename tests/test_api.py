@@ -2,40 +2,18 @@
 
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
-
 from api import models as m
 from api.config import get_settings
 from api.events import RedisStreamBus, bus
 from api.graph import GraphUnavailable
 from api.ingest.seed import seed_indexes
-from api.main import app
 from api.search.simulate import what_if
 from api.tools import graph_tools
+from tests.conftest import API_ENV as ENV
+from tests.conftest import diagnosed as _diagnosed
 
 FIXTURES = Path(__file__).parent / "fixtures"
-ENV = "test-api"
 Q = {"env": ENV}
-
-
-@pytest.fixture
-def client(graph, tmp_path, monkeypatch):
-    monkeypatch.setattr(get_settings(), "checkpoint_db", str(tmp_path / "cp.db"))
-    g = graph.env(ENV)
-    g.delete()
-    seed_indexes(g)
-    g.load_cypher(FIXTURES / "mini_graph.cypher")
-    with TestClient(app) as c:
-        c.g = g
-        yield c
-    g.delete()
-
-
-def _diagnosed(client) -> dict:
-    r = client.post("/api/v1/incidents/inc-1/diagnose", params=Q)  # inc-1 is `diagnosing` with no checkpoint
-    assert r.status_code == 202, r.text
-    return client.get("/api/v1/incidents/inc-1", params=Q).json()
 
 
 def test_incident_detail_matches_the_contract(client):
@@ -226,7 +204,7 @@ def test_graph_views(client):
 
 def test_health_reports_every_dependency(client):
     h = m.Health(**client.get("/api/v1/health").json())
-    assert h.falkordb == "ok" and h.openrouter in ("configured", "not_configured")
+    assert h.falkordb == "ok" and h.openrouter in ("ok", "down", "not_configured") and h.jev == h.openrouter
     assert h.falkordb_mcp in ("ok", "down", "not_configured") and h.openconnector in ("ok", "down", "not_configured")
 
 
@@ -250,17 +228,18 @@ def test_openapi_lists_every_endpoint(client):
 
 
 def test_resolve_with_an_action_bumps_its_runbook_step(client, tmp_path):
-    _diagnosed(client)
-    seed = tmp_path / "action.cypher"
+    seed = tmp_path / "runbook.cypher"
     seed.write_text(
-        "CREATE (:Runbook {id: 'rb-flag', kind: 'errors', steps: ['turn off the flag'], success: '{}'})"
-        "<-[:FROM {step: 0}]-(:Action {id: 'inc-1:a-1', name: 'turn off flag', status: 'proposed'})",
+        "MATCH (s:Service {name: 'payment'}) CREATE (:Runbook {id: 'rb-flag', kind: 'errors', "
+        "steps: ['Turn the flag off', 'Confirm the error rate drops'], success: '{}'})-[:FOR]->(s)",
         encoding="utf-8",
     )
     client.g.load_cypher(seed)
-    missing = client.post("/api/v1/incidents/inc-1/resolve", params=Q, json={"by": "priya", "fixed_by_action": "a-9"})
-    assert missing.status_code == 404
-    r = client.post("/api/v1/incidents/inc-1/resolve", params=Q, json={"by": "priya", "fixed_by_action": "a-1"})
+    body = _diagnosed(client)
+    step = next(a for a in body["actions"] if a["name"] == "Confirm the error rate drops")  # the responder's own action
+    missing = client.post("/api/v1/incidents/inc-1/resolve", params=Q, json={"by": "priya", "fixed_by_action": "a-99"})
+    assert missing.status_code == 404 and missing.json()["error"]["code"] == "ACTION_NOT_FOUND"
+    r = client.post("/api/v1/incidents/inc-1/resolve", params=Q, json={"by": "priya", "fixed_by_action": step["id"]})
     assert r.status_code == 200
-    [row] = client.g.ro("action", id="inc-1:a-1")
-    assert row["success"] == '{"0": 1}'
+    [row] = client.g.ro("action", id=f"inc-1:r2:{step['id']}")
+    assert (row["runbook"], row["step"], row["success"]) == ("rb-flag", 1, '{"1": 1}')

@@ -123,3 +123,4 @@ Gaps in the design docs, listed in the phase where they bite. Decide them there 
 | Q-d | `eval.py`'s RCAEval loader and the `/runs` scenario runner aren't in the [LLD §1](../LLD.md#1-package-layout) layout (`smoke_falkordb.py` added in phase 0) | 9 |
 | ~~Q-e~~ | **Closed (phase 1):** `Action` moved to the investigation labels | 1 |
 | ~~Q-f~~ | **Closed (phase 0):** build context is the repo root; `api/Dockerfile` copies `api/` to `/app/api` | 0 |
+| ~~Q-g~~ | **Closed (phase 7 follow-up):** `min_support` calibrated from labelled claims to 0.65 ([report](../calibration/jev-2026-10-16.json)); phase 10 reruns `python -m api.agents.calibrate` on the full RE2 suite | 7 |

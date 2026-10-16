@@ -24,6 +24,8 @@ data/eval/            results JSON per run (weights + rules version in the file 
 - [ ] Eval runner: for each RE2 case, fresh `env:rcaeval-<system>` graph, replay, diagnose, compare root-cause service/op with the label. AC@1, AC@3.
 - [ ] Ablations: no PageRank, no temporal rule, no mechanism rule, no footprint (weights v1 vs v2). Same cases, same seed.
 - [ ] Memory: leave-one-out precision@3 for Q5 recall.
+- [ ] Rerun the Jev cutoff calibration (`python -m api.agents.calibrate --env rcaeval-tt`) on every diagnosed RE2
+  case and update `explanation.min_support` if the recommendation moves ([phase 7](phase-07-memory-llm-delivery.md)).
 - [ ] Tune on a dev split only (grid over weights and rule `p`), evaluate on the held-out split, then **freeze** `weights.json` version and `rules_version`.
 - [ ] Measure N1 (alert → verdict < 60 s) and N2 (Q1–Q5 p95 < 200 ms) on all three environments; record in the README.
 - [ ] Determinism check on the full suite: two runs, identical results file.

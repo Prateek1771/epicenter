@@ -108,6 +108,40 @@ class NoRootCause(BaseModel):
     max_coverage: float
 
 
+class ClaimOut(BaseModel):
+    section: Literal["what", "where", "why"]
+    text: str
+    cites: list[str]
+    support_p: float | None = None  # Jev Noul P(cited evidence supports the claim)
+    status: Literal["verified", "unverified", "template", "llm"] | None = None
+
+
+class ExplanationOut(BaseModel):
+    claims: list[ClaimOut]
+    dropped: int
+    verified: bool
+    source: Literal["llm", "template"]  # template → the UI shows "AI explanation unavailable"
+    ai_calls: list[dict]
+
+
+class SimilarOut(BaseModel):
+    incident: str
+    score: float
+    cause: str | None
+    fixes: list[str]
+
+
+class ActionOut(BaseModel):
+    id: str
+    name: str
+    status: Literal["proposed", "done"]
+    rank: int
+    chosen_by: Literal["history", "runbook", "demoted"]
+    # p: Jev relevance (does the action address the cause the evidence shows?)
+    p: float | None
+    runbook: str | None
+
+
 class IncidentOut(BaseModel):
     id: str
     env: str
@@ -120,9 +154,10 @@ class IncidentOut(BaseModel):
     verdict: Verdict | None
     no_root_cause: NoRootCause | None = None
     hypotheses: list[HypothesisRef]
-    explanation: dict | None = None  # narrator, phase 7
-    similar: list[dict] = []  # historian, phase 7
-    actions: list[dict] = []  # responder, phase 7
+    explanation: ExplanationOut | None = None
+    similar: list[SimilarOut] = []
+    actions: list[ActionOut] = []
+    delivery: dict | None = None  # per target, from POST /deliver
 
 
 class Accepted(BaseModel):
@@ -178,6 +213,40 @@ class ResolveIn(BaseModel):
 
 class ResolveOut(BaseModel):
     status: Literal["resolved"]
+
+
+class DeliverIn(BaseModel):
+    targets: list[Literal["slack", "linear"]] = Field(min_length=1)
+    slack_channel: str | None = None  # Slack channel id; default SLACK_CHANNEL
+
+
+class DeliverResult(BaseModel):
+    target: Literal["slack", "linear"]
+    ok: bool
+    url: str | None = None
+    error: Literal["UPSTREAM_ERROR"] | None = None
+    message: str | None = None
+
+
+class DeliverOut(BaseModel):
+    results: list[DeliverResult]
+
+
+class AskIn(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    incident_id: str | None = None
+
+
+class ToolUse(BaseModel):
+    tool: str
+    args: dict
+
+
+class AskOut(BaseModel):
+    answer: str
+    path: list[str]
+    tools_used: list[ToolUse]
+    cypher: str | None  # set when the answer came from the read-only falkordb-mcp fallback
 
 
 # --- graph views ---
@@ -254,5 +323,6 @@ class Health(BaseModel):
     falkordb: str
     falkordb_mcp: str
     openrouter: str
+    jev: str
     openconnector: str
     query_ms: dict[str, dict[str, float]]

@@ -284,7 +284,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 | N3 determinism | Deterministic detectors, fixed weights, tie-break on id, sorted iteration; LLM output never read by the scorer |
 | N4 production safety | Adapters use read-only APIs; responder actions are posted as proposals |
 | N5 laptop footprint | FalkorDB < 1 GB; one API process; OTel Demo is the only heavy part and is optional |
-| N6 explainability | `Explanation.cites` must reference `Evidence` ids; Jev gate drops claims under 0.7 |
+| N6 explainability | `Explanation.cites` must reference `Evidence` ids; Jev gate drops claims under the calibrated `min_support` (0.65: no false claim accepted on the 2026-10-16 set, [docs/calibration/jev-2026-10-16.json](calibration/jev-2026-10-16.json)) |
 | N7 LLM-free verdict | Verdict = scorer output; narrator has a template fallback |
 | N1 (Fault Simulator cost) | One Q6 per hypothesis (≤ 50 × ~10 ms) + in-process matching; well inside the 60 s budget |
 
@@ -323,7 +323,7 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 |---|---|
 | DB access | `requirepass`; FalkorDB not exposed beyond localhost in the demo; password from `.env` |
 | Cypher injection | All queries parameterized (`$param`); agents can't send Cypher to the write path |
-| Agent overreach | LLM agents call typed tools only; free-form Cypher goes through `falkordb-mcp` with `FALKORDB_DEFAULT_READONLY=true` + `MCP_API_KEY` |
+| Agent overreach | LLM agents call typed tools only; free-form Cypher goes through `falkordb-mcp` with `FALKORDB_DEFAULT_READONLY=true` + `MCP_API_KEY`. The server also exposes `query_graph` / `delete_graph`: the ask agent's client allowlists `get_graph_schema` and `query_graph_readonly` only and pins `graphName` to the request's env |
 | Prompt injection via telemetry (log lines are untrusted text) | Log text reaches the LLM only inside evidence fields marked as data; tools are read-only; the verdict doesn't depend on the LLM |
 | Secrets | Never written to the graph; `.env` git-ignored; OpenConnector holds OAuth tokens |
 | Web | CORS restricted to the web origin; no auth for the local demo, API key header if deployed ([docs/API.md](API.md)) |
@@ -335,7 +335,8 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 
 - Structured JSON logs per agent step: `incident_id`, `agent`, `tool`, `query_id`, `duration_ms`, `rows`.
 - Query timings for Q1–Q5 are exported on `GET /api/v1/health` (last p50 / p95) so N2 is visible during the demo.
-- Every LLM call records model id, token counts and latency on the `Explanation` node (`ai_calls` property).
+- Every LLM call records model id, token counts and latency on the `Explanation` node (`ai_calls` property); Jev calls
+  add their cost.
 
 ---
 

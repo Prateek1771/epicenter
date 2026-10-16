@@ -45,6 +45,9 @@ def test_read_tools_return_typed_rows(load):
     assert [c.id for c in t.recent_changes("payment", minutes=10, until=100, env="test-tools")] == ["ch-1"]
     assert [p.handle for p in t.who_knows("payment", env="test-tools")] == ["alice", "bob", "carol"]
     assert [s.incident for s in t.similar_incidents("inc-1", env="test-tools")] == ["inc-0", "inc-00"]
+    past = t.incident_summary("inc-0", env="test-tools")
+    assert (past.status, past.causes, past.fixes) == ("resolved", ["payment/Charge"], ["disable flag paymentFailure"])
+    assert sorted(past.fixed_by) == ["bob", "carol"]
     sim = t.simulate("redis", "down", env="test-tools")
     assert sim.predictions[0].op == "redis/GET" and sim.rules_version
 
@@ -131,6 +134,7 @@ def test_every_tool_is_exposed_over_mcp():
         "why_not",
         "recent_changes",
         "similar_incidents",
+        "incident_summary",
         "who_knows",
         "simulate",
     ]

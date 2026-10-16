@@ -83,12 +83,20 @@ Query: `status`, `cause` (service name), `limit`, `cursor`.
     ]
   },
   "hypotheses": [ { "id": "h-3", "target": "cart/GetCart", "status": "refuted" } ],
-  "explanation": { "claims": [ { "section": "why", "text": "Payment requests started failing right after the paymentFailure flag was turned on.", "cites": ["E5", "E3"], "support_p": 0.94 } ],
-                   "dropped": 1, "verified": true },
+  "explanation": { "claims": [ { "section": "why", "text": "Payment requests started failing right after the paymentFailure flag was turned on.", "cites": ["E5", "E3"], "support_p": 0.94, "status": "verified" } ],
+                   "dropped": 1, "verified": true, "source": "llm",
+                   "ai_calls": [ { "agent": "narrator", "model": "openai/gpt-4o-2024-11-20", "prompt_tokens": 1575, "completion_tokens": 210, "ms": 2053 } ] },
   "similar": [ { "incident": "inc-17", "score": 0.93, "cause": "payment/Charge", "fixes": ["turn off flag paymentFailure"] } ],
-  "actions": [ { "id": "a-1", "name": "turn off flag paymentFailure", "status": "proposed", "delivery": null } ]
+  "actions": [ { "id": "a-1", "name": "turn off flag paymentFailure", "status": "proposed", "rank": 1, "chosen_by": "history", "p": null, "runbook": "rb-flag-rollback" } ],
+  "delivery": { "slack": { "ok": true, "url": "https://…", "error": null, "message": null, "ts": 1792159512, "run": 2 } }
 }
 ```
+`explanation.source` is `llm` (GPT-4o, gated by Jev) or `template` (built from the evidence: no key, model down or
+invalid output; the UI shows "AI explanation unavailable"). Claim `status`: `verified` (Jev `support_p` ≥ the
+calibrated `min_support`, 0.65),
+`unverified` (Jev down), `template` (a fact the engine always states itself). `actions[].chosen_by`: `history` (it
+fixed earlier incidents), `runbook` (runbook order), `demoted` (Jev judged it unrelated to the cause the evidence
+shows; listed last). `p` is Jev's relevance score. Action ids are per run.
 
 When nothing explains the alert, `status` is `no_root_cause`, `verdict` is `null`, and the response has
 `"no_root_cause": { "summary": "Nothing in the graph explains this alert", "checked": ["h-1", "h-2"], "max_coverage": 0.31 }`.
@@ -142,7 +150,13 @@ else `404 SERVICE_NOT_FOUND`). The change is a normal `Change` node, so the next
 ```json
 { "targets": ["slack", "linear"], "slack_channel": "#incidents" }
 ```
-`200` → `{ "results": [ { "target": "slack", "ok": true, "url": "https://…" }, { "target": "linear", "ok": false, "error": "UPSTREAM_ERROR" } ] }`
+`200` → `{ "results": [ { "target": "slack", "ok": true, "url": "https://…" }, { "target": "linear", "ok": false, "error": "UPSTREAM_ERROR", "message": "LINEAR_TEAM_ID not set" } ] }`
+Allowed on `diagnosed`, `delivered`, `no_root_cause` (else `409 INCIDENT_STATE`). Through OpenConnector
+(`slack.post_message` + `slack.get_message_permalink`, `linear.create_linear_issue`); `slack_channel` defaults to
+`SLACK_CHANNEL`, the Linear team to `LINEAR_TEAM_ID`. Each target succeeds or fails alone; the result is stored on the
+incident (`delivery`), the status becomes `delivered` once a target succeeded. The `Idempotency-Key` is
+`env:<name>:<incident>:r<run>:<target>:<payload hash>`: a retry of the same message never posts twice, and a different
+message (another env, a recreated incident, a changed card) never reuses a key.
 
 ### `POST /incidents/{id}/resolve`
 ```json
@@ -194,6 +208,8 @@ incident can be compared with this prediction.
   "cypher": null }
 ```
 `cypher` is set when the answer came from the read-only `falkordb-mcp` fallback, so the user can see the query.
+`path` only contains ids that appeared in tool results (plus relationship types). Needs the LLM: `502 UPSTREAM_ERROR`
+when OpenRouter is unavailable.
 
 ---
 
@@ -225,9 +241,9 @@ incident can be compared with this prediction.
 
 ### `GET /health`
 ```json
-{ "status": "ok", "falkordb": "ok", "falkordb_mcp": "ok", "openrouter": "ok", "openconnector": "degraded",
+{ "status": "ok", "falkordb": "ok", "falkordb_mcp": "ok", "openrouter": "ok", "jev": "ok", "openconnector": "down",
   "query_ms": { "Q1": { "p50": 9, "p95": 31 }, "Q2": { "p50": 14, "p95": 48 } } }
 ```
-`status` follows FalkorDB only (the verdict needs nothing else). `falkordb_mcp` / `openconnector`: `ok` · `down` ·
-`not_configured`; `openrouter`: `configured` · `not_configured` (no paid call per health check; checked live from
-phase 7). Not behind `X-API-Key`.
+`status` follows FalkorDB only (the verdict needs nothing else). `falkordb_mcp` / `openconnector` / `openrouter` /
+`jev`: `ok` · `down` · `not_configured`. OpenRouter is checked with `GET /v1/key` (free), cached 60 s; `jev` shares
+its key and status. Not behind `X-API-Key`.

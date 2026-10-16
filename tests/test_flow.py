@@ -115,9 +115,12 @@ def test_events_are_ordered_and_cover_the_run(graph, env):
     seqs = [e["seq"] for e in ev]
     assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
     kinds = [e["event"] for e in ev]
-    assert kinds[0] == "incident.status" and kinds[-1] == "incident.status"
+    assert kinds[0] == "incident.status"
     assert {"hypothesis.created", "evidence.added", "footprint", "hypothesis.status", "verdict"} <= set(kinds)
-    assert ev[-1]["data"]["status"] == "diagnosed"
+    # The verdict and final status come first; memory, the explanation and actions follow and never block them (N1)
+    final = max(i for i, k in enumerate(kinds) if k == "incident.status")
+    assert ev[final]["data"]["status"] == "diagnosed" and kinds.index("verdict") < final
+    assert {"explanation", "action"} <= set(kinds[final + 1 :])
 
 
 def test_skeptic_refutes_a_winner_that_does_not_explain_the_alert(graph, env, tmp_path):

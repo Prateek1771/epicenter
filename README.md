@@ -75,7 +75,7 @@ FALKORDB_MCP_TAG=
 FALKORDB_PASSWORD=change-me
 MCP_API_KEY=change-me
 OPENROUTER_API_KEY=
-LLM_MODEL=               # pinned OpenRouter model id
+LLM_MODEL=                              # empty = openai/gpt-4o-2024-11-20 (pinned)
 JEV_MODEL=typesafe/jev-1.13
 OPENCONNECTOR_IMAGE=
 OPENCONNECTOR_API_KEY=

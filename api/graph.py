@@ -317,7 +317,8 @@ QUERIES: dict[str, str] = {
         OPTIONAL MATCH (i)-[:TRIGGERED_BY]->(al:Alert)
         RETURN i.status AS status, i.summary AS summary, i.run AS run, i.ingest AS ingest,
                i.confidence AS confidence, i.symptom AS symptom, i.opened_at AS opened_at, i.gaps AS gaps,
-               i.weights_version AS weights_version, coalesce(sum(al.count), 0) AS alert_count""",
+               i.weights_version AS weights_version, i.delivery AS delivery,
+               coalesce(sum(al.count), 0) AS alert_count""",
     "root_causes": """
         MATCH (i:Incident {id: $inc})-[r:ROOT_CAUSE]->(h:Hypothesis)-[:BLAMES]->(o:Operation)
         WHERE r.run = i.run
@@ -350,6 +351,17 @@ QUERIES: dict[str, str] = {
         RETURN h.id AS hypothesis, h.status AS status, o.id AS op,
                collect(e {.id, .kind, .summary, .path}) AS refuted_by
         ORDER BY hypothesis""",
+    "incident_summary": """
+        MATCH (i:Incident {id: $inc})
+        OPTIONAL MATCH (i)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE rc.run = i.run
+        WITH i, rc, o ORDER BY rc.rank
+        WITH i, [x IN collect(o.id) WHERE x IS NOT NULL] AS causes
+        OPTIONAL MATCH (i)-[:RESOLVED_BY]->(a:Action)
+        WITH i, causes, collect(DISTINCT a.name) AS fixes
+        OPTIONAL MATCH (p:Person)-[:FIXED]->(i)
+        RETURN i.id AS incident, i.status AS status, i.symptom AS symptom, i.opened_at AS opened_at, causes, fixes,
+               collect(DISTINCT p.handle) AS fixed_by""",
     "recent_changes": """
         MATCH (c:Change)-[:CHANGED]->(:Service {name: $svc})
         WHERE c.ts >= $since
@@ -443,6 +455,96 @@ QUERIES: dict[str, str] = {
         MERGE (i)-[:RESOLVED_BY]->(a)""",
     "runbook_success": "MATCH (r:Runbook {id: $id}) SET r.success = $success",
     "service_exists": "MATCH (s:Service {name: $svc}) RETURN s.name AS name",
+    # --- Memory, explanation, actions (phase 7, LLD §5.3) ---
+    # Signature inputs (ADR 0008): the current run's root causes with their anomaly kinds, then the rest below
+    "signature_roots": """
+        MATCH (i:Incident {id: $inc})-[rc:ROOT_CAUSE]->(h:Hypothesis)-[:BLAMES]->(o:Operation)<-[:HAS_OP]-(s:Service)
+        WHERE rc.run = i.run
+        OPTIONAL MATCH (a:Anomaly {incident: $inc})-[:ON]->(o)
+        WITH rc, h, o, s, a ORDER BY a.id
+        RETURN rc.rank AS rank, o.id AS op, h.id AS hypothesis, h.hops AS hops, s.kind AS service_kind,
+               [x IN collect(a.kind) WHERE x IS NOT NULL] AS kinds
+        ORDER BY rank""",
+    "op_templates": """
+        MATCH (a:Anomaly {incident: $inc})-[:ON]->(:Operation {id: $op})
+        MATCH (a)-[:IN_SIGNAL]->(sg:Signal)
+        RETURN DISTINCT sg.text AS text
+        ORDER BY text""",
+    "run_kinds": """
+        MATCH (i:Incident {id: $inc})-[:HAS_HYPOTHESIS]->(h:Hypothesis)
+        WHERE h.run = i.run
+        RETURN h.id AS id, h.kinds AS kinds
+        ORDER BY id""",
+    "anomalous_op_kinds": """
+        MATCH (a:Anomaly {incident: $inc})-[:ON]->(o:Operation)<-[:HAS_OP]-(s:Service)
+        RETURN DISTINCT o.id AS op, s.kind AS kind
+        ORDER BY op""",
+    # Change types the incident's rank-1 root cause cites (its change evidence ABOUT a Change)
+    "root_change_types": """
+        MATCH (i:Incident {id: $inc})-[rc:ROOT_CAUSE {rank: 1}]->(h:Hypothesis)-[:SUPPORTED_BY]->(:Evidence)
+              -[:ABOUT]->(c:Change)
+        WHERE rc.run = i.run
+        RETURN DISTINCT c.type AS type
+        ORDER BY type""",
+    "incident_set_signature": "MATCH (i:Incident {id: $inc}) SET i.signature = vecf32($sig)",
+    "similar_to": """
+        MATCH (i:Incident {id: $inc})
+        UNWIND $rows AS r
+        MATCH (p:Incident {id: r.incident})
+        MERGE (i)-[s:SIMILAR_TO {run: $run}]->(p)
+        SET s.score = r.score""",
+    "similar_of_run": """
+        MATCH (i:Incident {id: $inc})-[s:SIMILAR_TO]->(p:Incident)
+        WHERE s.run = i.run
+        OPTIONAL MATCH (p)-[rc:ROOT_CAUSE {rank: 1}]->(:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE rc.run = p.run
+        OPTIONAL MATCH (p)-[:RESOLVED_BY]->(a:Action)
+        RETURN p.id AS incident, s.score AS score, o.id AS cause, collect(DISTINCT a.name) AS fixes,
+               p.resolved_at AS resolved_at
+        ORDER BY score DESC, incident""",
+    # Procedural memory: how often an action with this name fixed an incident in this env
+    "fix_counts": """
+        MATCH (:Incident)-[:RESOLVED_BY]->(a:Action)
+        WHERE a.name IN $names
+        RETURN a.name AS name, count(*) AS n
+        ORDER BY name""",
+    "runbook_steps": """
+        MATCH (rb:Runbook)-[:FOR]->(:Service {name: $svc})
+        WHERE rb.kind IN $kinds
+        RETURN rb.id AS id, rb.steps AS steps, rb.success AS success
+        ORDER BY id""",
+    "explanation_save": """
+        MATCH (i:Incident {id: $inc})
+        MERGE (x:Explanation {id: $id})
+        SET x.run = $run, x.claims = $claims, x.dropped = $dropped, x.verified = $verified, x.source = $source,
+            x.ai_calls = $ai_calls
+        MERGE (i)-[:HAS_EXPLANATION]->(x)""",
+    "explanation": """
+        MATCH (:Incident {id: $inc})-[:HAS_EXPLANATION]->(x:Explanation {id: $id})
+        RETURN x.claims AS claims, x.dropped AS dropped, x.verified AS verified, x.source AS source,
+               x.ai_calls AS ai_calls""",
+    # Proposed actions of one run; MERGE on id so a re-run responder after a crash writes them once
+    "actions_save": """
+        MATCH (i:Incident {id: $inc})
+        UNWIND $rows AS r
+        MERGE (a:Action {id: r.id})
+        ON CREATE SET a.status = 'proposed'
+        SET a.name = r.name, a.rank = r.rank, a.chosen_by = r.chosen_by, a.run = $run, a.p = r.p
+        MERGE (i)-[:HAS_ACTION]->(a)
+        WITH a, r WHERE r.runbook IS NOT NULL
+        MATCH (rb:Runbook {id: r.runbook})
+        MERGE (a)-[f:FROM]->(rb) SET f.step = r.step""",
+    "run_actions": """
+        MATCH (i:Incident {id: $inc})-[:HAS_ACTION]->(a:Action)
+        WHERE a.run = i.run
+        OPTIONAL MATCH (a)-[f:FROM]->(rb:Runbook)
+        RETURN a.id AS id, a.name AS name, a.status AS status, a.rank AS rank, a.chosen_by AS chosen_by, a.p AS p,
+               rb.id AS runbook, f.step AS step
+        ORDER BY rank, id""",
+    "incident_delivery": """
+        MATCH (i:Incident {id: $inc})
+        SET i.delivery = $delivery
+        FOREACH (_ IN CASE WHEN $delivered THEN [1] ELSE [] END | SET i.status = 'delivered')""",
     # Undirected CALLS neighbourhood of the start operations, bounded at 3 hops, with the calls among the result
     "subgraph": """
         UNWIND $starts AS sid

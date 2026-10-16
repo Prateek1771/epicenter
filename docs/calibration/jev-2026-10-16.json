@@ -1,0 +1,1146 @@
+{
+ "recommended": 0.65,
+ "max_false": 0.57,
+ "min_true": 0.18,
+ "table": [
+  {
+   "cutoff": 0.05,
+   "false_accepts": 75,
+   "true_kept": 1.0
+  },
+  {
+   "cutoff": 0.1,
+   "false_accepts": 41,
+   "true_kept": 1.0
+  },
+  {
+   "cutoff": 0.15,
+   "false_accepts": 25,
+   "true_kept": 1.0
+  },
+  {
+   "cutoff": 0.2,
+   "false_accepts": 18,
+   "true_kept": 0.979
+  },
+  {
+   "cutoff": 0.25,
+   "false_accepts": 15,
+   "true_kept": 0.938
+  },
+  {
+   "cutoff": 0.3,
+   "false_accepts": 12,
+   "true_kept": 0.875
+  },
+  {
+   "cutoff": 0.35,
+   "false_accepts": 8,
+   "true_kept": 0.75
+  },
+  {
+   "cutoff": 0.4,
+   "false_accepts": 4,
+   "true_kept": 0.656
+  },
+  {
+   "cutoff": 0.45,
+   "false_accepts": 4,
+   "true_kept": 0.615
+  },
+  {
+   "cutoff": 0.5,
+   "false_accepts": 4,
+   "true_kept": 0.542
+  },
+  {
+   "cutoff": 0.55,
+   "false_accepts": 1,
+   "true_kept": 0.49
+  },
+  {
+   "cutoff": 0.6,
+   "false_accepts": 0,
+   "true_kept": 0.438
+  },
+  {
+   "cutoff": 0.65,
+   "false_accepts": 0,
+   "true_kept": 0.375
+  },
+  {
+   "cutoff": 0.7,
+   "false_accepts": 0,
+   "true_kept": 0.26
+  },
+  {
+   "cutoff": 0.75,
+   "false_accepts": 0,
+   "true_kept": 0.156
+  },
+  {
+   "cutoff": 0.8,
+   "false_accepts": 0,
+   "true_kept": 0.115
+  },
+  {
+   "cutoff": 0.85,
+   "false_accepts": 0,
+   "true_kept": 0.104
+  },
+  {
+   "cutoff": 0.9,
+   "false_accepts": 0,
+   "true_kept": 0.062
+  },
+  {
+   "cutoff": 0.95,
+   "false_accepts": 0,
+   "true_kept": 0.0
+  }
+ ],
+ "date": "2026-10-16",
+ "model": "typesafe/jev-1.13",
+ "passes": 2,
+ "n_true": 48,
+ "n_false": 96,
+ "cost_usd": 0.002567,
+ "sources": {
+  "rcaeval-tt": {
+   "rc-re2tt_ts-auth-service_cpu_1": {
+    "true": [
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername is the root cause (confidence 60%).",
+      "scores": [
+       0.9,
+       0.9
+      ]
+     },
+     {
+      "text": "The problem started at ts-auth-service/UserRepository.findByUsername and reached client/load along ts-auth-service/UserRepository.findByUsername \u2192 ts-auth-service/POST /api/v1/users/login \u2192 client/load.",
+      "scores": [
+       0.46,
+       0.5
+      ]
+     },
+     {
+      "text": "explains 1 of 14 symptoms (precision 0.37, order 0.50)",
+      "scores": [
+       0.69,
+       0.67
+      ]
+     },
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername went bad 95 s before client/load; onset order holds along 2 hops to client/load",
+      "scores": [
+       0.74,
+       0.72
+      ]
+     },
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername: explains 1 of 14 symptoms (precision 0.37, order 0.50)",
+      "scores": [
+       0.53,
+       0.45
+      ]
+     },
+     {
+      "text": "ts-auth-service/POST /api/v1/users/login went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.45,
+       0.39
+      ]
+     },
+     {
+      "text": "ts-auth-service/POST /api/v1/users/login: explains 1 of 14 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.38,
+       0.4
+      ]
+     },
+     {
+      "text": "ts-travel-service/GET /api/v1/travelservice/routes/{tripId} went bad 70 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.28,
+       0.31
+      ]
+     },
+     {
+      "text": "ts-travel-service/GET /api/v1/travelservice/routes/{tripId}: explains 1 of 14 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.36,
+       0.35
+      ]
+     },
+     {
+      "text": "ts-food-service/GET /api/v1/foodservice/foods/{date}/{startStation}/{endStation}/{tripId} went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.31,
+       0.31
+      ]
+     },
+     {
+      "text": "ts-food-service/GET /api/v1/foodservice/foods/{date}/{startStation}/{endStation}/{tripId}: explains 1 of 14 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.36,
+       0.34
+      ]
+     }
+    ],
+    "false": [
+     {
+      "text": "client/load is the root cause (confidence 60%).",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername is the root cause (confidence 67%).",
+      "scores": [
+       0.22,
+       0.22
+      ]
+     },
+     {
+      "text": "The problem started at ts-food-service/GET and reached client/load along ts-food-service/GET \u2192 ts-auth-service/POST /api/v1/users/login \u2192 client/load.",
+      "scores": [
+       0.06,
+       0.06
+      ]
+     },
+     {
+      "text": "The problem started at ts-auth-service/UserRepository.findByUsername and reached client/load along ts-auth-service/UserRepository.findByUsername \u2192 ts-auth-service/POST /api/v8/users/login \u2192 client/load.",
+      "scores": [
+       0.21,
+       0.2
+      ]
+     },
+     {
+      "text": "explains 8 of 14 symptoms (precision 0.37, order 0.50)",
+      "scores": [
+       0.05,
+       0.04
+      ]
+     },
+     {
+      "text": "ts-food-service/GET went bad 95 s before client/load; onset order holds along 2 hops to client/load",
+      "scores": [
+       0.06,
+       0.07
+      ]
+     },
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername went bad 102 s before client/load; onset order holds along 2 hops to client/load",
+      "scores": [
+       0.12,
+       0.12
+      ]
+     },
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername went bad 95 s after client/load; onset order holds along 2 hops to client/load",
+      "scores": [
+       0.08,
+       0.07
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 14 symptoms (precision 0.37, order 0.50)",
+      "scores": [
+       0.37,
+       0.34
+      ]
+     },
+     {
+      "text": "ts-auth-service/UserRepository.findByUsername: explains 8 of 14 symptoms (precision 0.37, order 0.50)",
+      "scores": [
+       0.03,
+       0.03
+      ]
+     },
+     {
+      "text": "ts-food-service/GET went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.05,
+       0.05
+      ]
+     },
+     {
+      "text": "ts-auth-service/POST /api/v8/users/login went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.13,
+       0.12
+      ]
+     },
+     {
+      "text": "ts-auth-service/POST /api/v1/users/login went bad 0 s after client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.16,
+       0.17
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 14 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.53,
+       0.53
+      ]
+     },
+     {
+      "text": "ts-auth-service/POST /api/v8/users/login: explains 1 of 14 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.17,
+       0.17
+      ]
+     },
+     {
+      "text": "ts-food-service/GET went bad 70 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.1,
+       0.11
+      ]
+     },
+     {
+      "text": "ts-travel-service/GET /api/v8/travelservice/routes/{tripId} went bad 70 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.09,
+       0.1
+      ]
+     },
+     {
+      "text": "ts-travel-service/GET /api/v1/travelservice/routes/{tripId} went bad 70 s after client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 14 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.35,
+       0.3
+      ]
+     },
+     {
+      "text": "ts-travel-service/GET /api/v8/travelservice/routes/{tripId}: explains 1 of 14 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.12,
+       0.12
+      ]
+     },
+     {
+      "text": "ts-food-service/GET /api/v8/foodservice/foods/{date}/{startStation}/{endStation}/{tripId} went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.07,
+       0.08
+      ]
+     },
+     {
+      "text": "ts-food-service/GET /api/v1/foodservice/foods/{date}/{startStation}/{endStation}/{tripId} went bad 0 s after client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.11,
+       0.09
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 14 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.36,
+       0.38
+      ]
+     },
+     {
+      "text": "ts-food-service/GET /api/v8/foodservice/foods/{date}/{startStation}/{endStation}/{tripId}: explains 1 of 14 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.11,
+       0.11
+      ]
+     },
+     {
+      "text": "A deploy of ts-auth-service shortly before the alert caused the failure.",
+      "scores": [
+       0.11,
+       0.11
+      ]
+     }
+    ]
+   },
+   "rc-re2tt_ts-auth-service_cpu_2": {
+    "true": [
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets is the root cause (confidence 58%).",
+      "scores": [
+       0.9,
+       0.9
+      ]
+     },
+     {
+      "text": "The problem started at ts-seat-service/POST /api/v1/seatservice/seats/left_tickets and reached client/load along ts-seat-service/POST /api/v1/seatservice/seats/left_tickets \u2192 ts-travel-service/POST \u2192 ts-travel-service/POST /api/v1/travelservice/trips/left \u2192 client/load.",
+      "scores": [
+       0.39,
+       0.41
+      ]
+     },
+     {
+      "text": "explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.63,
+       0.66
+      ]
+     },
+     {
+      "text": "ts-order-service/POST /api/v1/orderservice/order/tickets went bad 145 s before client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.33,
+       0.33
+      ]
+     },
+     {
+      "text": "ts-order-service/POST /api/v1/orderservice/order/tickets: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.3,
+       0.32
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets went bad 0 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.71,
+       0.7
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.56,
+       0.5
+      ]
+     },
+     {
+      "text": "ts-user-service/GET /api/v1/userservice/users/id/{userId} went bad 140 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.24,
+       0.28
+      ]
+     },
+     {
+      "text": "ts-user-service/GET /api/v1/userservice/users/id/{userId}: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.27,
+       0.23
+      ]
+     },
+     {
+      "text": "ts-order-other-service/POST /api/v1/orderOtherService/orderOther/tickets went bad 122 s before client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.33,
+       0.34
+      ]
+     },
+     {
+      "text": "ts-order-other-service/POST /api/v1/orderOtherService/orderOther/tickets: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.34,
+       0.28
+      ]
+     }
+    ],
+    "false": [
+     {
+      "text": "client/load is the root cause (confidence 58%).",
+      "scores": [
+       0.13,
+       0.1
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v8/seatservice/seats/left_tickets is the root cause (confidence 58%).",
+      "scores": [
+       0.05,
+       0.06
+      ]
+     },
+     {
+      "text": "The problem started at ts-preserve-other-service/GET and reached client/load along ts-preserve-other-service/GET \u2192 ts-travel-service/POST \u2192 ts-travel-service/POST /api/v1/travelservice/trips/left \u2192 client/load.",
+      "scores": [
+       0.02,
+       0.02
+      ]
+     },
+     {
+      "text": "The problem started at ts-seat-service/POST /api/v8/seatservice/seats/left_tickets and reached client/load along ts-seat-service/POST /api/v1/seatservice/seats/left_tickets \u2192 ts-travel-service/POST \u2192 ts-travel-service/POST /api/v1/travelservice/trips/left \u2192 client/load.",
+      "scores": [
+       0.06,
+       0.05
+      ]
+     },
+     {
+      "text": "explains 8 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.02,
+       0.02
+      ]
+     },
+     {
+      "text": "ts-preserve-other-service/GET went bad 145 s before client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.05,
+       0.05
+      ]
+     },
+     {
+      "text": "ts-order-service/POST /api/v8/orderservice/order/tickets went bad 145 s before client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.08,
+       0.07
+      ]
+     },
+     {
+      "text": "ts-order-service/POST /api/v1/orderservice/order/tickets went bad 145 s after client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.26,
+       0.19
+      ]
+     },
+     {
+      "text": "ts-order-service/POST /api/v8/orderservice/order/tickets: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.12,
+       0.1
+      ]
+     },
+     {
+      "text": "ts-preserve-other-service/GET went bad 0 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.07,
+       0.05
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v8/seatservice/seats/left_tickets went bad 0 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.08,
+       0.08
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets went bad 0 s after client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.14,
+       0.16
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.54,
+       0.57
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v8/seatservice/seats/left_tickets: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.08,
+       0.06
+      ]
+     },
+     {
+      "text": "ts-preserve-other-service/GET went bad 140 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.07,
+       0.07
+      ]
+     },
+     {
+      "text": "ts-user-service/GET /api/v8/userservice/users/id/{userId} went bad 140 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.07,
+       0.08
+      ]
+     },
+     {
+      "text": "ts-user-service/GET /api/v1/userservice/users/id/{userId} went bad 140 s after client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.04,
+       0.03
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.19,
+       0.15
+      ]
+     },
+     {
+      "text": "ts-user-service/GET /api/v8/userservice/users/id/{userId}: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.06,
+       0.07
+      ]
+     },
+     {
+      "text": "ts-preserve-other-service/GET went bad 122 s before client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.06,
+       0.06
+      ]
+     },
+     {
+      "text": "ts-order-other-service/POST /api/v8/orderOtherService/orderOther/tickets went bad 122 s before client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.12,
+       0.1
+      ]
+     },
+     {
+      "text": "ts-order-other-service/POST /api/v1/orderOtherService/orderOther/tickets went bad 122 s after client/load; onset order holds along 5 hops to client/load",
+      "scores": [
+       0.05,
+       0.04
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.32,
+       0.33
+      ]
+     },
+     {
+      "text": "ts-order-other-service/POST /api/v8/orderOtherService/orderOther/tickets: explains 1 of 15 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.13,
+       0.14
+      ]
+     },
+     {
+      "text": "A deploy of ts-seat-service shortly before the alert caused the failure.",
+      "scores": [
+       0.12,
+       0.13
+      ]
+     }
+    ]
+   },
+   "rc-re2tt_ts-order-service_delay_1": {
+    "true": [
+     {
+      "text": "ts-order-service/find ts.orders is the root cause (confidence 53%).",
+      "scores": [
+       0.89,
+       0.88
+      ]
+     },
+     {
+      "text": "The problem started at ts-order-service/find ts.orders and reached client/load along ts-order-service/find ts.orders \u2192 ts-order-service/OrderRepository.findByAccountId \u2192 ts-order-service/POST /api/v1/orderservice/order/refresh \u2192 client/load.",
+      "scores": [
+       0.67,
+       0.65
+      ]
+     },
+     {
+      "text": "explains 10 of 33 symptoms (precision 0.64, order 0.48)",
+      "scores": [
+       0.69,
+       0.74
+      ]
+     },
+     {
+      "text": "ts-order-service/find ts.orders went bad 5 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.75,
+       0.71
+      ]
+     },
+     {
+      "text": "ts-order-service/find ts.orders: explains 10 of 33 symptoms (precision 0.64, order 0.48)",
+      "scores": [
+       0.64,
+       0.63
+      ]
+     },
+     {
+      "text": "ts-inside-payment-service/POST /api/v1/inside_pay_service/inside_payment went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.27,
+       0.27
+      ]
+     },
+     {
+      "text": "ts-inside-payment-service/POST /api/v1/inside_pay_service/inside_payment: explains 1 of 33 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.37,
+       0.37
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets went bad 150 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.19,
+       0.18
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets: explains 2 of 33 symptoms (precision 0.33, order 0.50)",
+      "scores": [
+       0.41,
+       0.46
+      ]
+     },
+     {
+      "text": "ts-preserve-service/POST /api/v1/preserveservice/preserve went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.21,
+       0.23
+      ]
+     },
+     {
+      "text": "ts-preserve-service/POST /api/v1/preserveservice/preserve: explains 1 of 33 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.32,
+       0.39
+      ]
+     }
+    ],
+    "false": [
+     {
+      "text": "client/load is the root cause (confidence 53%).",
+      "scores": [
+       0.04,
+       0.05
+      ]
+     },
+     {
+      "text": "ts-order-service/find ts.orders is the root cause (confidence 60%).",
+      "scores": [
+       0.27,
+       0.29
+      ]
+     },
+     {
+      "text": "The problem started at ts-travel-service/POST and reached client/load along ts-travel-service/POST \u2192 ts-order-service/OrderRepository.findByAccountId \u2192 ts-order-service/POST /api/v1/orderservice/order/refresh \u2192 client/load.",
+      "scores": [
+       0.08,
+       0.08
+      ]
+     },
+     {
+      "text": "The problem started at ts-order-service/find ts.orders and reached client/load along ts-order-service/find ts.orders \u2192 ts-order-service/OrderRepository.findByAccountId \u2192 ts-order-service/POST /api/v8/orderservice/order/refresh \u2192 client/load.",
+      "scores": [
+       0.32,
+       0.28
+      ]
+     },
+     {
+      "text": "explains 17 of 33 symptoms (precision 0.64, order 0.48)",
+      "scores": [
+       0.12,
+       0.1
+      ]
+     },
+     {
+      "text": "ts-order-service/OrderRepository.findByAccountId went bad 5 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.53,
+       0.49
+      ]
+     },
+     {
+      "text": "ts-order-service/find ts.orders went bad 12 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.05,
+       0.06
+      ]
+     },
+     {
+      "text": "ts-order-service/find ts.orders went bad 5 s after client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "client/load: explains 10 of 33 symptoms (precision 0.64, order 0.48)",
+      "scores": [
+       0.2,
+       0.37
+      ]
+     },
+     {
+      "text": "ts-order-service/find ts.orders: explains 17 of 33 symptoms (precision 0.64, order 0.48)",
+      "scores": [
+       0.08,
+       0.08
+      ]
+     },
+     {
+      "text": "ts-order-service/OrderRepository.findByAccountId went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.04,
+       0.03
+      ]
+     },
+     {
+      "text": "ts-inside-payment-service/POST /api/v8/inside_pay_service/inside_payment went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.07,
+       0.08
+      ]
+     },
+     {
+      "text": "ts-inside-payment-service/POST /api/v1/inside_pay_service/inside_payment went bad 0 s after client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.07,
+       0.07
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 33 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.23,
+       0.33
+      ]
+     },
+     {
+      "text": "ts-inside-payment-service/POST /api/v8/inside_pay_service/inside_payment: explains 1 of 33 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.13,
+       0.14
+      ]
+     },
+     {
+      "text": "ts-order-service/OrderRepository.findByAccountId went bad 150 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.03,
+       0.03
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v8/seatservice/seats/left_tickets went bad 150 s before client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.09,
+       0.1
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v1/seatservice/seats/left_tickets went bad 150 s after client/load; onset order holds along 3 hops to client/load",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "client/load: explains 2 of 33 symptoms (precision 0.33, order 0.50)",
+      "scores": [
+       0.21,
+       0.31
+      ]
+     },
+     {
+      "text": "ts-seat-service/POST /api/v8/seatservice/seats/left_tickets: explains 2 of 33 symptoms (precision 0.33, order 0.50)",
+      "scores": [
+       0.29,
+       0.26
+      ]
+     },
+     {
+      "text": "ts-order-service/OrderRepository.findByAccountId went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.03,
+       0.03
+      ]
+     },
+     {
+      "text": "ts-preserve-service/POST /api/v8/preserveservice/preserve went bad 0 s before client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.07,
+       0.08
+      ]
+     },
+     {
+      "text": "ts-preserve-service/POST /api/v1/preserveservice/preserve went bad 0 s after client/load; onset order holds along 1 hops to client/load",
+      "scores": [
+       0.09,
+       0.08
+      ]
+     },
+     {
+      "text": "client/load: explains 1 of 33 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.15,
+       0.18
+      ]
+     },
+     {
+      "text": "ts-preserve-service/POST /api/v8/preserveservice/preserve: explains 1 of 33 symptoms (precision 0.53, order 0.50)",
+      "scores": [
+       0.21,
+       0.2
+      ]
+     },
+     {
+      "text": "A deploy of ts-order-service shortly before the alert caused the failure.",
+      "scores": [
+       0.15,
+       0.13
+      ]
+     }
+    ]
+   }
+  },
+  "mini_graph": {
+   "inc-1": {
+    "true": [
+     {
+      "text": "payment/Charge is the root cause (confidence 100%).",
+      "scores": [
+       0.92,
+       0.92
+      ]
+     },
+     {
+      "text": "The problem started at payment/Charge and reached frontend/GET /checkout along payment/Charge \u2192 checkout/PlaceOrder \u2192 frontend/GET /checkout.",
+      "scores": [
+       0.59,
+       0.66
+      ]
+     },
+     {
+      "text": "flag paymentFailure -> on (flag) 40 s before payment/Charge went bad",
+      "scores": [
+       0.76,
+       0.74
+      ]
+     },
+     {
+      "text": "explains 3 of 4 symptoms (precision 1.00, order 1.00)",
+      "scores": [
+       0.72,
+       0.73
+      ]
+     },
+     {
+      "text": "frontend/GET /checkout is the alerting operation and has its own anomaly (errors)",
+      "scores": [
+       0.69,
+       0.63
+      ]
+     },
+     {
+      "text": "frontend/GET /checkout is a victim: time in its callees grew \u00d73.0, its own time \u00d70.2",
+      "scores": [
+       0.55,
+       0.55
+      ]
+     },
+     {
+      "text": "frontend/GET /checkout: explains 1 of 4 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.63,
+       0.66
+      ]
+     },
+     {
+      "text": "payment/Charge went bad 20 s before frontend/GET /checkout; onset order holds along 2 hops to frontend/GET /checkout",
+      "scores": [
+       0.87,
+       0.86
+      ]
+     },
+     {
+      "text": "payment/Charge: flag paymentFailure -> on (flag) 40 s before payment/Charge went bad",
+      "scores": [
+       0.82,
+       0.78
+      ]
+     },
+     {
+      "text": "payment/Charge: explains 3 of 4 symptoms (precision 1.00, order 1.00)",
+      "scores": [
+       0.72,
+       0.75
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder went bad 10 s before frontend/GET /checkout; onset order holds along 1 hops to frontend/GET /checkout",
+      "scores": [
+       0.49,
+       0.43
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder is a victim: time in its callees grew \u00d72.5, its own time \u00d70.3",
+      "scores": [
+       0.48,
+       0.46
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder: explains 2 of 4 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.64,
+       0.59
+      ]
+     },
+     {
+      "text": "cart/GetCart: no path from cart/GetCart to frontend/GET /checkout where the problem started at cart/GetCart and moved towards the symptom (onsets along the best path: [120, 110, 200])",
+      "scores": [
+       0.66,
+       0.69
+      ]
+     },
+     {
+      "text": "cart/GetCart: explains 1 of 4 symptoms (precision 0.28, order 0.50)",
+      "scores": [
+       0.51,
+       0.51
+      ]
+     }
+    ],
+    "false": [
+     {
+      "text": "payment/Charge is the root cause (confidence 107%).",
+      "scores": [
+       0.18,
+       0.17
+      ]
+     },
+     {
+      "text": "flag paymentFailure -> on (flag) 47 s before payment/Charge went bad",
+      "scores": [
+       0.06,
+       0.07
+      ]
+     },
+     {
+      "text": "flag paymentFailure -> on (flag) 40 s after payment/Charge went bad",
+      "scores": [
+       0.03,
+       0.02
+      ]
+     },
+     {
+      "text": "explains 10 of 4 symptoms (precision 1.00, order 1.00)",
+      "scores": [
+       0.03,
+       0.04
+      ]
+     },
+     {
+      "text": "frontend/GET /checkout is a victim: time in its callees grew \u00d710.0, its own time \u00d70.2",
+      "scores": [
+       0.04,
+       0.05
+      ]
+     },
+     {
+      "text": "frontend/GET /checkout: explains 8 of 4 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.03,
+       0.03
+      ]
+     },
+     {
+      "text": "payment/Charge went bad 27 s before frontend/GET /checkout; onset order holds along 2 hops to frontend/GET /checkout",
+      "scores": [
+       0.09,
+       0.08
+      ]
+     },
+     {
+      "text": "payment/Charge went bad 20 s after frontend/GET /checkout; onset order holds along 2 hops to frontend/GET /checkout",
+      "scores": [
+       0.06,
+       0.06
+      ]
+     },
+     {
+      "text": "payment/Charge: flag paymentFailure -> on (flag) 47 s before payment/Charge went bad",
+      "scores": [
+       0.08,
+       0.07
+      ]
+     },
+     {
+      "text": "payment/Charge: flag paymentFailure -> on (flag) 40 s after payment/Charge went bad",
+      "scores": [
+       0.03,
+       0.03
+      ]
+     },
+     {
+      "text": "payment/Charge: explains 10 of 4 symptoms (precision 1.00, order 1.00)",
+      "scores": [
+       0.05,
+       0.05
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder went bad 17 s before frontend/GET /checkout; onset order holds along 1 hops to frontend/GET /checkout",
+      "scores": [
+       0.05,
+       0.06
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder went bad 10 s after frontend/GET /checkout; onset order holds along 1 hops to frontend/GET /checkout",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder is a victim: time in its callees grew \u00d79.5, its own time \u00d70.3",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder: explains 9 of 4 symptoms (precision 1.00, order 0.50)",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "cart/GetCart: no path from cart/GetCart to frontend/GET /checkout where the problem started at cart/GetCart and moved towards the symptom (onsets along the best path: [127, 110, 200])",
+      "scores": [
+       0.44,
+       0.51
+      ]
+     },
+     {
+      "text": "cart/GetCart: explains 8 of 4 symptoms (precision 0.28, order 0.50)",
+      "scores": [
+       0.04,
+       0.04
+      ]
+     },
+     {
+      "text": "checkout/PlaceOrder is the root cause.",
+      "scores": [
+       0.06,
+       0.05
+      ]
+     },
+     {
+      "text": "cart/GetCart is the root cause.",
+      "scores": [
+       0.02,
+       0.02
+      ]
+     }
+    ]
+   }
+  }
+ }
+}

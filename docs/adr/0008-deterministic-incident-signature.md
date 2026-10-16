@@ -22,6 +22,13 @@ Option 2. 64 dims, L2-normalized:
 Stored on `Incident.signature`, vector-indexed (cosine), queried by Q5, then re-ranked with graph overlap (same root-cause
 operation or change type).
 
+## Implementation note (phase 7, clarification)
+`api/search/signature.py`. Kind order `latency, errors, cpu, mem, saturation, log_burst, new_template, down`; change
+types `deploy, flag, config, infra, manual`. Dims 25–31: 25–27 root-cause service kind one-hot (datastore, app, proxy),
+28–30 share of anomalous operations per service kind, 31 = a second root cause was found. Templates are hashed with
+`blake2b` (Python's `hash()` is salted per process). Each block is scaled to [0, 1] before the L2 normalization. An
+all-zero signature (nothing anomalous) is not written.
+
 ## Consequences
 - Recall is reproducible and free; it can be evaluated leave-one-out on RCAEval (precision@3).
 - It won't match incidents that are similar only in wording. Acceptable: our memory is about mechanism, not wording.

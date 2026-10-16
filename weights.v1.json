@@ -40,5 +40,8 @@
     "slow_burn_p": 0.01,
     "slow_burn_ratio": 1.5,
     "slow_burn_limit_frac": 0.8
-  }
+  },
+  "memory": { "top_similar": 3, "overlap_op": 0.2, "overlap_change": 0.1 },
+  "explanation": { "min_support": 0.65 },
+  "actions": { "min_relevance": 0.15 }
 }

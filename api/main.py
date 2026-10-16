@@ -15,12 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from api.agents import flow
+from api.agents import ask, flow
 from api.config import get_settings
 from api.events import publish
 from api.graph import Graph, GraphUnavailable
 from api.ingest.seed import seed_all
-from api.routes import alerts, graph_views, health, incidents
+from api.routes import alerts, deliver, graph_views, health, incidents
+from api.routes import ask as ask_route
 from api.routes.deps import ApiError
 from api.tools import mcp_server
 
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI):
     s = get_settings()
     app.state.graph = Graph(s.falkordb_url, s.query_timeout_s)
     app.state.diagnosis = Diagnosis()
+    app.state.ask = ask.answer
     try:
         seed_all(app.state.graph, s.env_name)
     except GraphUnavailable as e:
@@ -144,6 +146,6 @@ def jsonable(errors: list) -> list:
 
 
 router = APIRouter(prefix="/api/v1")
-for r in (health.router, alerts.router, incidents.router, graph_views.router):
+for r in (health.router, alerts.router, incidents.router, deliver.router, ask_route.router, graph_views.router):
     router.include_router(r)
 app.include_router(router)

@@ -94,6 +94,16 @@ class Similar(BaseModel):
     fixes: list[str]
 
 
+class IncidentSummary(BaseModel):
+    incident: str
+    status: str
+    symptom: str | None
+    opened_at: int | None
+    causes: list[str]  # current run's root causes, rank 1 first
+    fixes: list[str]  # names of the actions that resolved it
+    fixed_by: list[str]
+
+
 class Person(BaseModel):
     handle: str
     name: str | None
@@ -220,6 +230,14 @@ def similar_incidents(incident: str, env: str | None = None) -> list[Similar]:
     return [Similar(distance=r.pop("score"), **r) for r in rows]
 
 
+def incident_summary(incident: str, env: str | None = None) -> IncidentSummary:
+    """One incident's status, root cause(s), the actions that fixed it and who fixed it."""
+    e = _env(env)
+    _incident(e, incident)
+    [row] = e.ro("incident_summary", inc=incident)
+    return IncidentSummary(**row)
+
+
 def who_knows(service: str, env: str | None = None) -> list[Person]:
     """People who know `service`: owners, who fixed incidents rooted there, who changed it."""
     return [Person(**r) for r in _env(env).ro("who_knows", svc=service)]
@@ -240,6 +258,7 @@ TOOLS = [
     why_not,
     recent_changes,
     similar_incidents,
+    incident_summary,
     who_knows,
     simulate,
 ]

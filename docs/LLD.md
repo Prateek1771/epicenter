@@ -35,14 +35,17 @@ graph-hacks/
     agents/
       flow.py             # LangGraph wiring
       triage.py  investigator.py  skeptic.py  historian.py  narrator.py  responder.py  ask.py
+      prompts/            # narrator.md, ask.md: fixed system prompts (data framing, citation rules)
     tools/
       graph_tools.py      # typed tools (Python functions)
       mcp_server.py       # same tools exposed over MCP
+      falkordb_mcp.py     # client for falkordb-mcp: allowlisted read tools only, graph pinned to the env
     ai/
-      openrouter.py       # chat completions client
-      jev.py              # Jev Noul / Choice client
+      openrouter.py       # chat completions client (GPT-4o snapshot, temperature 0)
+      jev.py              # Jev Noul client (OpenRouter decisions API)
+      calibrate.py        # (agents/) Jev cutoff calibration from labelled claims, CLI
     deliver/
-      openconnector.py
+      openconnector.py    # POST /v1/actions/{id} with an Idempotency-Key
     eval.py               # RCAEval replay + metrics
     smoke_falkordb.py     # FalkorDB feature check on the pinned tag (README §5)
   web/                    # Next.js app
@@ -205,7 +208,8 @@ ORDER BY hops, op
 
 The typed tools live in `api/tools/graph_tools.py` (pydantic in/out, env-bound, no Cypher): `blast_radius`,
 `upstream_candidates` (Q1), `propagation_path` (Q2), `mechanism` (Q3), `why_not`, `recent_changes`,
-`similar_incidents` (Q5), `who_knows`, `simulate` (what-if). `api/tools/mcp_server.py` registers the same `TOOLS`
+`similar_incidents` (Q5), `incident_summary` (an incident's root causes, fixes and who fixed it; added in phase 7 so
+the ask agent answers "how was inc-X fixed?" from a typed tool), `who_knows`, `simulate` (what-if). `api/tools/mcp_server.py` registers the same `TOOLS`
 list on an MCP server mounted at `/mcp` (streamable HTTP, stateless, JSON responses). `why_not` answers from the
 current run: `is_root_cause` (rank 1 or 2), `victim` / `later_onset` / `small_footprint` (the refuting evidence
 kind), `small_footprint` or `lost_on_score` for a pruned hypothesis (coverage below / at the winner's),
@@ -387,11 +391,53 @@ a per-incident `seq` and a bounded history for replay).
 | skeptic | yes: picks which alternative to test and which tool to use | top-2 + the winner's `unexplained` symptoms | `Evidence` (refutes) **only via deterministic tools**; the LLM chooses, the tools decide. Leads with "what doesn't the winner explain?" |
 | historian | no | incident | signature, `SIMILAR_TO` edges |
 | narrator | yes | verdict + evidence (as JSON data) | `Explanation {claims:[{text, cites[]}]}` |
-| jev_gate | Jev Noul | each claim + its cited evidence | `support_p` per claim; drop < 0.7 or uncited |
-| responder | Jev Choice | root cause kind + `Runbook` steps + past `RESOLVED_BY` counts | `Action {name, status:'proposed'}`; delivery |
+| jev_gate | Jev Noul | each claim + its cited evidence | `support_p` per claim; drop < `min_support` (calibrated, 0.65) or uncited |
+| responder | Jev Noul (relevance per action) | root cause + its supporting evidence + `Runbook` steps + past `RESOLVED_BY` counts | `Action {name, status:'proposed'}`; delivery |
 
 Narrator prompt contract (system message, fixed): output JSON `{"what":[claim], "where":[claim], "why":[claim]}` with
 `claim = {"text": str, "cites": ["E…"]}`; only ids that appear in the input may be cited; temperature 0; pinned model id.
+
+**Implementation (phase 7).** Models: **GPT-4o** (`openai/gpt-4o-2024-11-20` via OpenRouter chat completions) for the
+narrator and the ask agent; **Jev** (`typesafe/jev-1.13`, OpenRouter `POST /api/alpha/decisions`) for typed decisions.
+historian, narrator, jev_gate and responder run after `finalize` has published the verdict, so they never delay it
+(N1), and a failure in one of them publishes an `error` event instead of failing the run (N7).
+
+- **historian:** signature (ADR 0008) → `Incident.signature` → Q5 (5 nearest resolved incidents) → re-rank by
+  `(1 − distance) + overlap_op·[same root op] + overlap_change·[shared change type]` (`weights.json` `memory`) → top 3 →
+  `SIMILAR_TO {score, run}` → event `memory.similar {similar: [{incident, score, cause, fixes, worked}]}`.
+- **narrator:** input = verdict + the evidence of the top 4 hypotheses and the committed causes, as one JSON document
+  inside `<verdict_json>…</verdict_json>` (the system prompt says it is data). Output is a strict JSON schema; a claim
+  citing an unknown id, or nothing, is dropped and counted. No key / error / invalid output → **template** (claims
+  built from the evidence summaries), `source: 'template'`.
+- **jev_gate:** one Jev request, one **Noul per claim**; each question carries its own claim and the text, kind,
+  path **and subject operation** of its cited evidence, and the state carries the engine's verdict (a single shared
+  question text makes Jev score every claim the same; evidence like "explains 1 of 15 symptoms" without its operation
+  can't refute a claim about the wrong operation). `support_p < explanation.min_support` → dropped.
+  `min_support` is **calibrated**, not guessed: `python -m api.agents.calibrate` builds TRUE claims from the engine's
+  own evidence and FALSE ones by perturbing them (another operation, another number, "after" for "before", a refuted
+  hypothesis as root cause, an invented deploy), scores each twice through this same gate, and recommends the lowest
+  cutoff with no false accept plus 0.05. Run of 2026-10-16 (3 RE2-TT cases + mini_graph, 48 true / 96 false claims,
+  $0.003): zero false accepts from 0.60 → **0.65**, keeping 38% of true claims (26% at the old 0.7). Report:
+  [docs/calibration/jev-2026-10-16.json](calibration/jev-2026-10-16.json); phase 10 reruns it on the full RE2 suite. Jev down → claims kept as
+  `unverified`. Afterwards the headline (root cause, or "nothing explains it") and the root cause's change are always
+  present: if no kept claim states them, the template's claim is added with `status: 'template'`; if every claim
+  failed, the explanation is the template.
+- **responder:** candidates = steps of `Runbook`s `FOR` the root-cause service whose `kind` is among its anomaly kinds,
+  plus fixes of similar incidents. Order: past `RESOLVED_BY` count for that action name (procedural memory), then the
+  rest in runbook order, except the ones Jev judges irrelevant: one **Noul per action**, "does this action address
+  the cause shown in the evidence?", with the root cause's supporting evidence in the state; `p < actions.min_relevance`
+  (0.15) → last (`demoted`). The cutoff is deliberately low: live on mini_graph, Jev scored "Turn the flag off" only
+  0.31–0.35 for a flag fault (and "Restart payment" 0.73), so relevance only demotes clearly unrelated actions and
+  never reorders the rest; history and runbook order decide. Jev rules actions out instead of picking a winner: a Choice over near-equal options
+  ("Check recent flag changes" 0.47 vs "Turn the flag off" 0.48) flipped between runs, and without the evidence it put
+  "Restart payment" first for a flag fault. `Action {id: <inc>:r<run>:a-<n>, rank, chosen_by: history|runbook|demoted,
+  p}` + `HAS_ACTION` + `FROM {step}`. `no_root_cause` → "Check the alert
+  threshold against the baseline".
+- **ask:** GPT-4o tool loop (≤ 4 steps) over the typed tools plus `graph_schema` / `cypher_readonly`, which call
+  falkordb-mcp's `get_graph_schema` / `query_graph_readonly` only, with `graphName` pinned to `env:<name>` (the server
+  also has write tools; they are never offered). `path` keeps only ids that appeared in tool results.
+- **skeptic:** stays deterministic (phase 5). An LLM choosing which check to run first can't change the verdict,
+  because every check runs; not built.
 
 ---
 
@@ -651,7 +697,8 @@ count grows past the pool.
 | Jaeger / Prometheus / OpenSearch | 5 s | 2, backoff 0.5 s | record gap on `Incident.gaps` |
 | OpenRouter chat | 20 s | 1 | template explanation |
 | Jev | 10 s | 1 | claims marked `unverified` |
-| OpenConnector | 10 s | 0 (user retries) | `Action.delivery = failed` |
+| OpenConnector | 10 s | 0 (user retries; `Idempotency-Key` = env, incident run, target + payload hash) | per-target `ok:false` in `Incident.delivery` |
+| falkordb-mcp (ask fallback) | 10 s | 0 | the tool error goes back to the model |
 
 ---
 
@@ -663,8 +710,10 @@ count grows past the pool.
 | `FALKORDB_MCP_URL`, `MCP_API_KEY` | — | ask agent, `/health` |
 | `API_KEY` | unset | deployed mode: `X-API-Key` required on `/api/v1` (not `/health`) |
 | `WEB_ORIGIN` | `http://localhost:3001` | CORS |
-| `OPENROUTER_API_KEY`, `LLM_MODEL`, `JEV_MODEL` | pinned ids | `ai/` |
+| `OPENROUTER_API_KEY`, `LLM_MODEL`, `JEV_MODEL` | `openai/gpt-4o-2024-11-20`, `typesafe/jev-1.13` (empty = default) | `ai/` |
+| `OPENROUTER_URL` | `https://openrouter.ai/api` | `ai/` |
 | `OPENCONNECTOR_URL`, `OPENCONNECTOR_API_KEY` | — | `deliver/` |
+| `SLACK_CHANNEL`, `LINEAR_TEAM_ID` | — | `POST /deliver` defaults (Slack channel id, Linear team id) |
 | `ENV_NAME` | `astronomy-shop` | ingest |
 | `JAEGER_URL`, `PROMETHEUS_URL`, `OPENSEARCH_URL` | host.docker.internal ports | `ingest/otel.py` |
 | `FLIP_OTEL_FILE`, `FLIP_LOG_DIR`, `FLIP_NGINX_LOG` | — | flip-commerce adapter |

@@ -12,7 +12,9 @@ from api.events import bus
 from api.graph import EnvGraph
 from api.models import (
     Accepted,
+    ActionOut,
     EvidenceOut,
+    ExplanationOut,
     FootprintOut,
     FootprintSummary,
     HypothesisOut,
@@ -27,6 +29,7 @@ from api.models import (
     Prediction,
     ResolveIn,
     ResolveOut,
+    SimilarOut,
     Verdict,
     local_id,
     scoped_id,
@@ -143,6 +146,19 @@ def get_incident(incident_id: str, env: Env, request: Request) -> IncidentOut:
             checked=[h["id"] for h in v["ranking"]],
             max_coverage=max((h["coverage"] for h in v["ranking"]), default=0.0),
         )
+    x = env.ro("explanation", inc=incident_id, id=scoped_id(incident_id, f"r{inc['run']}:X"))
+    if x:
+        out.explanation = ExplanationOut(
+            claims=json.loads(x[0]["claims"]),
+            dropped=x[0]["dropped"],
+            verified=x[0]["verified"],
+            source=x[0]["source"],
+            ai_calls=json.loads(x[0]["ai_calls"] or "[]"),
+        )
+    out.similar = [SimilarOut(**{k: s[k] for k in ("incident", "score", "cause", "fixes")})
+                   for s in env.ro("similar_of_run", inc=incident_id)]  # fmt: skip
+    out.actions = [ActionOut(**(a | {"id": local_id(a["id"])})) for a in env.ro("run_actions", inc=incident_id)]
+    out.delivery = json.loads(inc["delivery"]) if inc["delivery"] else None
     return out
 
 
@@ -224,7 +240,7 @@ def resolve(incident_id: str, body: ResolveIn, env: Env) -> ResolveOut:
         raise ApiError(409, "INCIDENT_STATE", f"Incident {incident_id!r} is {inc['status']}; it can't be resolved yet")
     action = None
     if body.fixed_by_action:
-        rows = env.ro("action", id=scoped_id(incident_id, body.fixed_by_action))
+        rows = env.ro("action", id=scoped_id(incident_id, f"r{inc['run']}:{body.fixed_by_action}"))
         if not rows:
             raise ApiError(404, "ACTION_NOT_FOUND", f"No action {body.fixed_by_action!r} on {incident_id!r}")
         action = rows[0]
