@@ -37,7 +37,7 @@ export function ServicePicker({
         placeholder="service, e.g. redis"
         value={v}
         onChange={(e) => setV(e.target.value)}
-        className="h-9 w-64 font-mono"
+        className="h-9 w-full min-w-0 font-mono sm:w-64"
       />
       <datalist id="service-suggestions">
         {[...new Set(suggestions)].sort().map((s) => (

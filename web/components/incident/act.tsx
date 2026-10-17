@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenCheck, History, Loader2, MessageSquarePlus, Send, ShieldCheck } from "@/components/icons";
+import { Bot, BookOpenCheck, ChevronDown, FileText, History, Loader2, MessageSquarePlus, Send, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { api, ApiError, call, type S } from "@/lib/api";
+import { api, API_URL, ApiError, call, type S } from "@/lib/api";
 import { withEnv } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -54,23 +55,14 @@ function errMsg(e: unknown) {
   return e instanceof ApiError ? `${e.code}: ${e.message}` : String(e);
 }
 
-export function ActionsPanel({
-  incident,
-  env,
-  actions,
-  delivery,
-  status,
-  onChanged,
-}: {
-  incident: string;
-  env: string | null;
-  actions: S["IncidentOut"]["actions"];
-  delivery: Record<string, { ok?: boolean; url?: string | null; message?: string | null }> | null | undefined;
-  status: string;
-  onChanged: () => void;
-}) {
+type Delivery = Record<string, { ok?: boolean; url?: string | null; message?: string | null }> | null | undefined;
+const TARGETS = { slack: "Slack message", linear: "Linear issue" } as const;
+
+/** Header action: send the verdict to Slack and / or Linear (POST /deliver); each target succeeds or fails on its own. */
+export function DeliverMenu({ incident, env, delivery, status, onChanged }: { incident: string; env: string | null; delivery: Delivery; status: string; onChanged: () => void }) {
   const [sending, setSending] = useState<string | null>(null);
   const canDeliver = ["diagnosed", "delivered", "no_root_cause"].includes(status);
+  const sent = Object.values(delivery ?? {}).filter((d) => d.ok).length;
   const deliver = async (targets: ("slack" | "linear")[]) => {
     setSending(targets.join("+"));
     try {
@@ -91,6 +83,72 @@ export function ActionsPanel({
       setSending(null);
     }
   };
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" disabled={!canDeliver} title={canDeliver ? "Send the verdict to Slack / Linear" : "Available once diagnosed"}>
+          {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Deliver{sent ? ` · ${sent}` : ""} <ChevronDown className="size-3 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-1 p-2">
+        <p className="px-2 pt-1 pb-2 text-[11px] text-muted-foreground">The verdict, path, explanation and actions as a message.</p>
+        {(["slack", "linear"] as const).map((t) => {
+          const d = delivery?.[t];
+          return (
+            <div key={t} className="rounded-md p-2 hover:bg-accent">
+              <button className="flex w-full items-center gap-2 text-left text-sm" disabled={!!sending} onClick={() => deliver([t])}>
+                {sending === t ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5 text-gold" />}
+                {d?.ok ? `Send again to ${t}` : d && !d.ok ? `Retry ${TARGETS[t]}` : `Send ${TARGETS[t]}`}
+                {d?.ok && <span className="ml-auto text-[11px] text-st-confirmed">sent</span>}
+              </button>
+              {d?.ok && d.url && <a href={d.url} target="_blank" rel="noreferrer" className="mt-1 block truncate pl-5 text-[11px] text-signal hover:underline">{d.url}</a>}
+              {d && !d.ok && <p className="mt-1 pl-5 text-[11px] text-ov-missed">{d.message}</p>}
+            </div>
+          );
+        })}
+        <Button size="sm" className="mt-1 w-full" disabled={!!sending} onClick={() => deliver(["slack", "linear"])}>Send to both</Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** incident_info.md (people) and the agent context file (Claude Code, Codex, Cursor): GET /incidents/{id}/export.md. */
+export async function downloadExport(incident: string, env: string | null, flavor: "human" | "agent") {
+  const q = new URLSearchParams({ flavor, ...(env ? { env } : {}) });
+  try {
+    const res = await fetch(`${API_URL}/incidents/${encodeURIComponent(incident)}/export.md?${q}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const url = URL.createObjectURL(new Blob([await res.text()], { type: "text/markdown" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: flavor === "agent" ? `${incident}.agent.md` : `${incident}.incident_info.md` });
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    toast.error("Download failed", { description: String(e) });
+  }
+}
+
+export function ExportButtons({ incident, env, className }: { incident: string; env: string | null; className?: string }) {
+  return (
+    <div className={cn("grid grid-cols-2 gap-2", className)}>
+      <Button size="sm" variant="outline" onClick={() => downloadExport(incident, env, "human")} title="Verdict, evidence, actions: for people">
+        <FileText className="size-3.5" /> incident_info.md
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => downloadExport(incident, env, "agent")} title="Context for Claude Code, Codex, Cursor: where to look, what's ruled out, constraints">
+        <Bot className="size-3.5" /> AGENTS.md
+      </Button>
+    </div>
+  );
+}
+
+export function ActionsPanel({
+  env,
+  actions,
+  delivery,
+}: {
+  env: string | null;
+  actions: S["IncidentOut"]["actions"];
+  delivery: Delivery;
+}) {
   return (
     <div className="space-y-3">
       {actions.length === 0 ? (
@@ -122,17 +180,6 @@ export function ActionsPanel({
           ))}
         </ol>
       )}
-      <div className="flex flex-wrap gap-2">
-        {(["slack", "linear"] as const).map((t) => {
-          const d = delivery?.[t];
-          return (
-            <Button key={t} size="sm" variant={d?.ok ? "secondary" : "outline"} disabled={!canDeliver || !!sending} onClick={() => deliver([t])}>
-              {sending?.includes(t) ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              {d?.ok ? `Sent to ${t}` : d && !d.ok ? `Retry ${t}` : `Send to ${t}`}
-            </Button>
-          );
-        })}
-      </div>
       {delivery &&
         Object.entries(delivery).map(([t, d]) =>
           d.ok ? (

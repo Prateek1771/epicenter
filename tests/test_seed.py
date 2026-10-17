@@ -19,7 +19,7 @@ def test_env_seed_is_idempotent(blank):
     assert blank.ro("list_indexes") == indexes
     labels = {r["label"] for r in indexes}
     assert {"Service", "Operation", "Anomaly", "Incident", "Signal"} <= labels
-    assert len(ENV_INDEXES) == 16  # + idx_run (phase 9)
+    assert len(ENV_INDEXES) == 18  # + idx_run (phase 9), idx_conversation + idx_message (ask history)
 
 
 def test_owners_are_per_env(blank):

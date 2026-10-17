@@ -86,6 +86,10 @@ class Change(BaseModel):
     authors: list[str]
 
 
+class Changes(BaseModel):
+    items: list[Change]
+
+
 class Similar(BaseModel):
     incident: str
     distance: float
@@ -108,6 +112,12 @@ class Person(BaseModel):
     handle: str
     name: str | None
     score: int
+    via: list[str]  # how they know the service: MEMBER_OF (its owning team), FIXED (an incident there), AUTHORED
+    team: str | None  # the service's owning team, so an answer can cite service → team → person
+
+
+class People(BaseModel):
+    items: list[Person]
 
 
 class Predicted(BaseModel):
@@ -240,7 +250,7 @@ def incident_summary(incident: str, env: str | None = None) -> IncidentSummary:
 
 def who_knows(service: str, env: str | None = None) -> list[Person]:
     """People who know `service`: owners, who fixed incidents rooted there, who changed it."""
-    return [Person(**r) for r in _env(env).ro("who_knows", svc=service)]
+    return [Person(**r | {"via": sorted(r["via"])}) for r in _env(env).ro("who_knows", svc=service)]
 
 
 def simulate(target: str, kind: str, env: str | None = None) -> WhatIf:

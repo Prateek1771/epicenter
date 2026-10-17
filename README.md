@@ -45,12 +45,14 @@ How others do it: [competitors](docs/COMPETITORS.md) · [technical research](doc
 
 ## Docs
 
-**Judges and evaluators: start with [docs/SETUP.md](docs/SETUP.md).** It sizes your machine, then walks you to a
-diagnosed incident (small, medium or huge samples).
+**Judges and evaluators: start with [docs/SETUP.md](docs/SETUP.md).** `python syscheck.py` sizes your machine, then
+SETUP walks you through three demos: **small** (a synthetic system with a known answer, any laptop), **medium** (real
+recorded faults from the RCAEval benchmark) and **real-world** (live faults in the OpenTelemetry Demo shop). The hosted deployment is planned and scripted, not run for the
+event (the demo runs locally): [docs/DEPLOYMENT_PLAN.md](docs/DEPLOYMENT_PLAN.md).
 
 [Setup guide](docs/SETUP.md) · [Implementation phases](docs/phases/) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
 [API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
-[ADRs 0001–0013](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
+[Deployment plan](docs/DEPLOYMENT_PLAN.md) · [ADRs 0001–0014](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
 [Planning notes](docs/planning/)
 
 ---
@@ -151,6 +153,62 @@ Then open http://localhost:3001/incidents and the new incident.
 docker compose exec api python -m api.eval --suite re2 --system tt
 ```
 Prints AC@1 / AC@3 and the ablations (no PageRank, no temporal rule, no mechanism rule, no Fault Simulator footprint).
+`--download` fetches missing cases (~1.9 GB for all 90); one run takes ~35 min. Results land in
+`data/eval/<n>-re2-tt-<weights>-<rules>.json` (numbered, kept) and on the `/eval` page.
+
+### Results (measured 2026-10-17)
+
+RCAEval RE2-TT, all 90 cases, frozen weights `2026-10-17.v5`, rules `2026-10-16`, engine only (no LLM). A hit means
+the verdict's root-cause operation is in the labelled service; `no_root_cause` counts as a miss.
+
+| | Cases | AC@1 | AC@3 |
+|---|---|---|---|
+| **Held-out** (rep 3, never tuned on) | 30 | **90.0%** | 90.0% |
+| Dev (reps 1–2, weights tuned here) | 60 | 86.7% | 88.3% |
+| All | 90 | 87.8% | 88.9% |
+| Before tuning (v3 weights), all / held-out | 90 / 30 | 61.1% / 66.7% | 87.8% / 90.0% |
+
+The ablations (all 90 cases, v5), losses included:
+
+| Variant | AC@1 | AC@3 | Reading |
+|---|---|---|---|
+| full | 87.8% | 88.9% | |
+| no PageRank | 76.7% | 85.6% | The biggest single contributor |
+| no mechanism rule | 83.3% | 94.4% | Helps at @1; at @3 the victim refutes cost some runner-ups |
+| no Fault Simulator footprint (v1) | 83.3% | 88.9% | +4.5 points at @1 |
+| no temporal rule | **92.2%** | **95.6%** | **Better without it on RE2-TT.** Kept, because the live scenarios (a flag or a deploy before the effect) depend on onset order; noted as a known loss |
+
+By fault (AC@1): cpu 100%, delay 100%, socket 93.3%, disk 86.7%, loss 73.3%, mem 73.3%.
+
+Memory recall (leave-one-out precision@3, same service and fault): 12.2% (13.0% before the slow-burn fix, below). The signature describes the *shape* of an
+incident (kinds, hops, service kind), and many RE2-TT services fail in the same shape. Recall is a weak point.
+
+Determinism: two full runs give byte-identical result files (`cmp`).
+
+Re-measured after the slow-burn fix (run `0008`: the pass now fetches its own 6 h of metrics): AC@1 / AC@3 and every
+ablation unchanged; one verdict, already a miss, moved to another service.
+
+Synthetic samples, reported apart (seed 1, `api.eval --suite synth`): small 8/8, medium 7/9, huge 5/9 AC@1; misses
+and their causes in [EXAMPLE_RUNS §4](docs/EXAMPLE_RUNS.md#4-synthetic-samples-self-made).
+
+**Latency** (targets from [ARCHITECTURE §1.2](docs/ARCHITECTURE.md#12-non-functional)):
+
+| | Measured | Target |
+|---|---|---|
+| N1 alert → verdict, RCAEval replay (ingest 24 min of telemetry + diagnose) | p50 10.3 s, p95 15.4 s, max 21.0 s | < 60 s ✓ |
+| N1 diagnosis only, RCAEval | p50 263 ms, p95 534 ms | |
+| N1 diagnosis (agent flow), the 11 recorded live incidents (OTel Demo, flip-commerce) | 178–843 ms | < 60 s ✓ |
+| N2 p95 per query, live API (Q1, Q2, Q3, Q3b, Q4a / Q4_blame / Q4b, Q5) | 8.4, 10.0, 11.4, 7.7, 6.1 / 4.1 / 7.3, 52.0 ms | < 200 ms ✓ |
+
+For a live run, alert → verdict also includes the `settle_s` wait (by design, 60–90 s after the fault) and the ingest
+from Jaeger / Prometheus. The verdict lands within about a second of the ingest.
+
+How the weights were frozen:
+- v4 came from a grid on the dev split only.
+- v5 then raised `change_match`, which RCAEval can't tune because it has no change events, after v4 flipped one live
+  flip-commerce verdict. It scales the rest uniformly, so the RE2-TT numbers are identical to v4's.
+
+The reasoning is in [LLD §6.3](docs/LLD.md#63-weightsjson).
 
 ## 7b. Test reports
 

@@ -153,3 +153,20 @@ def test_alert_ingest_runs_once_even_when_the_window_was_healthy(graph, tmp_path
     finally:
         env.delete()
     assert seen == ["inc-h", "inc-h"]
+
+
+def test_lines_since_reads_only_the_window_of_a_long_file(tmp_path):
+    """Binary search on the byte offset: everything from `start` on, a slack before it, not the whole file."""
+    from api.ingest.otel import SLACK_S, _nginx_ts, lines_since
+
+    p = tmp_path / "access.log"
+    lines = [f'{1000 + i}.500 "GET /node/products HTTP/1.1" 200 0.010 127.0.0.1:5001 0.009\n' for i in range(50_000)]
+    lines.insert(30_000, "1000")  # a line cut mid-write: no newline, unreadable timestamp
+    p.write_text("".join(lines), encoding="utf-8")
+    start = 1000 + 40_000
+    got = list(lines_since(p, start, _nginx_ts))
+    ts = [t for line in got if (t := _nginx_ts(line)) is not None]
+    assert ts[-1] == 1000 + 49_999.5 and all(t >= start - SLACK_S - 1000 for t in ts)  # starts shortly before start
+    assert {t for t in ts if t >= start} == {1000 + i + 0.5 for i in range(40_000, 50_000)}  # nothing in range lost
+    assert len(got) < 12_000  # ~10k in the window + the slack + one search block, not 50k
+    assert list(lines_since(p, 0, _nginx_ts))[0] == lines[0]  # a window before the file: from the top

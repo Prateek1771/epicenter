@@ -21,6 +21,8 @@ ENV_INDEXES = [
     "idx_change",
     "idx_change_id",
     "idx_run",
+    "idx_conversation",
+    "idx_message",
     "idx_evidence",
     "idx_incident",
     "idx_hypothesis",

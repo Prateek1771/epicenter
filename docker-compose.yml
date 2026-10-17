@@ -50,7 +50,8 @@ services:
   web:
     build:
       context: ./web
-      args: { NEXT_PUBLIC_API_URL: "http://localhost:8000/api/v1" }   # inlined into the browser bundle at build
+      # inlined into the browser bundle at build; the demo box sets PUBLIC_API_URL=https://<host>/api/v1 (phase 11)
+      args: { NEXT_PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000/api/v1}" }
     ports: ["3001:3000"]
     depends_on: [api]
     restart: unless-stopped

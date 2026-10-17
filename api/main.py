@@ -22,8 +22,9 @@ from api.events import publish
 from api.graph import Graph, GraphUnavailable, get_graph
 from api.ingest import live
 from api.ingest.seed import seed_all
-from api.routes import alerts, deliver, graph_views, health, incidents, runs
+from api.routes import alerts, conversations, deliver, graph_views, health, incidents, runs
 from api.routes import ask as ask_route
+from api.routes import eval as eval_route
 from api.routes.deps import ApiError
 from api.runs import Runner
 from api.tools import mcp_server
@@ -77,7 +78,8 @@ async def lifespan(app: FastAPI):
     app.state.runner = Runner()
     app.state.ask = ask.answer
     try:
-        seed_all(app.state.graph, s.env_name)
+        for env in sorted({s.env_name} | live.live_envs()):  # every live env gets its owners and runbooks
+            seed_all(app.state.graph, env)
     except GraphUnavailable as e:
         # ponytail: seed runs once per start; restart the api after FalkorDB is back to seed
         log.warning(json.dumps({"event": "seed_skipped", "reason": str(e)}))
@@ -170,6 +172,6 @@ def jsonable(errors: list) -> list:
 
 
 router = APIRouter(prefix="/api/v1")
-for r in (health, alerts, incidents, deliver, ask_route, graph_views, runs):
+for r in (health, alerts, incidents, deliver, ask_route, conversations, graph_views, runs, eval_route):
     router.include_router(r.router)
 app.include_router(router)

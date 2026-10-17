@@ -36,10 +36,11 @@ def ingest_window(
     series = list(ad.series(base[0], window[1]))
     rows = detect.detect_window(series, t, cfg, s.baseline_s, window[1] - t)
 
+    # the slow-burn pass reads its own 6 h of resource metrics: the short window above starts ~12 min before t
     slow_kinds = set(s.slow_burn_kinds.split(","))
     lookback = (t - s.slow_burn_lookback_s, t)
-    for sr in series:
-        if sr.kind in slow_kinds and sr.metric.startswith("metric:"):
+    for sr in ad.metric_series(*lookback):
+        if sr.kind in slow_kinds:
             keep = (sr.ts >= lookback[0]) & (sr.ts <= lookback[1])
             minute = sr.ts[keep] // 60 * 60
             if len(minute) == 0:

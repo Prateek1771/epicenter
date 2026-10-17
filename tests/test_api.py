@@ -271,6 +271,79 @@ def test_incident_graph_has_everything_the_canvas_draws(client):
     assert ENV in envs.items and envs.default
 
 
+def test_service_changes_for_the_map_side_panel(client, monkeypatch):
+    """Phase 12 /map: recent changes on a service, newest first, with their authors; bounded by `hours`."""
+    from api.tools import graph_tools
+
+    monkeypatch.setattr(graph_tools.time, "time", lambda: 3600)  # the fixture's change is at ts 60
+    r = client.get("/api/v1/services/payment/changes", params=Q | {"hours": 1})
+    assert r.status_code == 200, r.text
+    [c] = r.json()["items"]
+    assert (c["id"], c["type"], c["authors"]) == ("ch-1", "flag", ["alice"])
+    assert client.get("/api/v1/services/redis/changes", params=Q).json()["items"] == []
+
+
+def test_blast_radius_dossier_routes(client):
+    """/blast-radius bento: people to pull in, runbooks, and the riskiest services when none is picked."""
+    people = client.get("/api/v1/services/payment/people", params=Q).json()["items"]
+    alice = next(p for p in people if p["handle"] == "alice")
+    assert "AUTHORED" in alice["via"]  # she authored the flag change on payment (mini_graph ch-1)
+    assert client.get("/api/v1/services/nope/people", params=Q).status_code == 404
+    assert isinstance(client.get("/api/v1/services/payment/runbooks", params=Q).json()["items"], list)
+    risk = client.get("/api/v1/services/risk", params=Q | {"limit": 50}).json()["items"]
+    pay = next(r for r in risk if r["name"] == "payment")
+    assert pay["callers"] >= 1  # checkout calls it
+    assert [r["incidents"] for r in risk] == sorted((r["incidents"] for r in risk), reverse=True)
+
+
+def test_graph_explore_is_bounded_and_spans_labels(client):
+    """/map Network view: every label, ids are Label:key, edges only between returned nodes, capped by limit."""
+    g = client.get("/api/v1/graph/explore", params=Q | {"limit": 500}).json()
+    labels = {n["label"] for n in g["nodes"]}
+    assert {"Service", "Operation", "Team"} <= labels and set(g["label_counts"]) >= labels
+    ids = {n["id"] for n in g["nodes"]}
+    assert "Service:payment" in ids and all(e["from"] in ids and e["to"] in ids for e in g["edges"])
+    assert {"HAS_OP", "CALLS", "OWNED_BY"} <= {e["type"] for e in g["edges"]}
+    small = client.get("/api/v1/graph/explore", params=Q | {"limit": 10}).json()
+    assert len(small["nodes"]) == 10 and small["truncated"] and small["nodes"][0]["label"] == "Service"
+    assert g == client.get("/api/v1/graph/explore", params=Q | {"limit": 500}).json()  # deterministic
+
+
+def test_simulate_lab_routes(client):
+    """/simulate lab: compare a prediction with past incidents, list saved experiments, show the rules."""
+    _diagnosed(client)  # inc-1 is rooted at payment/Charge
+    body = {"service": "payment", "kind": "errors"}
+    cmp = client.post("/api/v1/simulate/compare", params=Q, json=body).json()
+    [row] = [r for r in cmp["items"] if r["incident"] == "inc-1"]
+    assert 0 <= row["coverage"] <= 1 and row["explains"].startswith("explains ")
+    assert cmp == client.post("/api/v1/simulate/compare", params=Q, json=body).json()  # deterministic
+    assert (
+        client.post("/api/v1/simulate/compare", params=Q, json={"service": "nope", "kind": "down"}).status_code == 404
+    )
+    saved = client.post("/api/v1/simulate", params=Q, json={"service": "redis", "kind": "down", "save": True}).json()
+    sims = client.get("/api/v1/simulations", params=Q).json()["items"]
+    assert sims[0]["id"] == saved["simulation_id"] and sims[0]["operations"] == saved["counts"]["operations"]
+    rules = client.get("/api/v1/rules").json()["items"]
+    assert rules and [r["id"] for r in rules] == sorted(r["id"] for r in rules)
+
+
+def test_export_markdown_human_and_agent(client):
+    """Incident page downloads: incident_info.md for people, an agent context file for coding agents. Deterministic."""
+    _diagnosed(client)
+    r = client.get("/api/v1/incidents/inc-1/export.md", params=Q)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
+    assert 'filename="inc-1.incident_info.md"' in r.headers["content-disposition"]
+    md = r.text
+    assert md.startswith("# Incident inc-1") and "**Root cause:** `payment/Charge`" in md and "## Evidence" in md
+    a = client.get("/api/v1/incidents/inc-1/export.md", params=Q | {"flavor": "agent"})
+    assert 'filename="inc-1.agent.md"' in a.headers["content-disposition"]
+    assert "## Where to look" in a.text and "`payment`" in a.text and "## Constraints" in a.text
+    assert a.text == client.get("/api/v1/incidents/inc-1/export.md", params=Q | {"flavor": "agent"}).text
+    assert client.get("/api/v1/incidents/nope/export.md", params=Q).status_code == 404
+    bad = client.get("/api/v1/incidents/inc-1/export.md", params=Q | {"flavor": "x"})
+    assert bad.status_code == 400 and bad.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
 def test_verdict_card_and_canvas_extras(client):
     """Phase 12: owner, contributing change, found-in on the verdict; changes + alert time on the canvas; precedent."""
     body = _diagnosed(client)

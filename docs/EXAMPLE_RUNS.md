@@ -20,23 +20,21 @@ the system evaluator ([LLD §13](LLD.md#13-system-evaluator-syscheck), [SETUP §
 
 ## 0. Sample sizes: small, medium, huge
 
-| Size | Sample | Kind | Docker memory | Graph size | Shows |
-|---|---|---|---|---|---|
-| Small | Fixture self-test (`tests/fixtures/*.cypher`) | hand-made graphs | none extra | 4–10 ops each | known cause, two faults, healthy, quiet symptom, saturated caller, weak self-blame |
-| Small | Synthetic small (§4) | generated, replayed | none extra | 5 svc / ~15 ops | the full ingest → detect → search path on a laptop |
-| Small | Jaeger HotROD (§5) | live, real OTLP traces | < 1 GB | 4 svc / ~10 ops | live ingest + a config change as the cause, on any machine |
-| Medium | Synthetic medium (§4) | generated, replayed | none extra | 30 svc / ~150 ops | two faults, a loud victim, a healthy run, a config change |
-| Medium | RCAEval RE2-TT (§3) | recorded benchmark | none extra | ~40 svc | accuracy on public data |
-| Medium | flip-commerce (§2) | live, own system | ~2 GB | 5 svc / ~15 ops | real Mongo / Redis failures |
-| Medium | OTel Demo minimal (§1) | live | ~3 GB | ~15 svc | multi-hop without Kafka and its consumers |
-| Huge | OTel Demo full (§1) | live | ~6 GB | ~20 svc / ~80 ops | the main multi-hop demo |
-| Huge | Synthetic huge (§4) | generated, replayed | ~1 GB during replay | 300 svc / ~2000 ops, 6 h | scale: N2 query latency at size, the slow-burn pass |
-| Huge | Train-Ticket live (§6) | live, opt-in | 24 GB+ (estimate) | 41 svc | the system RCAEval recorded, faulted live |
+**The demo set is three demos** (2026-10-17; [SETUP §5](SETUP.md#5-the-three-demos)):
 
-OTel Demo minimal is the demo's own `docker-compose.minimal.yml`: no Kafka, accounting, fraud-detection or flagd-ui,
-about 3 GB instead of 6 GB ([OTel Demo Docker deployment](https://opentelemetry.io/docs/demo/docker-deployment/)).
-`run.py up --minimal` selects it **(phase 11)**; flagd itself is still there, so `paymentFailure` and `adHighCpu`
-apply.
+| Demo | Sample | Kind | Docker memory | Graph size | Shows |
+|---|---|---|---|---|---|
+| 1 Small | Synthetic small (§4) | generated, replayed | none extra | 5 svc / 14 ops | the full ingest → detect → search path on any laptop, with a known answer (8/8) |
+| 2 Medium | RCAEval RE2-TT (§3) | recorded benchmark | none extra | ~40 svc in a window | accuracy on public data (AC@1 87.8%, held-out 90.0%) |
+| 3 Real-world | OTel Demo (§1) | live | ~6 GB | ~15 svc | multi-hop search on a live microservice shop, faults flipped by feature flags |
+
+Also built, used in development, and recorded below, but not part of the demo set: the fixture self-test
+(`api.selftest`, the tier-1 check), flip-commerce (§2), synthetic medium / huge (§4). HotROD (§5) and Train-Ticket live
+(§6) were dropped.
+
+The OTel Demo 3.1.0 `compose.yaml` is the demo's minimal core (no Kafka, accounting or fraud-detection; those are in
+`compose.full.yaml`, which `run.py` doesn't load), plus `compose.observability.yaml`. flagd is part of the core, so
+every scenario applies.
 
 Considered and not picked:
 - **DeathStarBench** (social network, media, hotel): C++/Thrift services with Jaeger tracing, but no built-in fault
@@ -78,11 +76,11 @@ The `otel` adapter (demo mode) reads:
 Flag names checked against 3.1.0's `src/flagd/demo.flagd.json`: `paymentFailure` (variant `50%`), `adHighCpu` (`on`),
 `emailMemoryLeak` (`100x`). Each run flips `defaultVariant` with one atomic rename; flagd picks it up in about a second.
 
-| Scenario | Alert on | Settle | Expected verdict | Live result (2026-10-16, 10 users) |
-|---|---|---|---|---|
-| `paymentFailure` | `frontend/POST /api/checkout` | 90 s | `payment/Charge`, change = flag on | `payment/oteldemo.PaymentService/Charge`, 0.81–0.83, path payment → checkout → frontend, "flag paymentFailure → 50% 64 s before" |
-| `adHighCpu` | `frontend/GET /api/data` | 60 s | `ad/*`, kind `cpu` | `ad/oteldemo.AdService/GetAds`, cpu (0.02 → 3 cores), confirmed |
-| `emailMemoryLeak` | `frontend/POST /api/checkout` | 90 s | `no_root_cause` at demo traffic | `no_root_cause`: email's memory rose 79 → 87 MB in the window (+10%), under the detector, then plateaued |
+| Scenario | Alert on | Settle | Expected verdict | Live result (2026-10-16, 10 users) | Re-run (2026-10-17, full test) |
+|---|---|---|---|---|---|
+| `paymentFailure` | `frontend/POST /api/checkout` | 90 s | `payment/Charge`, change = flag on | `payment/oteldemo.PaymentService/Charge`, 0.81–0.83, path payment → checkout → frontend, "flag paymentFailure → 50% 64 s before" | same op, 0.99, flag change found; found in 0.8 s, alert → verdict 131 s; undo → flags `off` |
+| `adHighCpu` | `frontend/GET /api/data` | 60 s | `ad/*`, kind `cpu` | `ad/oteldemo.AdService/GetAds`, cpu (0.02 → 3 cores), confirmed | same op, 0.999, found in 2.4 s (gap: traces) |
+| `emailMemoryLeak` | `frontend/POST /api/checkout` | 90 s | `no_root_cause` at demo traffic | `no_root_cause`: email's memory rose 79 → 87 MB in the window (+10%), under the detector, then plateaued | **differs:** `email/POST /send_order_confirmation`, 0.61, with the flag change (gap: logs). Email is the leaking service, so this verdict is right and the expectation was conservative; demo traffic decides which way it falls |
 
 Trigger: the `/runs` screen, or `POST /api/v1/runs {"env":"astronomy-shop","scenario":"paymentFailure"}`; undo with
 `DELETE /api/v1/runs/{run_id}?env=astronomy-shop`. Every run was undone and the flags read `off` afterwards.
@@ -259,85 +257,85 @@ docker compose exec api python -m api.eval --suite re2 --system tt
 
 ## 4. Synthetic samples (self-made)
 
-**Phase 11, not built yet.** Generated cases with a known answer, in any size, on any machine. They fill the gap between
-the fixtures (hand-made graphs, which skip ingest) and the live environments (which need real hardware).
+Generated cases with a known answer, in any size, on any machine. They fill the gap between the fixtures (hand-made
+graphs, which skip ingest) and the live environments (which need real hardware).
 
 ```bash
-docker compose exec api python examples/synthetic/gen.py --size small|medium|huge --fault <kind> --seed <n>
-docker compose exec api python -m api.ingest.rcaeval --case <printed case id> --env synthetic
-docker compose exec api python -m api.eval --suite synth --size medium          # AC@1 / AC@3 per size
+docker compose exec api python examples/synthetic/gen.py --size small|medium|huge --fault <kind> --seed <n> [--run]
+docker compose exec api python -m api.ingest.rcaeval --case <printed case id> --env synthetic   # or /runs → Synthetic
+docker compose exec api python -m api.eval --suite synth --size small,medium,huge               # every fault per size
 ```
 
 - **Layout:** the generator writes the **RCAEval layout**, so the existing replay path ingests it unchanged:
   `traces.parquet`, `metrics.parquet`, `logs.parquet`, `inject_time.txt`.
-  - Two extra files: `labels.json` (root-cause service / op / kind, read by eval only, never ingested) and, for
-    `config`, `changes.jsonl` in the fault-journal format.
-  - Output goes to `data/rcaeval/synth-<size>_<svc>_<fault>_<n>/`. The script runs inside the api container because
-    `examples/` is mounted read-only there.
-- **Topology:** a layered call graph:
-  - `edge → api tier → domain services → datastores (mongodb, redis, mysql)`;
-  - fan-out 2–4 per operation;
-  - traffic shares that sum to 1 per caller;
-  - each service has 2–8 operations.
+  - Two extra files: `labels.json` (root-cause service / op / fault, read by eval only, never ingested) and, for
+    `config`, `changes.jsonl` in the fault-journal format (read by the RCAEval adapter through `read_journal`).
+  - Output goes to `data/rcaeval/synth-<size>_<svc>_<fault>_<seed>/`; `/runs` lists every case found there under env
+    `synthetic`, with its `expect` from `labels.json`.
+  - Each (size, fault) gets its own inject time, one day apart, so cases replayed into the shared `env:synthetic` never
+    overlap. `--run` and the eval use a throwaway graph per case instead.
+- **Topology:** a layered call graph, one per (size, seed), so every fault of a size runs on the same system:
+  `edge → api tier → domain services → datastores (mongodb, redis, mysql, store-*)`; each operation calls 1–3
+  operations one or two tiers down. Faults land only on operations that traffic reaches from the edge.
 
-  | Size | Services | Ops | Window | Traces / s |
-  |---|---|---|---|---|
-  | small | 5 | ~15 | 15 min | 5 |
-  | medium | 30 | ~150 | 30 min | 20 |
-  | huge | 300 | ~2000 | 6 h (slow-burn pass) | 50 (sampled) |
+  | Size | Services | Ops (seed 1) | Traces | Traces / s | Metrics |
+  |---|---|---|---|---|---|
+  | small | 5 | 14 | 15 min (t−10 … t+5) | 5 | 1 s steps; `mem`: 6 h at 5 s |
+  | medium | 30 | ~150 | 15 min | 20 | same |
+  | huge | 300 | 1,814 (~300k spans) | 15 min | 50 | same |
 
-- **Healthy behaviour:** log-normal latencies per operation, 0.1–0.5% background errors, a daily-shaped traffic curve,
-  per-service CPU and memory with noise.
-- **Faults** start at `inject_time` and spread up the callers following `seed/propagation_rules.yaml`, so the footprint
-  is the one the Fault Simulator would predict, with real noise around it:
+- **Healthy behaviour:** log-normal latencies per operation, 0.3% background errors (a parent fails with 70% of its
+  failed children), per-service CPU and memory with noise. Traffic is flat.
+- **Faults** start at `inject_time`:
 
   | `--fault` | Injected | Label |
   |---|---|---|
-  | `cpu` | one service's CPU → saturation, its ops' self time grows | that service's busiest op, `cpu` |
-  | `mem` | linear memory climb from 3 h before the alert (huge only) | `mem`, found by the slow-burn pass |
-  | `delay` | +300 ms self time on one op | that op, `latency` |
-  | `error` | 30% errors on one op | that op, `errors` |
-  | `down` | a datastore stops answering (timeouts → errors upstream) | `mongodb/*` / `redis/*`, `down` |
-  | `config` | `delay` + a `Change` 60 s before | that op, with the change |
-  | `two` | two independent faults in disjoint subtrees | both, as `ROOT_CAUSE` rank 1 and 2 |
-  | `loud-victim` | a deep cause whose caller has the bigger anomaly | the deep cause, not the loud caller |
-  | `healthy` | noise only, plus one weak unrelated wobble | `no_root_cause` |
+  | `cpu` | one service's CPU → 0.95; its ops' self time ×20 (M/M/1 at ρ 0.95: response = service / (1 − ρ)) | that service |
+  | `mem` | linear memory climb from 3 h before the alert, metrics only | that service, found by the slow-burn pass |
+  | `delay` | +300 ms self time on one op | that op's service |
+  | `error` | 30% errors on one op, plus ERROR log lines | that op's service |
+  | `down` | a datastore op times out and fails | that datastore |
+  | `config` | `delay` + a `Change` 60 s before | that op's service, with the change |
+  | `two` | `cpu` on one service + 40% errors on an op in a disjoint subtree (neither reaches the other) from t+30 | both, as rank 1 and 2. Needs medium+: small has no independent pair and says so |
+  | `loud-victim` | +150 ms on a datastore op whose caller retries 3× (the bigger anomaly upstream) | the datastore, not the loud caller |
+  | `healthy` | noise only, plus a ×1.15 wobble on one op for a minute | `no_root_cause` |
 
-- **Determinism:** numpy `default_rng(seed)`. The same seed gives byte-identical files and so the same verdict
-  (AGENTS hard rule 5). The seed is part of the case id.
-- **Honesty:** synthetic data follows our own propagation rules, so it is easier than real data. Report synthetic
-  accuracy apart from RCAEval, never mixed into it. Its job is to test scale and code paths, not to prove accuracy.
+- **Determinism:** numpy `default_rng([seed, size, fault])`. The same seed gives byte-identical files and so the same
+  verdict (AGENTS hard rule 5); `tests/test_synth.py` checks the bytes.
+- **Honesty:** synthetic data is easier than real data in one way (the faults spread the way the propagation rules
+  say) and harder in another (hundreds of low-traffic operations at huge). Report synthetic accuracy apart from
+  RCAEval, never mixed into it. Its job is to test scale and code paths, not to prove accuracy.
 
-## 5. Jaeger HotROD (small, live)
+**Results** (2026-10-17, seed 1, weights `2026-10-17.v5`, `data/eval/0007-synth-s1-…json`):
 
-**Phase 11, not built yet.** HotROD is Jaeger's ride-sharing demo: one container running four logical services
-(`frontend`, `customer`, `driver`, `route`) with simulated `mysql` and `redis`, traced over OTLP. It runs on any laptop,
-so a weak machine still sees a live fault diagnosed. Source:
-[Jaeger getting started](https://www.jaegertracing.io/docs/2.2/getting-started/).
+| Size | AC@1 | AC@3 | Misses |
+|---|---|---|---|
+| small | **8 / 8** (100%) | 100% | none (`two` skipped: no independent pair) |
+| medium | **7 / 9** (78%) | 100% | `cpu` → `api-3` (caller); `two` → first cause right, no second cause |
+| huge | **5 / 9** (56%) | 67% | `cpu`, `mem`, `healthy` → a false error-rate anomaly on a low-traffic op (`svc-173`, `api-25`); `two` → `store-8` |
 
-- **Setup:** `examples/hotrod/compose.yaml` runs pinned `jaegertracing/example-hotrod` and `jaegertracing/jaeger`
-  (v2, all-in-one). The Jaeger v2 OTLP receiver listens on localhost by default, so the compose sets it to `0.0.0.0`.
-- **Ports:** HotROD 8083 and Jaeger UI 16687, so it can't collide with the OTel Demo or flip-commerce on 8080 / 16686.
-- **`run.py up|down|status`** with a stdlib load loop that calls `/dispatch?customer=<id>` a few times per second.
-- **Adapter:** the existing `otel` demo mode with `jaeger_url=http://host.docker.internal:16687` (no base path). There is
-  no Prometheus, so the series come from spans only. `LIVE_ENVS` gets `hotrod`.
-- **Faults:** HotROD's "bugs" are on by default and have command-line fixes (`--fix-db-query-delay`,
-  `--fix-disable-db-conn-mutex`, `--fix-route-worker-pool-size`).
-  - The healthy baseline runs **with** the fixes.
-  - `faults.py` journals a `config` change, then restarts HotROD without one fix. `--undo` restores it.
-  - Check the flag names with `docker run --rm jaegertracing/example-hotrod:<tag> all --help` on the pinned tag before
-    wiring.
+What the runs found:
+- **Bug, fixed:** the slow-burn pass never had its 6 h of data. `ingest_window` handed it the short window's series
+  (from t − 12 min), so a climb that started hours earlier could never reach the 1.5× ratio, in replay or live. The
+  adapters now have `metric_series(start, end)` and the pass fetches `[t − 6 h, t]` itself, as LLD §3.2 says
+  (`tests/test_synth.py` small `mem`). `mem` went from missed to found at every size.
+- **Known gap (huge):** with ~1,800 operations, a few background errors in a quiet 5 s bucket pass the error detector
+  (`eps_abs` 0.01, sustain 3) somewhere, and one such anomaly can win, even on `healthy`. The fix is a minimum error
+  count per bucket (or a binomial test) in the detector: a `detect` change, so a new weights version and an RE2 re-run.
+  Not done in this pass.
+- **Known gap (`two`):** the second fault is ranked #2 but explains < 50% of what the first left
+  (`simulator.second_cause.min_coverage` 0.5), so it isn't confirmed as a second cause. The `multi_fault` fixture
+  passes; tuning the frozen v5 weights for a synthetic case isn't worth it.
 
-| Scenario | Fix removed | Expected verdict |
-|---|---|---|
-| `db-slow` | `--fix-db-query-delay` | `mysql/*` (or `customer/*` if mysql isn't a separate service in the traces), `latency`, with the config change |
-| `db-mutex` | `--fix-disable-db-conn-mutex` | `mysql/*` / `customer/*`, `latency` (lock queueing) |
-| `route-pool` | `--fix-route-worker-pool-size` | `route/*`, `latency` |
-| `healthy-baseline` | none | `no_root_cause` |
+## 5. Jaeger HotROD (dropped)
 
-The expected-verdict column is a hypothesis until the first live run; record what happens, misses included.
+Built and wired on 2026-10-17 (`jaegertracing/example-hotrod:2.20.0`, fix flags checked), then dropped when the demo
+set was cut to three. One run happened before it was removed: `healthy-baseline` → `no_root_cause` ✓, but alert →
+verdict took 60 s, almost all of it ingest: with Jaeger as the only source, the adapter queries each service in turn
+and every dispatch trace (~50 spans) comes back once per service it touches, about 6× over. If HotROD (or any
+Jaeger-only env) comes back, read each trace once (one query from the entry service) before relying on its N1.
 
-## 6. Train-Ticket (huge, live, opt-in)
+## 6. Train-Ticket (huge, live, opt-in; dropped)
 
 **Phase 11 stretch; only on a 16-core / 32 GB+ box.** Train-Ticket (FudanSELab) is a 41-service train booking system
 (Java / Spring Boot, Node, Python, Go; MongoDB and MySQL). RCAEval's RE2-TT cases were recorded on it, so a live run
@@ -353,3 +351,31 @@ can be compared with the replay of the same fault. Source:
   Expected: `ts-auth-service/*` (`cpu`) and `ts-order-service/*` (`latency`), the same targets as the replays
   (`re2tt_ts-auth-service_cpu_*`, `re2tt_ts-order-service_delay_1`).
 - **Not on the demo box:** `m6i.2xlarge` can't hold it next to the OTel Demo. Rehearse it on an `m6i.4xlarge` if at all.
+
+---
+
+## 7. Demo script (phase 10)
+
+About 6 minutes, small → medium → real-world. Everything runs from the `/runs` screen. The backup video follows the
+same order.
+
+| # | Time | Do | Say / point at |
+|---|---|---|---|
+| 1 | 0:00 | Open `/` (landing), then **Open the app** | "Every outage has an epicenter. The graph does the reasoning; the LLM only explains." |
+| 2 | 0:30 | `/runs` → **synthetic · small `config`**, then **small `healthy`** (demo 1) | A known answer: the labelled op, badge "matches expected" (in a graph that already holds older synthetic runs the change isn't linked; a fresh `env:synthetic` shows it). Then `no_root_cause` on a healthy system: Epicenter doesn't invent a cause. |
+| 3 | 1:00 | `/runs` → **astronomy-shop · paymentFailure**; open the incident while it streams | The lanes fill live. The alert is on `frontend`, the loudest symptom. |
+| 4 | 2:00 | Click runner-up `checkout/PlaceOrder`, then `payment/Charge` (§1, "Fault Simulator demo moment") | Its footprint "explains 1 of 5", `payment` red as unexplained. `payment/Charge` lights the chain payment → checkout → frontend, with the flag change 64 s before. Symptom anchoring avoided, on screen. |
+| 5 | 3:00 | **Receipts** + **Graph \| Data** toggle | Every query that produced the answer, with timings; the same subgraph as a table. |
+| 6 | 3:30 | `/runs` → **rcaeval-tt · `re2tt_ts-auth-service_cpu_2`** (demo 2) | A real recorded fault on 40+ Train-Ticket services: `ts-auth-service`, found in under a second of diagnosis. |
+| 7 | 4:30 | `/simulate` → type `redis` (the traces name valkey-cart `redis`), kind `down`, **Simulate**, then **Play** | What-if: 12 operations in 6 services, cart → checkout / frontend, with owners and how soon, before anything breaks. |
+| 8 | 5:15 | `/eval` | The RCAEval number on 90 RE2-TT cases, the held-out split and the ablations, losses included (README results table). |
+| 9 | 5:45 | Undo the runs (`/runs` → Undo) | Read-only towards the systems: only `faults.py` changed anything, and it put it back. |
+
+**Before going on stage:**
+- `python examples/otel-demo/run.py status` is green, and `/health` is all `ok`.
+- The OTel Demo has been up for **≥ 25 min**, and one rehearsal run of `paymentFailure` is done (≥ 10 min before the
+  live one). A run 10 min after a cold start blamed `postgresql` (2026-10-17); see SETUP §5, demo 3.
+- The synthetic cases and the RCAEval case are on disk (`/runs` lists them; generate / `--download` the day before).
+
+**If the OTel Demo won't start:** steps 3–5 use the RCAEval replay of `re2tt_ts-order-service_delay_1` (`/runs` →
+replay) instead, and the backup video covers the live moment.

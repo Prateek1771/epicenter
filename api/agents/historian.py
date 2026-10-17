@@ -6,26 +6,10 @@ Runs after the verdict is published, so memory never slows the diagnosis. Re-ran
 
 from api.events import publish
 from api.search import causal
-from api.search.signature import signature
-
-
-def incident_signature(r: causal.Run) -> list[float]:
-    roots = r.env.ro("signature_roots", inc=r.incident)
-    top = roots[0] if roots else None
-    return signature(
-        root_kinds=top["kinds"] if top else [],
-        hops=top["hops"] if top else None,
-        root_service_kind=top["service_kind"] if top else None,
-        change_types=[x["type"] for x in r.env.ro("root_change_types", inc=r.incident)],
-        run_kinds=[k for h in r.env.ro("run_kinds", inc=r.incident) for k in (h["kinds"] or [])],
-        op_service_kinds=[x["kind"] for x in r.env.ro("anomalous_op_kinds", inc=r.incident)],
-        templates=[x["text"] for x in r.env.ro("op_templates", inc=r.incident, op=top["op"])] if top else [],
-        second_cause=any(x["rank"] == 2 for x in roots),
-    )
 
 
 def remember(r: causal.Run) -> dict:
-    sig = incident_signature(r)
+    sig = causal.incident_signature(r)
     if not any(sig):
         return {}  # nothing to describe (no anomalies at all): no signature, no recall
     r.env.rw("incident_set_signature", inc=r.incident, sig=sig)

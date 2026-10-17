@@ -9,7 +9,7 @@ astronomy-shop:
       services: [checkout, payment, currency, shipping, quote, email]
       members: [{ handle: pay-oncall, name: Payments on-call }]
     - name: platform
-      services: [cart, valkey-cart, kafka, accounting, fraud-detection, flagd]
+      services: [cart, valkey-cart, redis, kafka, accounting, fraud-detection, flagd]  # the traces name valkey `redis`
       members: [{ handle: plat-oncall, name: Platform on-call }]
 
 flip-commerce:

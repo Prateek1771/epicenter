@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { Suspense } from "react";
 
 import { TopBar } from "@/components/shell/top-bar";
@@ -12,6 +12,8 @@ import "./globals.css";
 // The variable names stay --font-geist-* so globals.css and inline styles don't change.
 const geistSans = Inter({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = JetBrains_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// the landing's display serif, app-wide: page titles (globals.css h1) and the landing headlines
+const display = Instrument_Serif({ variable: "--font-landing-serif", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
 
 export const metadata: Metadata = {
   title: "Epicenter",
@@ -21,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     // the font variables go on <html>: Tailwind's base font-family resolves there, so on <body> they never applied
-    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} ${display.variable}`}>
       <body className="min-h-screen font-sans antialiased">
         <TooltipProvider delayDuration={200}>
           {/* useSearchParams (env) needs a Suspense boundary for static rendering */}

@@ -1,0 +1,30 @@
+# Demo box override (phase 11, ADR 0013, HLD §5.3). Compose ≥ 2.24 (`!override`).
+#   docker compose -f docker-compose.yml -f deploy/compose.prod.yaml up -d --build
+# Every Epicenter port is bound to loopback; only Caddy listens publicly (80/443). The security group is the boundary
+# for the example environments' own ports (Docker bypasses ufw).
+services:
+  falkordb:
+    ports: !override ["127.0.0.1:6380:6379", "127.0.0.1:3002:3000"]
+  falkordb-mcp:
+    ports: !override ["127.0.0.1:8081:8080"]
+  api:
+    ports: !override ["127.0.0.1:8000:8000"]
+  web:
+    ports: !override ["127.0.0.1:3001:3000"]
+  open-connector:
+    ports: !override ["127.0.0.1:3000:3000"]
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    ports: ["80:80", "443:443"]
+    env_file: .env          # EPICENTER_HOST, DEMO_USER, DEMO_PASSWORD_HASH (single-quoted: bcrypt has `$`)
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data    # certificates survive restarts, so Let's Encrypt isn't asked again
+      - caddy_config:/config
+    depends_on: [api, web]
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -46,6 +46,7 @@ SPEC = {
     "test_calibrate": "docs/phases/phase-07-memory-llm-delivery.md",
     "test_prompt_evals": "api/agents/prompts/",
     "test_runs": "docs/API.md (runs), ADR 0012",
+    "test_eval": "docs/phases/phase-10-eval-demo.md, docs/LLD.md §12 (eval)",
     "test_report": "tests/report.py",
 }
 

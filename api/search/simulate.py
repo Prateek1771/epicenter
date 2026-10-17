@@ -230,20 +230,48 @@ class Simulator:
         return simulate(cand, cause_kinds, t_cause, paths, self.info(ops), self.rules, self.cfg["min_p"], self.skew_s)
 
 
+def _target_ops(env: EnvGraph, target: str) -> list[str]:
+    return [target] if "/" in target else [r["op"] for r in env.ro("service_ops", svc=target)]
+
+
+def _predict_target(sim: Simulator, env: EnvGraph, target: str, kind: str, t_cause: int) -> list[Prediction]:
+    """Predictions for a target (an op, or every op of a service), merged per (op, kind) keeping the likeliest."""
+    merged: dict[tuple[str, str], Prediction] = {}
+    for op in _target_ops(env, target):
+        for p in sim.predict(op, [kind], t_cause):
+            k = (p.op, p.kind)
+            if k not in merged or (p.p, -p.hops) > (merged[k].p, -merged[k].hops):
+                merged[k] = p
+    return sorted(merged.values(), key=lambda p: (p.hops, p.op, p.kind))
+
+
+def compare(graph: Graph, env_name: str, target: str, kind: str, limit: int = 10) -> list[dict]:
+    """ "Did it happen before?": the what-if prediction matched against each past incident rooted at the target's
+    service. The clock starts at the target's earliest observed onset in that incident (else the first symptom)."""
+    s = get_settings()
+    w = json.loads(open(s.weights_path, encoding="utf-8").read())
+    env = graph.env(env_name)
+    sim = Simulator(graph, env, w["simulator"], w["skew_s"])
+    svc = target.split("/")[0]
+    out = []
+    for inc in env.ro("service_past_incidents", svc=svc)[-limit:]:
+        observed = observed_set(env.ro("observed", inc=inc["id"]))
+        if not observed:
+            continue
+        own = [o["onset"] for op, o in observed.items() if op == target or op.startswith(svc + "/")]
+        t0 = min(own or [o["onset"] for o in observed.values()])
+        m = match(_predict_target(sim, env, target, kind, t0), observed)
+        out.append({"incident": inc["id"], "observed": len(observed)} | m)
+    return sorted(out, key=lambda r: (-r["footprint"], r["incident"]))
+
+
 def what_if(graph: Graph, env_name: str, target: str, kind: str, save: bool = False) -> dict:
     """ "What breaks if `target` (an operation, or every operation of a service) fails with `kind`?" No incident."""
     s = get_settings()
     w = json.loads(open(s.weights_path, encoding="utf-8").read())
     env = graph.env(env_name)
     sim = Simulator(graph, env, w["simulator"], w["skew_s"])
-    ops = [target] if "/" in target else [r["op"] for r in env.ro("service_ops", svc=target)]
-    merged: dict[tuple[str, str], Prediction] = {}
-    for op in ops:
-        for p in sim.predict(op, [kind], 0):
-            k = (p.op, p.kind)
-            if k not in merged or (p.p, -p.hops) > (merged[k].p, -merged[k].hops):
-                merged[k] = p
-    preds = sorted(merged.values(), key=lambda p: (p.hops, p.op, p.kind))
+    preds = _predict_target(sim, env, target, kind, 0)
     owners = {r["op"]: r for r in env.ro("op_owners", ops=sorted({p.op for p in preds}))} if preds else {}
     out = [
         {

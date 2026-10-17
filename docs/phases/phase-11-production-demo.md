@@ -1,23 +1,27 @@
-# Phase 11: Demo deployment (AWS), setup guide, system evaluator, demo samples
+# Phase 11: Deployment plan (AWS), setup guide, system evaluator, demo samples
 
 **Goal:**
-- Epicenter runs on a public HTTPS URL during the demo, with live faults, and is torn down afterwards.
+- A deployment plan for a public HTTPS URL (AWS), scripted end to end and documented for judges in
+  [DEPLOYMENT_PLAN.md](../DEPLOYMENT_PLAN.md). **Not executed:** the event demo runs locally
+  ([ADR 0014](../adr/0014-local-event-demo.md)).
 - Anyone (a judge, an evaluator, a teammate) can set it up from [SETUP.md](../SETUP.md).
 - A **system evaluator** (`syscheck.py`) checks the machine. It picks the biggest set of samples the machine can run,
   from a small simulation up to full live environments, runs them and their tests, and reports what to try next.
-- Demo samples come in three sizes: small, medium and huge.
+- Three demos, one per size: **small** synthetic, **medium** RCAEval replays, **real-world** OTel Demo live
+  ([ADR 0014](../adr/0014-local-event-demo.md), [SETUP §5](../SETUP.md#5-the-three-demos)).
 
 **Depends on:** phases 9 and 10. **Unblocks:** the event demo and submission.
 
 ## Spec
 
-- [ADR 0013](../adr/0013-ephemeral-demo-deployment.md): one EC2 host for the demo, then destroy it
+- [ADR 0013](../adr/0013-ephemeral-demo-deployment.md): one EC2 host behind Caddy (the deployment plan);
+  [ADR 0014](../adr/0014-local-event-demo.md): the event demo runs locally instead
 - [HLD §5.3 demo deployment](../HLD.md#53-demo-deployment-aws), [HLD §9 security](../HLD.md#9-security)
 - [LLD §13 system evaluator](../LLD.md#13-system-evaluator-syscheck), [LLD §11 config](../LLD.md#11-configuration),
   [LLD §12 test plan](../LLD.md#12-test-plan)
 - [EXAMPLE_RUNS §0 sizes](../EXAMPLE_RUNS.md#0-sample-sizes-small-medium-huge),
-  [§4 synthetic](../EXAMPLE_RUNS.md#4-synthetic-samples-self-made), [§5 HotROD](../EXAMPLE_RUNS.md#5-jaeger-hotrod-small-live),
-  [§6 Train-Ticket](../EXAMPLE_RUNS.md#6-train-ticket-huge-live-opt-in)
+  [§4 synthetic](../EXAMPLE_RUNS.md#4-synthetic-samples-self-made), [§5 HotROD](../EXAMPLE_RUNS.md#5-jaeger-hotrod-dropped),
+  [§6 Train-Ticket](../EXAMPLE_RUNS.md#6-train-ticket-huge-live-opt-in-dropped)
 - [SETUP.md](../SETUP.md): the guide this phase has to make true
 
 ## Files
@@ -40,10 +44,14 @@ tests/test_synth.py     same seed → same files; small case → expected verdic
 
 ## Tasks
 
-### A. AWS demo deployment ([ADR 0013](../adr/0013-ephemeral-demo-deployment.md), [HLD §5.3](../HLD.md#53-demo-deployment-aws))
+### A. AWS deployment plan ([ADR 0013](../adr/0013-ephemeral-demo-deployment.md), [HLD §5.3](../HLD.md#53-demo-deployment-aws))
 
-The plan: create the box two days before the event and rehearse on it, stop it, start it on demo day, run the demo,
-back up the graph and destroy everything.
+**Scripted, not executed** ([ADR 0014](../adr/0014-local-event-demo.md)): the files below are built and checked
+locally; the steps that need an AWS account are marked *not run, by decision*. Judge-facing summary:
+[DEPLOYMENT_PLAN.md](../DEPLOYMENT_PLAN.md).
+
+The plan, if run: create the box two days before the event and rehearse on it, stop it, start it on demo day, run
+the demo, back up the graph and destroy everything.
 
 **Target**
 
@@ -68,14 +76,14 @@ back up the graph and destroy everything.
 
 A 3-day window with ~10 running hours costs under $10. Set a $20 AWS Budgets alert anyway.
 
-- [ ] `docker-compose.yml`: web build arg `NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000/api/v1}` (the
+- [x] `docker-compose.yml`: web build arg `NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000/api/v1}` (the
   only change to the base compose; local runs keep today's default).
-- [ ] `deploy/compose.prod.yaml` (Compose ≥ 2.24 for `!override`):
+- [x] `deploy/compose.prod.yaml` (Compose ≥ 2.24 for `!override`):
   - `ports: !override ["127.0.0.1:<port>:<port>"]` for falkordb (6380, 3002), falkordb-mcp (8081), api (8000),
     web (3001), open-connector (3000). Nothing of Epicenter's listens on a public interface except Caddy.
   - `caddy` service, pinned `caddy:2.x-alpine` tag, ports 80 and 443, `deploy/Caddyfile`, volumes
     `caddy_data` / `caddy_config` (certificates survive restarts, so Let's Encrypt isn't asked again).
-- [ ] `deploy/Caddyfile`:
+- [x] `deploy/Caddyfile`:
   ```
   {$EPICENTER_HOST} {
       basic_auth {
@@ -95,7 +103,7 @@ A 3-day window with ~10 running hours costs under $10. Set a $20 AWS Budgets ale
   `EventSource`. That is why `API_KEY` stays empty on the box: the web UI doesn't send `X-API-Key`, and the API is only
   reachable through Caddy. `/mcp`, falkordb-mcp and the FalkorDB browser are **not** exposed; use
   `ssh -L 3002:127.0.0.1:3002` when you need them.
-- [ ] `deploy/cloud-init.sh` (EC2 user-data; **no secrets**, user-data is readable from the console and the
+- [x] `deploy/cloud-init.sh` (EC2 user-data; **no secrets**, user-data is readable from the console and the
   metadata service):
   - Docker Engine + compose plugin from Docker's apt repo; `ubuntu` in the `docker` group.
   - `python3.12`, `python3.12-venv`, Node 22 (NodeSource), k6 (Grafana apt repo), uv, git, jq.
@@ -111,7 +119,7 @@ A 3-day window with ~10 running hours costs under $10. Set a $20 AWS Budgets ale
     adds build output to a throwaway clone; the source is never edited (hard rule 10).
   - `npm ci` in `examples/flip-commerce/otel-node`.
   - Writes `/opt/READY` when done; `aws.sh create` waits for it over SSH.
-- [ ] `deploy/aws.sh` (bash + AWS CLI v2; profile and region from `AWS_PROFILE` / `AWS_REGION`):
+- [x] `deploy/aws.sh` (bash + AWS CLI v2; profile and region from `AWS_PROFILE` / `AWS_REGION`):
   - `create`:
     - key pair (saved to `~/.ssh/epicenter-demo.pem`, mode 600);
     - security group: 443 and 80 from `0.0.0.0/0`, 22 from `$(curl -s https://checkip.amazonaws.com)/32` only;
@@ -127,7 +135,7 @@ A 3-day window with ~10 running hours costs under $10. Set a $20 AWS Budgets ale
     - terminates the instance and waits;
     - releases the EIP, deletes the security group and the key pair;
     - checks that no volume or snapshot with the tag is left.
-- [ ] `deploy/demo.sh` (runs on the box, from `/opt/epicenter`):
+- [x] `deploy/demo.sh` (runs on the box, from `/opt/epicenter`):
   - `up`:
     1. If `.env` is missing, generate it:
        - `FALKORDB_PASSWORD`, `MCP_API_KEY`, `FAULT_RUNNER_TOKEN` and `DEMO_PASSWORD` from `openssl rand -hex 24`;
@@ -150,16 +158,24 @@ A 3-day window with ~10 running hours costs under $10. Set a $20 AWS Budgets ale
   - `backup`: `redis-cli BGSAVE` in falkordb, wait for `LASTSAVE` to change, `docker cp` the `dump.rdb` to
     `backups/epicenter-<utc>.rdb`. Then, from the laptop, `aws.sh ssh -- cat …` it into `data/backups/`
     (git-ignored). This keeps the incident history (rehearsal and demo) after the box is gone.
-- [ ] Fault runner on Linux: `FAULT_RUNNER_BIND=0.0.0.0` (ADR 0012 already allows it). Port 8090 is closed by the
+- [x] Fault runner on Linux: `FAULT_RUNNER_BIND=0.0.0.0` (ADR 0012 already allows it). Port 8090 is closed by the
   security group; the token still guards it.
-- [ ] Ports opened by the example environments (8080, 16686, 9090, 9200, 6379, 27017–27019, 4317–4318, 5001) are
+- [ ] *Not run, by decision.* Ports opened by the example environments (8080, 16686, 9090, 9200, 6379, 27017–27019, 4317–4318, 5001) are
   published on all interfaces by their own compose files. Docker bypasses `ufw`, so **the security group is the
   boundary**. Check from outside with `nmap -Pn -p 1-65535 <host>`: only 80 and 443 (and 22 from your IP).
-- [ ] Rehearsal on the box: `python3 syscheck.py --run --live` (expects tier 4), then every scenario from `/runs` through
+- [ ] *Not run, by decision.* Rehearsal on the box: `python3 syscheck.py --run --live` (expects tier 4), then every scenario from `/runs` through
   the public URL; write down the verdicts next to EXAMPLE_RUNS.
-- [ ] Use a separate OpenRouter key with a spend limit for the box; revoke it after the demo.
+- [ ] *Not run, by decision.* Use a separate OpenRouter key with a spend limit for the box; revoke it after the demo.
 
-**Demo-day runbook** (also in [SETUP §9](../SETUP.md#9-hosted-demo-for-the-presenter)):
+**Checked locally:** `bash -n` on the three scripts; `docker compose -f docker-compose.yml -f deploy/compose.prod.yaml
+config`; Caddy basic auth in front of the local stack (401 without the login) and SSE through it (101 events streamed
+with `flush_interval -1`).
+
+**Event demo, local** (the runbook is [SETUP §9](../SETUP.md#9-presenter-demo-local)): `syscheck.py --run --live` the
+day before, OTel Demo up ≥ 10 min before the slot, `paymentFailure` live from `/runs`, flip-commerce and RCAEval from
+rehearsal incidents, fallback the recorded video.
+
+**Hosted runbook, if the plan is run:**
 
 | When | Step |
 |---|---|
@@ -174,7 +190,7 @@ Fallbacks, in order: the laptop setup (identical topology), then the recorded vi
 
 ### B. System evaluator ([LLD §13](../LLD.md#13-system-evaluator-syscheck))
 
-- [ ] `syscheck.py` at the repo root, stdlib only (runs before anything is installed; Python ≥ 3.10):
+- [x] `syscheck.py` at the repo root, stdlib only (runs before anything is installed; Python ≥ 3.10):
   - **Probe** (read-only, < 15 s): OS / arch, cores, RAM, disk free, Docker + Compose version, **Docker VM limits**
     (`docker info` → `NCPU`, `MemTotal`), free ports, tools (git, node, k6, uv), internet (Hugging Face,
     OpenRouter), `.env` sanity (present, no `change-me`), Epicenter stack health, a 3 s CPU benchmark and a
@@ -188,56 +204,60 @@ Fallbacks, in order: the laptop setup (identical topology), then the recorded vi
   - **Report:** a table on screen plus `data/syscheck/<n>-<utc>.json`, and the same `findings.md` +
     `agent-context.md` pair a test run writes (phase 12, `tests/report.py`), numbered and never overwritten.
     Exit code 0 = all checks passed, 1 = a check failed, 2 = the machine is below tier 1.
-- [ ] `api/selftest.py`: loads each `tests/fixtures/*.cypher` into its own `scratch:selftest-<name>` graph, diagnoses it,
+- [x] `api/selftest.py`: loads each `tests/fixtures/*.cypher` into its own `env:selftest-<n>-<name>` graph (diagnose reads env graphs), diagnoses it,
   prints verdict / top suspect / footprint / ms against the expected answer, and deletes the graph in `finally`.
   `python -m api.selftest [--json]`.
-- [ ] `api/runs.py` `Scenario.expect` (machine-readable, e.g. `{"target_prefix": "redis/"}` or
+- [x] `api/runs.py` `Scenario.expect` (machine-readable, e.g. `{"target_prefix": "redis/"}` or
   `{"status": "no_root_cause"}`) on every live scenario, so `syscheck` and the `/runs` card compare verdicts instead
   of eyeballing them. The card shows "matches expected" / "differs".
-- [ ] `tests/test_syscheck.py`: `pick_tier` on fake probes: 2 cores / 4 GB → 1; a 16 GB host whose Docker VM has 8 GB →
+- [x] `tests/test_syscheck.py`: `pick_tier` on fake probes: 2 cores / 4 GB → 1; a 16 GB host whose Docker VM has 8 GB →
   2 (the VM wins); 8 / 32 / 60 GB + tools → 4; no Docker → 0.
 
 ### C. Demo samples ([EXAMPLE_RUNS §0](../EXAMPLE_RUNS.md#0-sample-sizes-small-medium-huge))
 
-- [ ] **Synthetic generator** `examples/synthetic/gen.py --size small|medium|huge --fault <kind> --seed <n>`
+- [x] **Synthetic generator** `examples/synthetic/gen.py --size small|medium|huge --fault <kind> --seed <n>`
   ([EXAMPLE_RUNS §4](../EXAMPLE_RUNS.md#4-synthetic-samples-self-made)):
   - writes the RCAEval layout plus `labels.json` (and `changes.jsonl` for `config`) into `data/rcaeval/synth-…`;
   - the case regex in `api/runs.py` and `api/ingest/rcaeval.py` accepts `synth-<size>_<svc>_<fault>_<n>` → env
     `synthetic`;
   - the RCAEval adapter reads an optional `changes.jsonl` through `changes.read_journal`.
-- [ ] `api.eval --suite synth [--size …]`: AC@1 / AC@3 per size, the scale curve.
-- [ ] `tests/test_synth.py`: same seed → byte-identical files; `small/cpu` → the labelled op wins; `small/healthy` →
+  - *Built 2026-10-17:* `--run` diagnoses in a throwaway `env:synth-check`; inject times are a day apart per (size,
+    fault); `cpu` uses ×20 self time (M/M/1 at ρ 0.95); `two` refuses a topology with no independent pair (small).
+    Results and misses: [EXAMPLE_RUNS §4](../EXAMPLE_RUNS.md#4-synthetic-samples-self-made). The `mem` case found a
+    real bug: the slow-burn pass never had its 6 h of data (fixed: `Adapter.metric_series`, LLD §3.2).
+- [x] `api.eval --suite synth [--size …]`: AC@1 / AC@3 per size, the scale curve.
+- [x] `tests/test_synth.py`: same seed → byte-identical files; `small/cpu` → the labelled op wins; `small/healthy` →
   `no_root_cause`.
-- [ ] **HotROD** env ([EXAMPLE_RUNS §5](../EXAMPLE_RUNS.md#5-jaeger-hotrod-small-live)):
+- [ ] *Dropped by decision (ADR 0014: three demos).* **HotROD** env (built, one healthy run, then removed; EXAMPLE_RUNS §5) ([EXAMPLE_RUNS §5](../EXAMPLE_RUNS.md#5-jaeger-hotrod-dropped)):
   - compose, `run.py` and `faults.py`;
   - `LIVE_ENVS` entry `hotrod` with its own `jaeger_url`;
   - registry rows.
   - Check the fix flags with `docker run --rm jaegertracing/example-hotrod:<tag> all --help` before wiring scenarios.
-- [ ] **OTel Demo minimal:** `run.py up --minimal` (the demo's `docker-compose.minimal.yml` + our override). Verify that
+- [x] **OTel Demo minimal** (3.1.0's `compose.yaml` is already the minimal core and `run.py up` uses only it +
+  observability; `paymentFailure` / `adHighCpu` verified on it 2026-10-17): `run.py up --minimal` (the demo's `docker-compose.minimal.yml` + our override). Verify that
   `paymentFailure` and `adHighCpu` still give the same verdicts.
-- [ ] **Train-Ticket** (stretch) ([EXAMPLE_RUNS §6](../EXAMPLE_RUNS.md#6-train-ticket-huge-live-opt-in)): only if a
+- [ ] *Dropped by decision (ADR 0014).* **Train-Ticket** (stretch) ([EXAMPLE_RUNS §6](../EXAMPLE_RUNS.md#6-train-ticket-huge-live-opt-in-dropped)): only if a
   16-core / 32 GB box is rehearsed. `ts-auth-service` cpu and `ts-order-service` delay, compared with the RE2-TT
   replays.
 
 ### D. Docs
 
-- [ ] [SETUP.md](../SETUP.md) checked end to end on a clean machine per tier (Windows laptop, the EC2 box, a 2-core /
+- [ ] [SETUP.md](../SETUP.md) checked end to end on a clean machine per tier (Windows laptop, a 2-core /
   4 GB Docker limit), and every "phase 11" label removed as its command lands.
-- [ ] EXAMPLE_RUNS: write the real results of the new samples (verdicts, timings), including misses.
-- [ ] README: "Judges: start with [docs/SETUP.md](../SETUP.md)" (done in the docs pass); the phase 10 results table.
+- [x] EXAMPLE_RUNS: write the real results of the new samples (verdicts, timings), including misses.
+- [x] README: "Judges: start with [docs/SETUP.md](../SETUP.md)" (done in the docs pass); the phase 10 results table.
 
 ## Acceptance
 
-- `https://<host>` asks for the login, then shows the UI. SSE updates arrive live through Caddy (the incident canvas
-  fills during a run).
-- From outside, only 80 / 443 (and 22 from the presenter's IP) answer.
-- `/runs` on the box: ready dots green for `astronomy-shop`; `paymentFailure` → `payment/Charge` with the flag change;
-  Undo returns the flags to `off`.
-- `aws.sh destroy` leaves zero resources tagged `Project=epicenter-demo` (checked with
-  `aws resourcegroupstaggingapi get-resources`).
-- `demo.sh backup` produces a `dump.rdb` that loads in a local FalkorDB with the demo's incidents in it.
-- `syscheck.py` picks tier 1 with Docker capped at 2 CPUs / 4 GB, tier 4 on the EC2 box, the laptop's tier on the
-  laptop. `--run` passes on each and writes a numbered report.
+- [DEPLOYMENT_PLAN.md](../DEPLOYMENT_PLAN.md) lists the target, the security boundary, the lifecycle and cost, what
+  was verified locally and what wasn't. `deploy/` passes `bash -n` and the prod compose config validates.
+- Locally through Caddy: the login is required, then the UI shows; SSE updates arrive live.
+- `/runs` on the laptop: ready dots green for `astronomy-shop`; `paymentFailure` → `payment/Charge` with the flag
+  change; Undo returns the flags to `off`.
+- *Hosted-only checks (external port scan, `aws.sh destroy` leaving zero tagged resources, `demo.sh backup` on the
+  box): not run, by decision (ADR 0014).*
+- `syscheck.py` picks tier 1 with Docker capped at 2 CPUs / 4 GB and the laptop's tier on the laptop. `--run` passes
+  and writes a numbered report.
 - `test_syscheck.py` and `test_synth.py` pass; synthetic small / medium / huge give their labelled verdicts (misses
   reported, not hidden).
 
@@ -272,6 +292,6 @@ Fallbacks, in order: the laptop setup (identical topology), then the recorded vi
 
 ## Done when
 
-The demo ran from the public URL and the box is destroyed with its graph backed up. SETUP.md works on a clean machine
-at each tier. `syscheck.py` picks the right tier and its `--run` passes. The small / medium / huge samples run with
+The deployment plan is documented and its scripts checked locally; the event demo runs locally. SETUP.md works on a
+clean machine at each tier. `syscheck.py` picks the right tier and its `--run` passes. The small / medium / huge samples run with
 results written into EXAMPLE_RUNS.

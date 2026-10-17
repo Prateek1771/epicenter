@@ -23,6 +23,7 @@ from api.config import get_settings
 from api.graph import EnvGraph, Graph, GraphUnavailable
 from api.models import local_id, scoped_id
 from api.search import score as sc
+from api.search.signature import signature
 from api.search.simulate import Simulator, match, observed_set
 
 # --- Pure rules (table-tested in tests/test_causal.py) ---
@@ -158,6 +159,7 @@ def triage(
 def check(env: EnvGraph, incident: str, symptom: str, h: dict, w: dict) -> list[dict]:
     """Q3 + Q2 for one hypothesis → evidence dicts (without ids). Reads only; phase 5 runs these in parallel."""
     ev = []
+    off = set(w.get("ablate", []))
     # Q3 first: its rows carry the candidate's anomaly ids, which the propagation evidence cites (ABOUT edges)
     mech = env.ro("Q3", cand=h["op"], inc=incident, lookback_s=w["lookback_s"])
     cand_anomalies = sorted({row["anomaly"] for row in mech})
@@ -187,7 +189,7 @@ def check(env: EnvGraph, incident: str, symptom: str, h: dict, w: dict) -> list[
                     "anomalies": cand_anomalies,
                 }
             )
-        else:
+        elif "temporal" not in off:
             ev.append(
                 {
                     "rel": "refute",
@@ -204,6 +206,8 @@ def check(env: EnvGraph, incident: str, symptom: str, h: dict, w: dict) -> list[
     h["self_caused"] = None
     h["change"] = False
     for row in mech:
+        if "mechanism" in off:
+            break
         if is_victim(row["self_ratio"], row["child_ratio"]):
             h["victim"] = True
             ev.append(
@@ -219,7 +223,7 @@ def check(env: EnvGraph, incident: str, symptom: str, h: dict, w: dict) -> list[
             )
         elif row["self_ratio"] is not None and row["child_ratio"] is not None:
             h["self_caused"] = h["self_caused"] or row["self_ratio"] >= row["child_ratio"]
-    if set(h["kinds"]) <= {"latency"} and not h["victim"]:
+    if set(h["kinds"]) <= {"latency"} and not h["victim"] and "mechanism" not in off:
         # a datastore only "slow" as measured inside callers that are themselves saturated: the lag is theirs
         lag = env.ro("Q3b", cand=h["op"], inc=incident)
         if lag and all(is_saturated(r["self_ratio"], r["child_ratio"]) for r in lag):
@@ -533,6 +537,22 @@ def score_and_challenge(r: Run) -> list[dict]:
         if top is None or i == 2 or not skeptic(r, top):
             return ordered
     return ordered
+
+
+def incident_signature(r: Run) -> list[float]:
+    """The run's 64-dim signature (ADR 0008) from its root cause and hypotheses; the historian and the eval use it."""
+    roots = r.env.ro("signature_roots", inc=r.incident)
+    top = roots[0] if roots else None
+    return signature(
+        root_kinds=top["kinds"] if top else [],
+        hops=top["hops"] if top else None,
+        root_service_kind=top["service_kind"] if top else None,
+        change_types=[x["type"] for x in r.env.ro("root_change_types", inc=r.incident)],
+        run_kinds=[k for h in r.env.ro("run_kinds", inc=r.incident) for k in (h["kinds"] or [])],
+        op_service_kinds=[x["kind"] for x in r.env.ro("anomalous_op_kinds", inc=r.incident)],
+        templates=[x["text"] for x in r.env.ro("op_templates", inc=r.incident, op=top["op"])] if top else [],
+        second_cause=any(x["rank"] == 2 for x in roots),
+    )
 
 
 def diagnose(graph: Graph, env_name: str, incident: str, weights_path: str | None = None) -> dict:

@@ -67,6 +67,25 @@ import {
   WrenchIcon,
   XCircleIcon,
   XIcon as PXIcon,
+  ListIcon,
+  PaperclipIcon,
+  SidebarSimpleIcon,
+  FileTextIcon,
+  TrashIcon,
+  PlusIcon,
+  ChatsCircleIcon,
+  CornersOutIcon,
+  ChartLineUpIcon,
+  CalendarBlankIcon,
+  ShareNetworkIcon,
+  SquaresFourIcon,
+  DotsThreeIcon,
+  RobotIcon,
+  BookBookmarkIcon,
+  LightningIcon,
+  ScalesIcon,
+  TimerIcon,
+  CaretLeftIcon,
 } from "@phosphor-icons/react/ssr";
 import type { ComponentType } from "react";
 
@@ -136,6 +155,26 @@ export const Wrench = light(WrenchIcon, "Wrench");
 export const X = light(PXIcon, "X");
 export const Info = light(PInfoIcon, "Info");
 export const OctagonX = light(OctagonIcon, "OctagonX");
+export const Menu = light(ListIcon, "Menu");
+export const Paperclip = light(PaperclipIcon, "Paperclip");
+export const PanelRight = light(SidebarSimpleIcon, "PanelRight");
+export const FileText = light(FileTextIcon, "FileText");
+export const Trash = light(TrashIcon, "Trash");
+export const Plus = light(PlusIcon, "Plus");
+export const Chats = light(ChatsCircleIcon, "Chats");
+export const ChartLine = light(ChartLineUpIcon, "ChartLine");
+export const Calendar = light(CalendarBlankIcon, "Calendar");
+export const ForceGraph = light(ShareNetworkIcon, "ForceGraph");
+export const Bento = light(SquaresFourIcon, "Bento");
+export const More = light(DotsThreeIcon, "More");
+export const Bot = light(RobotIcon, "Bot");
+export const Wiki = light(BookBookmarkIcon, "Wiki");
+export const Zap = light(LightningIcon, "Zap");
+export const Scales = light(ScalesIcon, "Scales");
+export const Timer = light(TimerIcon, "Timer");
+export const Target = light(TargetIcon, "Target");
+export const Maximize = light(CornersOutIcon, "Maximize");
+export const ChevronLeft = light(CaretLeftIcon, "ChevronLeft");
 // shadcn primitives (and the toaster) use the *Icon names
 export {
   Check as CheckIcon,

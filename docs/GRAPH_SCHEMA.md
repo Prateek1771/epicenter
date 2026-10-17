@@ -50,6 +50,8 @@ flowchart LR
     PE -->|MEMBER_OF| T
     PE -->|FIXED| I
     SIM[Simulation] -->|PREDICTS| O
+    CV[Conversation] -->|HAS_MESSAGE| M[Message]
+    CV -->|ABOUT| I
 ```
 
 In `kb:propagation` (separate graph): standalone `Rule` nodes, no edges.
@@ -170,7 +172,7 @@ support_p, status}]`, status `verified` · `unverified` · `template`) · `dropp
 **`Decision`**: key `id` (`<incident>:d-<n>`; the API shows `d-<n>`) · `by` str · `text` str · `ts` ts. Human notes
 during an incident (`POST /notes`); a note's optional change is a `Change {id: 'chg-manual-<incident>-<n>'}`.
 **`Simulation`**: key `id` · `target` str (operation or service) · `kind` str · `ts` ts · `rules_version` str. A saved
-what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)).
+what-if run ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)). Listed newest first by `GET /simulations`.
 
 **`Action`**: key `id` (`<incident>:r<run>:a-<n>`; the API shows `a-<n>`) · `run` int · `name` str · `status`
 (`proposed` · `done`) · `rank` int · `chosen_by` (`history` · `runbook` · `demoted`) · `p` float (Jev relevance to the
@@ -188,6 +190,18 @@ cause)
 | `delay_s_max` | int | ✓ | max delay per hop |
 | `service_kind` | str | | restricts the rule, e.g. `datastore` |
 | `version` | str | ✓ | rules version, recorded on every footprint |
+
+### Ask conversations
+
+Shared `/ask` history, kept in the env graph so every viewer and device sees it. No telemetry in them; excluded from
+`GET /graph/explore`.
+
+**`Conversation`**: key `id` (`conv-<ns>`) · `title` str (`''` until the first question, then its first 60 chars) ·
+`incident` str (optional scope, also an `ABOUT` edge) · `created` ts · `updated` ts (bumped per message) · `n` int
+(message count)
+**`Message`**: key `id` (`<conversation>:m<nnnn>`, sortable) · `role` (`user` · `assistant`) · `text` str · `ts` ts ·
+`path` list<str> · `tools` str (JSON: `[{tool, args}]`) · `cypher` str (read-only MCP fallback query) · `attachments`
+list<str> (file names only; the text is never stored)
 
 ### People and knowledge
 
@@ -231,6 +245,8 @@ Rule ids in `kb:propagation` come from the rule's content (`errors+down->errors:
 | `OWNED_BY` | Service → Team | | |
 | `MEMBER_OF` | Person → Team | | |
 | `FIXED` | Person → Incident | | |
+| `HAS_MESSAGE` | Conversation → Message | | one per turn; deleted with the conversation |
+| `ABOUT` | Conversation → Incident | | only for an incident-scoped conversation |
 | `BLAME` | Operation → Operation | `w` float | **only in `scratch:*`** |
 
 ---
@@ -251,6 +267,8 @@ CREATE INDEX FOR (a:Alert) ON (a.id)
 CREATE INDEX FOR (h:Hypothesis) ON (h.id)
 CREATE INDEX FOR (p:Person) ON (p.handle)
 CREATE INDEX FOR (s:Simulation) ON (s.id)
+CREATE INDEX FOR (c:Conversation) ON (c.id)
+CREATE INDEX FOR (m:Message) ON (m.id)
 // on kb:propagation
 CREATE INDEX FOR (r:Rule) ON (r.id)
 CREATE INDEX FOR (s:Signal) ON (s.id)
@@ -296,5 +314,6 @@ CALL db.idx.fulltext.queryNodes('Signal', 'ECONNREFUSED') YIELD node RETURN node
 | Anomalies, signals, investigation nodes | kept with the incident (they are the memory). Replays never delete anomalies: the previous ingest is retired as `<incident>@i<k>` and stays linked from the diagnosis runs that cited it |
 | Scratch graphs | deleted after scoring (`finally` block) |
 | `Simulation` nodes | kept, so predictions can be compared with later incidents |
+| `Conversation`, `Message` | kept until `DELETE /conversations/{id}` |
 | `kb:propagation` | replaced as a whole when the rules version changes (old version kept in git as YAML) |
 | Manual purge | `DELETE /incidents/{id}` is **not** exposed; use `GRAPH.DELETE env:<name>` to reset an environment |

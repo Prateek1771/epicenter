@@ -40,6 +40,7 @@ def list_scenarios(request: Request) -> Scenarios:
             title=s.title,
             expected=s.expected,
             kind=s.kind,
+            expect=s.expect,
             ready=True if s.kind == "replay" else up.get(s.env, False),
         )  # fmt: skip
         for s in runs.scenarios()
@@ -56,10 +57,12 @@ def recent_runs(request: Request, env: str = Query(), limit: int = Query(5, ge=1
     for r in graph(request).env(env).ro("runs_recent", limit=limit):
         sc = runs.find(env, r["scenario"])
         settle = sc.settle_s if sc and sc.kind != "replay" else 0
+        ok = runs.matches(sc.expect if sc else None, r["incident_status"], r["root_cause"])
         items.append(RunOut(run_id=r["id"], env=env, scenario=r["scenario"], title=sc.title if sc else r["scenario"],
                             kind=sc.kind if sc else "fault", status=r["status"], incident_id=r["incident"],
                             started_at=iso(r["started_at"]), alert_at=iso(r["started_at"] + settle),
-                            detail=r["detail"]))  # fmt: skip
+                            detail=r["detail"], verdict=r["root_cause"] or r["incident_status"],
+                            matches=ok))  # fmt: skip
     return Runs(items=items)
 
 

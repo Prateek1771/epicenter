@@ -266,7 +266,7 @@ function Canvas({ view, overlay, spotlight, selected, later, onSelect }: Props) 
         zoomable
         position="bottom-left"
         style={{ width: 168, height: 104 }}
-        className="!rounded-lg !border !border-border"
+        className="!rounded-lg !border !border-border max-sm:!hidden"
         nodeColor={(n) => {
           const d = n.data as OpData;
           if (d.root) return "var(--color-st-confirmed)";

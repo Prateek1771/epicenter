@@ -53,7 +53,7 @@ graph-hacks/
     eval.py               # RCAEval replay + metrics
     smoke_falkordb.py     # FalkorDB feature check on the pinned tag (README §5)
                           # graph.py also records per-run query receipts (`recording()`, phase 12)
-    selftest.py           # phase 11: fixtures → scratch graphs → diagnose → verdict table (§13)
+    selftest.py           # phase 11: fixtures → throwaway env:selftest-* graphs → diagnose → verdict table (§13)
   web/                    # Next.js 15 app (React 19, Tailwind 4, shadcn, React Flow 12)
     app/                  # / incidents · incident/[id] canvas · blast-radius · simulate · ask · runs · eval
     components/           # graph/incident-canvas.tsx · incident/{verdict,act,side}.tsx · shell/top-bar.tsx · ui/
@@ -254,7 +254,25 @@ kind), `small_footprint` or `lost_on_score` for a pruned hypothesis (coverage be
 | `blast_radius(service)` | `MATCH (s:Service {name:$svc})-[:HAS_OP]->(o) MATCH p=(caller:Operation)-[:CALLS*1..6]->(o) MATCH (cs:Service)-[:HAS_OP]->(caller) OPTIONAL MATCH (cs)-[:OWNED_BY]->(t:Team) RETURN cs.name, caller.id, min(length(p)) AS hops, t.name ORDER BY hops, caller.id` |
 | `why_not(incident, service)` | the service's `Hypothesis` with its `REFUTED_BY` evidence and stored paths; if none, run Q1 membership → "not upstream of the symptom" |
 | `recent_changes(service, minutes)` | `Change -[:CHANGED]-> Service` with `ts >= $since` (the caller turns minutes into `$since`), with `AUTHORED` people; newest first |
-| `who_knows(service)` | `OWNED_BY` team members + `FIXED` incidents whose root cause is on that service + `AUTHORED` changes on it, one point per reason, ranked by count then handle |
+| `who_knows(service)` | `OWNED_BY` team members + `FIXED` incidents whose root cause is on that service + `AUTHORED` changes on it, one point per reason, ranked by count then handle. Each row carries `via` (which of MEMBER_OF / FIXED / AUTHORED) and the owning `team`, so the ask agent can cite service → team → person as its path |
+
+### 2.4 UI and conversation queries
+
+Read paths behind the phase 12 screens and the `/ask` history ([API.md](API.md)). All bounded by `$limit` or by a
+start node.
+
+| Query id | Used by | What it does |
+|---|---|---|
+| `explore_counts`, `explore_nodes`, `explore_edges` | `GET /graph/explore` | node count per label; nodes ordered topology first, `LIMIT $limit`; relationships among the sent keys (`coalesce(id, name, handle)`), `LIMIT 4 × $limit`. All skip `Conversation` / `Message` |
+| `simulations_recent` | `GET /simulations` | `Simulation` nodes with their `PREDICTS` count, `ORDER BY ts DESC, id DESC` |
+| `rules` | `GET /rules`, the simulator | every `Rule` in `kb:propagation`, by id |
+| `services_risk` | `GET /services/risk` | per service: distinct calling services, incidents whose current-run root cause is on it, owner; `ORDER BY incidents DESC, callers DESC, name` |
+| `service_runbooks` | `GET /services/{service}/runbooks` | `(:Runbook)-[:FOR]->(:Service {name: $svc})` |
+| `conv_create`, `conv_about`, `conv_title` | `POST /conversations`, `POST /ask` | create with `n: 0`; `ABOUT` the scoped incident; set the title once (only while `''`) |
+| `conv_get`, `conv_list` | `GET /conversations[/{id}]` | one conversation; newest `updated` first, optional `incident` and title `q` filters, cursor `(updated, id)` |
+| `msg_add` | `POST /ask` | bumps `updated` and `n`, creates `(c)-[:HAS_MESSAGE]->(:Message)` |
+| `conv_messages` | history, `GET /conversations/{id}` | messages `ORDER BY ts, id` |
+| `conv_delete_messages`, `conv_delete` | `DELETE /conversations/{id}` | `DETACH DELETE` the messages, then the conversation |
 
 ---
 
@@ -345,8 +363,10 @@ The short baseline only looks back 10 minutes. A memory leak that started 3 hour
 would be missed. So for kinds in `SLOW_BURN_KINDS` (default `mem`, `saturation`, `cpu`; plus disk and queue-length
 metrics when present), a second pass runs:
 
-1. **Fetch:** the same series at a 1-minute step over `[t_alert − SLOW_BURN_LOOKBACK_S, t_alert]` (default 6 h) via
-   Prometheus `query_range`. This is read from the source, not stored.
+1. **Fetch:** the same series at a 1-minute step over `[t_alert − SLOW_BURN_LOOKBACK_S, t_alert]` (default 6 h)
+   through the adapter's `metric_series(start, end)`: Prometheus `query_range` live, `metrics.parquet` in replay, none
+   for flip-commerce (no metrics source). This is read from the source, not stored, and it is its own fetch: the short
+   window's series start ~12 min before the alert, too late to see a climb that began hours earlier.
 2. **Trend test:** Mann-Kendall for a monotonic increase (p < 0.01) plus the Theil-Sen slope.
 3. **Anomaly if** the trend is significant **and** either the value at `t_alert` is ≥ 1.5× the value at the start of
    the lookback, or it crosses 80% of a known limit (e.g. `container_spec_memory_limit_bytes`).
@@ -532,19 +552,41 @@ confidence = 1 / (1 + exp(−k · (score₁ − score₂)))
 ### 6.3 `weights.json`
 
 ```json
-{ "version": "2026-10-16.v3",
-  "w": { "onset_earliness": 0.25, "strength": 0.20, "mechanism_fit": 0.15, "pagerank": 0.10,
-         "change_match": 0.10, "footprint": 0.20 },
+{ "version": "2026-10-17.v5",
+  "w": { "onset_earliness": 0.0, "strength": 0.1875, "mechanism_fit": 0.1417, "pagerank": 0.3291,
+         "change_match": 0.25, "footprint": 0.0917 },
   "k": 8.0, "skew_s": 15, "lookback_s": 600, "max_hops": 6,
-  "simulator": { "rules_version": "2026-10-15", "min_p": 0.3, "refute_below_coverage": 0.0,
+  "simulator": { "min_p": 0.3, "refute_below_coverage": 0.0,
                  "no_root_cause": { "max_coverage": 0.5, "max_anomaly": 0.6 },
                  "second_cause": { "min_unexplained_ops": 2, "strong_anomaly": 0.8, "min_coverage": 0.5 } } }
 ```
+The rules version is not stored here: it comes from the `Rule` nodes (`seed/propagation_rules.yaml`) and is recorded
+on every footprint and in every eval result file. An optional `"ablate": ["temporal" | "mechanism"]` list switches a
+rule off for the eval's ablations (phase 10): `temporal` drops the onset-order refute, `mechanism` drops the victim
+evidence (Q3 ratios and the Q3b saturated-caller check). Weights alone can't do this, because a refute costs −1
+whatever the weights. Production weights files never set it.
+
 v1 (before the Fault Simulator) had no `footprint` term. Both versions are kept so the ablation table can compare them.
 v3 (phase 9) changes only `detect.down_z` 16 → 80: an operation that went fully silent now scores 1.0, like a 100% error
 rate, instead of 0.86. Before, `strength` (rank-normalized across hypotheses) turned that small gap into 0.25 vs 0.88
 and let a caller's errors outrank the dead datastore behind them (flip-commerce `mongo-majority-lost`). The RE2-TT
 verdicts are unchanged.
+
+**v4 (phase 10)** comes from a grid over the weight simplex (step 0.05) on the RE2-TT dev split (reps 1–2, 60 cases)
+only, scored offline from the stored round-1 `score_parts` (`python -m api.eval --grid`). Fed the v3 weights, that
+offline proxy reproduced v3's measured dev AC@1 exactly (58.3%).
+- `onset_earliness` drops to 0. Onset order still matters: it is the propagation rule's refute, not a score term.
+- PageRank rises to 0.395.
+- Held-out (rep 3, 30 cases) AC@1 went from 66.7% (v3) to 90.0%.
+
+**v5 (frozen)** fixes what the grid couldn't see. RCAEval has no change events, so `change_match` is always 0 there and
+its weight is not learnable from the benchmark.
+- Re-diagnosing the recorded live incidents with v4 flipped flip-commerce `circuit-misconfig` from `flip-node/GET
+  /products` (the deployed typo) to `mongodb/find products` (a victim). PageRank 0.395 outweighed the change at 0.10.
+- v5 raises `change_match` to 0.25 and scales the other v4 weights by 0.75 / 0.9. A uniform scale leaves every RE2-TT
+  ranking as it was. 0.25 is a round value above the 0.175 this incident needs, with margin.
+- With v5, all 11 recorded live incidents (OTel Demo and flip-commerce) give the same root-cause operation as when
+  they ran. The RE2-TT numbers are in the README results table.
 
 Tie-break: higher score, then earlier onset, then operation id. The weights version is stored on the `Incident`.
 
@@ -690,6 +732,10 @@ caller kept the incident from counting as "weak" (`tests/fixtures/weak_self.cyph
 - if `service` is given, simulates every operation of that service and merges, keeping max `p`;
 - writes `(:Simulation {id, target, kind, ts, rules_version})-[:PREDICTS {p, hops, kind}]->(:Operation)` so a later
   incident can be compared against the prediction made before the change ("we predicted 9, 8 happened").
+
+`simulate.compare(graph, env, target, kind)` (`POST /simulate/compare`) answers "did it happen before?": for each of
+the last 10 incidents rooted at the target's service it runs the same prediction with the clock at the target's
+earliest observed onset, then §7.4's match against that incident's observed set; sorted by footprint desc, then id.
 
 ### 7.8 Canvas overlay
 
@@ -849,7 +895,7 @@ reports. Two parts:
 | Part | Where | Needs | Does |
 |---|---|---|---|
 | `syscheck.py` | host, repo root | Python ≥ 3.10, stdlib only | probe, tier, recommend; with `--run`, drives Docker, `docker compose exec`, the REST API and `examples/*/run.py` |
-| `api/selftest.py` | api container | the app | the small simulation: each `tests/fixtures/*.cypher` → `scratch:selftest-<name>` → diagnose → compare with the expected verdict → `GRAPH.DELETE` in `finally` |
+| `api/selftest.py` | api container | the app | the small simulation: each `tests/fixtures/*.cypher` → `env:selftest-<n>-<name>` (diagnose reads env graphs) → diagnose → compare with the expected verdict → `GRAPH.DELETE` in `finally` |
 
 ### 13.1 Probe (read-only, < 15 s)
 
@@ -870,14 +916,16 @@ reports. Two parts:
 `pick_tier(probe) -> int` is a pure function. Thresholds use `min(host, Docker VM)`; all of a tier's conditions must
 hold. The thresholds live in one table in `syscheck.py` that mirrors this one.
 
+One tier per demo (SETUP §5): small, medium, real-world.
+
 | Tier | CPUs | Memory | Disk | Also needs | `--run` executes | ~Time |
 |---|---|---|---|---|---|---|
-| 0 | below tier 1 | | | | nothing; prints the hosted URL / video and why | — |
-| 1 Lite | 2 | 4 GB | 10 GB | Docker | `up -d falkordb api web`, smoke, `api.selftest`, synthetic small (`cpu`, `healthy`), `pytest` offline subset (`test_simulate`, `test_causal`, `test_score`, `test_spans`, `test_detect`) | 3–5 min |
-| 2 Standard | 4 | 8 GB | 20 GB | internet | + full stack, full `pytest`, synthetic medium (`two`, `loud-victim`, `healthy`), 3 RCAEval replays + `api.eval`, N1 / N2 timings; with `--live`: HotROD | 10–15 min |
-| 3 Live | 6 | 12 GB | 30 GB | node, k6, uv, `FLIP_REPO` | with `--live`: flip-commerce `redis-down`, `circuit-misconfig`, `healthy-baseline`; OTel Demo minimal `paymentFailure` | +25 min |
-| 4 Full | 8 | 16 GB | 40 GB | `DEMO_DIR` | + synthetic huge (`mem` slow burn); with `--live`: OTel Demo full `paymentFailure`, `adHighCpu` | +30 min |
-| 5 Huge | 16 | 32 GB | 80 GB | `--tier 5` (never chosen automatically) | with `--live`: Train-Ticket `auth-cpu`, `order-delay` | +45 min |
+| 0 | below tier 1 | | | | nothing; points at the demo video and says why | — |
+| 1 Small | 2 | 4 GB | 10 GB | Docker | `up -d`, smoke, `api.selftest`, **demo 1**: synthetic small (`cpu`, `healthy`), `pytest` offline subset (`test_simulate`, `test_causal`, `test_score`, `test_spans`, `test_detect`) | ~1 min |
+| 2 Medium | 4 | 8 GB | 20 GB | internet | + full `pytest`, **demo 2**: 3 RCAEval replays diagnosed through the API, N2 p95 from `/health` | ~2 min (measured 2026-10-17) |
+| 3 Real-world | 8 | 16 GB | 40 GB | `DEMO_DIR` (the OTel Demo clone) | with `--live`: **demo 3**: OTel Demo `paymentFailure`, `adHighCpu` | +30 min |
+
+`--tier N` only lowers the tier, never raises it.
 
 Each run's expected verdict comes from the scenario registry (`api/runs.py` `Scenario.expect`, machine-readable) or
 the synthetic `labels.json`. **Matching:** `target_prefix` on the top `ROOT_CAUSE` op, or `status == no_root_cause`.
@@ -904,7 +952,7 @@ python syscheck.py [--run] [--live] [--tier N] [--minutes M] [--json] [--yes-env
   5. wait for `run.py status` to be healthy.
 
   `run.py down` at the end. Only one environment runs at a time.
-- **Never:** `docker compose down -v`, `GRAPH.DELETE` outside its own `scratch:selftest-*` graphs, or an environment
+- **Never:** `docker compose down -v`, `GRAPH.DELETE` outside its own `env:selftest-*` and `env:synth-check` graphs, or an environment
   change without `--live` and a yes. Ctrl-C undoes the scenario in flight before exiting.
 
 ### 13.4 Report

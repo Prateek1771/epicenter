@@ -56,18 +56,18 @@ export function Lanes({ view, cutoff, onCutoff, onLane, active }: {
 
   return (
     <section className="border-t border-border bg-card/70 backdrop-blur" aria-label="Anomaly onsets over time">
-      <div className="flex items-center gap-3 px-3 py-1.5 text-xs">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-1.5 text-xs">
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-1 font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground" aria-expanded={open}>
           {open ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />} Timeline lanes
         </button>
         <span className="text-muted-foreground">{rows.length} anomalous · {view.changes.length} change{view.changes.length === 1 ? "" : "s"}</span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <button
             onClick={() => {
               if (!playing && (cutoff === null || cutoff >= axis.t1)) onCutoff(axis.t0);
               setPlaying((p) => !p);
             }}
-            className="inline-flex items-center gap-1 rounded-md bg-acid-lime px-2 py-0.5 font-medium text-void shadow-cta hover:brightness-110"
+            className="inline-flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 font-medium text-void shadow-cta hover:brightness-110"
             aria-label={playing ? "Pause playback" : "Play the onsets in order"}
           >
             {playing ? <Pause className="size-3" /> : <Play className="size-3" />} {playing ? "Pause" : "Play spread"}
@@ -78,7 +78,7 @@ export function Lanes({ view, cutoff, onCutoff, onLane, active }: {
             max={Math.ceil(axis.t1)}
             value={Math.round(cutoff ?? axis.t1)}
             onChange={(e) => { setPlaying(false); onCutoff(Number(e.target.value) >= axis.t1 ? null : Number(e.target.value)); }}
-            className="w-40"
+            className="min-w-0 flex-1 sm:w-40 sm:flex-none"
             aria-label="Show the canvas as it was at this time"
           />
           <span className="w-20 text-right font-mono tabular-nums text-muted-foreground">{cutoff === null ? "all" : rel(cutoff)}</span>
@@ -91,7 +91,7 @@ export function Lanes({ view, cutoff, onCutoff, onLane, active }: {
       </div>
       {open && (
         <div className="relative max-h-44 overflow-y-auto px-3 pb-2">
-          <div className="grid grid-cols-[180px_1fr]">
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[180px_1fr]">
             <span />
             <div className="flex h-4 items-end justify-between font-mono text-[10px] text-muted-foreground">
               <span>{rel(axis.t0)}</span>
@@ -99,7 +99,7 @@ export function Lanes({ view, cutoff, onCutoff, onLane, active }: {
             </div>
           </div>
           {/* over every lane: changes as blue ticks, the alert in the accent colour, the slicer cursor */}
-          <div className="pointer-events-none absolute inset-y-0 right-3 left-[calc(180px+0.75rem)]">
+          <div className="pointer-events-none absolute inset-y-0 right-3 left-[calc(110px+0.75rem)] sm:left-[calc(180px+0.75rem)]">
             {view.changes.map((c) => (
               <Tooltip key={c.id}>
                 <TooltipTrigger asChild>
@@ -115,12 +115,12 @@ export function Lanes({ view, cutoff, onCutoff, onLane, active }: {
                 <span className="absolute -top-1 right-1 font-mono text-[10px] text-signal">alert</span>
               </span>
             )}
-            {cutoff !== null && <span className="absolute inset-y-0 z-20 w-px bg-acid-lime shadow-[0_0_6px_var(--color-acid-lime)]" style={{ left: x(cutoff) }} />}
+            {cutoff !== null && <span className="absolute inset-y-0 z-20 w-px bg-gold shadow-[0_0_6px_var(--color-gold)]" style={{ left: x(cutoff) }} />}
           </div>
           <ul className="space-y-0.5">
             {rows.map((l) => (
               <li key={l.op}>
-                <button onClick={() => onLane(l.op)} className={cn("grid w-full grid-cols-[180px_1fr] items-center rounded text-left hover:bg-accent/50", active === l.op && "bg-signal/10")} title={`${l.op} · ${l.kind} from ${rel(l.onset)}`}>
+                <button onClick={() => onLane(l.op)} className={cn("grid w-full grid-cols-[110px_1fr] sm:grid-cols-[180px_1fr] items-center rounded text-left hover:bg-accent/50", active === l.op && "bg-signal/10")} title={`${l.op} · ${l.kind} from ${rel(l.onset)}`}>
                   <span className="flex min-w-0 items-center gap-1.5 pr-2 font-mono text-[11px]">
                     {l.role === "root" && <span className="text-st-confirmed" aria-label="root cause">♛</span>}
                     {l.role === "symptom" && <span className="text-signal" aria-label="alert">●</span>}

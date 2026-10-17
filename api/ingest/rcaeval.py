@@ -25,6 +25,7 @@ import pandas as pd
 from api.config import get_settings
 from api.graph import Graph
 from api.ingest.base import CallAgg, ChangeEvent, LogLine, Series
+from api.ingest.changes import read_journal
 from api.ingest.window import ingest_window
 
 HF_BASE = "https://huggingface.co/datasets/phamquiluan/RCAEval/resolve/main/"
@@ -59,8 +60,9 @@ def download(case: str, root: Path) -> Path:
             with urllib.request.urlopen(HF_BASE + f"{case}/{name}", timeout=120) as r:
                 target.write_bytes(r.read())
         except urllib.error.HTTPError as e:
-            if e.code != 404:
-                raise
+            if e.code != 404 or name != "logs.parquet":
+                # only logs are missing in a few cases; anything else missing means no such case
+                raise ValueError(f"{case}: {name} not on Hugging Face (HTTP {e.code}); check the case name") from e
     return dest
 
 
@@ -148,7 +150,7 @@ class RcaevalAdapter:
 
     def series(self, start: int, end: int):
         yield from self._span_series(start, end)
-        yield from self._metric_series(start, end)
+        yield from self.metric_series(start, end)
 
     def _span_series(self, start: int, end: int):
         df = self._spans()
@@ -171,7 +173,7 @@ class RcaevalAdapter:
                 ref = f"rcaeval:{self.case}:traces:{op}:{metric}"
                 yield Series(op, metric, kind, ts, rows[metric].to_numpy(dtype=float), ref)
 
-    def _metric_series(self, start: int, end: int):
+    def metric_series(self, start: int, end: int):
         df = pd.read_parquet(self.dir / "metrics.parquet")
         df = df[(df["time"] >= start) & (df["time"] <= end)]
         entry = self.entry_ops()
@@ -201,13 +203,14 @@ class RcaevalAdapter:
             self.gaps.append("logs")
             return
         df = pd.read_parquet(path, columns=["timestamp", "container_name", "message"])
-        df = df[(df["timestamp"] >= start) & (df["timestamp"] <= end)]
+        df = df[(df["timestamp"] >= start) & (df["timestamp"] <= end)].dropna(subset=["message"])  # some rows are NA
         for ts, svc, msg in df.itertuples(index=False):
-            m = _LEVEL.search(msg or "")
+            m = _LEVEL.search(msg)
             yield LogLine(service=str(svc), ts=int(ts), level=m.group(1) if m else "", text=str(msg))
 
     def changes(self, since: int) -> list[ChangeEvent]:
-        return []  # RCAEval has no change events; inject_time is deliberately not one
+        # RCAEval has no change events (inject_time is deliberately not one); a synthetic `config` case ships a journal
+        return read_journal(self.dir / "changes.jsonl", "synthetic", since)
 
 
 def replay(case_dir: Path, env_name: str, graph: Graph) -> dict:
@@ -226,7 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     s = get_settings()
     root = Path(s.rcaeval_dir)
-    case_dir = download(a.case, root) if a.download else root / a.case
+    try:
+        case_dir = download(a.case, root) if a.download else root / a.case
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
     if not (case_dir / "inject_time.txt").exists():
         print(f"case not found: {case_dir} (add --download)", file=sys.stderr)
         return 2

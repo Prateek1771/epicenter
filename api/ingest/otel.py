@@ -9,6 +9,7 @@ are only read, HTTP sources only queried. A source that can't be read becomes an
 
 import json
 import re
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +25,49 @@ _NGINX = re.compile(r'^(?P<msec>\d+\.\d+) "(?P<method>[A-Z]+) (?P<path>\S+)[^"]*
                     r'(?P<rt>[\d.]+) (?P<addr>\S+) (?P<urt>[\d.,: -]+)$')  # fmt: skip
 _TIMEOUT = 5.0
 _RETRIES = 2
+SLACK_S = 120  # appended in time order give or take a batch / a slow request: start reading this much early
+
+
+def lines_since(path: Path, start: int, ts_of: Callable[[str], float | None]) -> Iterator[str]:
+    """Lines of an append-only, time-ordered file from shortly before `start` on. A binary search on the byte offset
+    parses O(log n) lines, so a window costs its own size, not the file's (these files grow all day: 160 MB after a
+    few hours of flip-commerce made every ingest scan ~20 s). `ts_of(line)` → seconds, or None for a line it can't
+    read (cut mid-write). Callers still filter to their exact window."""
+    with path.open("rb") as f:
+        lo, hi = 0, f.seek(0, 2)
+        while hi - lo > 65536:
+            mid = (lo + hi) // 2
+            f.seek(mid)
+            f.readline()  # finish the line the seek landed in
+            ts = None
+            while ts is None and (raw := f.readline()):
+                ts = ts_of(raw.decode("utf-8", "replace"))
+            if ts is None or ts >= start - SLACK_S:
+                hi = mid
+            else:
+                lo = mid
+        f.seek(lo)
+        if lo:
+            f.readline()
+        for raw in f:
+            yield raw.decode("utf-8", "replace")
+
+
+def _otlp_ts(line: str) -> float | None:
+    try:
+        return min((s.start for s in sp.from_otlp(json.loads(line))), default=None)
+    except (ValueError, KeyError):
+        return None
+
+
+def _nginx_ts(line: str) -> float | None:
+    head = line.split(" ", 1)[0]
+    return float(head) if head.replace(".", "", 1).isdigit() else None
+
+
+def _winston_ts(line: str) -> float | None:
+    ln = parse_winston(line, "")
+    return ln.ts if ln else None
 
 
 def parse_nginx(line: str, prefixes: dict[str, str]) -> sp.Span | None:
@@ -110,21 +154,19 @@ class OtelAdapter:
         files = []
         if traces and traces.parent.exists():
             files = sorted(traces.parent.glob(f"{traces.stem}*{traces.suffix}"))
-        # ponytail: a full scan of each file still in range (~200 MB per 30 min at 20 req/s); index by time if it grows
         for path in (p for p in files if p.stat().st_mtime >= start):
-            with path.open(encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if line.strip():
-                        try:
-                            out += [s for s in sp.from_otlp(json.loads(line)) if start <= s.start <= end]
-                        except (ValueError, KeyError):
-                            continue  # a line cut mid-write by the collector
+            for line in lines_since(path, start, _otlp_ts):
+                if line.strip():
+                    try:
+                        out += [s for s in sp.from_otlp(json.loads(line)) if start <= s.start <= end]
+                    except (ValueError, KeyError):
+                        continue  # a line cut mid-write by the collector
         if not files:
             self._gap("traces")
         nginx = Path(self.cfg["nginx_log"]) if self.cfg.get("nginx_log") else None
         if nginx and nginx.exists():
-            with nginx.open(encoding="utf-8", errors="replace") as f:
-                out += [s for line in f if (s := parse_nginx(line, self.cfg.get("prefixes", {})))]
+            pre = self.cfg.get("prefixes", {})
+            out += [s for line in lines_since(nginx, start, _nginx_ts) if (s := parse_nginx(line, pre))]
         else:
             self._gap("proxy")
         return [s for s in out if start <= s.start <= end]
@@ -152,18 +194,19 @@ class OtelAdapter:
 
     def series(self, start: int, end: int) -> list[Series]:
         out = sp.series(self.load(start, end), start, end, self.bucket_s, self.source)
-        if self.mode == "demo" and self.cfg.get("prometheus_url"):
-            out += self._prom_series(start, end)
-        return out
+        return out + self.metric_series(start, end, self.bucket_s)
 
-    def _prom_series(self, start: int, end: int) -> list[Series]:
-        """Resource series per service (cpu, mem), attached to the service's entry operation like RCAEval metrics."""
+    def metric_series(self, start: int, end: int, step: int = 60) -> list[Series]:
+        """Resource series per service (cpu, mem) from Prometheus, attached to the service's entry operation like
+        RCAEval metrics. The slow-burn pass reads 6 h at the default 1-minute step (LLD §3.2)."""
+        if self.mode != "demo" or not self.cfg.get("prometheus_url"):
+            return []
         base = self.cfg["prometheus_url"].rstrip("/")
         entry = self.entry_ops()
         out = []
         try:
             for kind, query in sorted(self.cfg.get("prom_queries", {}).items()):
-                params = {"query": query, "start": start, "end": end, "step": self.bucket_s}
+                params = {"query": query, "start": start, "end": end, "step": step}
                 for r in _get(self.client, f"{base}/api/v1/query_range", params)["data"]["result"]:
                     m = r["metric"]
                     svc = m.get("service_name") or m.get("container_name") or m.get("job", "").split("/")[-1]
@@ -191,10 +234,9 @@ class OtelAdapter:
             self._gap("logs")
             return
         svc = self.cfg.get("log_service", "flip-node")
-        with f.open(encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                if (ln := parse_winston(line, svc)) and start <= ln.ts <= end:
-                    yield ln
+        for line in lines_since(f, start, _winston_ts):
+            if (ln := parse_winston(line, svc)) and start <= ln.ts <= end:
+                yield ln
 
     def _opensearch_logs(self, start: int, end: int):
         url = self.cfg.get("opensearch_url")

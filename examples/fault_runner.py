@@ -25,18 +25,18 @@ _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,80}$")
 PORT = int(os.environ.get("FAULT_RUNNER_PORT", "8090"))
 
 
-def token() -> str:
-    """FAULT_RUNNER_TOKEN from the environment, else from the repo's .env (never logged, never sent back)."""
-    if t := os.environ.get("FAULT_RUNNER_TOKEN"):
-        return t
+def setting(name: str, default: str = "") -> str:
+    """`name` from the environment, else from the repo's .env (the token is never logged, never sent back)."""
+    if v := os.environ.get(name):
+        return v
     env = HERE.parent / ".env"
     for line in env.read_text(encoding="utf-8").splitlines() if env.exists() else []:
-        if line.startswith("FAULT_RUNNER_TOKEN="):
-            return line.split("=", 1)[1].split("#", 1)[0].strip()
-    return ""
+        if line.startswith(f"{name}="):
+            return line.split("=", 1)[1].split("#", 1)[0].strip() or default
+    return default
 
 
-TOKEN = token()
+TOKEN = setting("FAULT_RUNNER_TOKEN")
 
 
 def env_up(env: str) -> bool:
@@ -106,4 +106,4 @@ if __name__ == "__main__":
         raise SystemExit("set FAULT_RUNNER_TOKEN in .env first")
     # Docker Desktop's host.docker.internal reaches the host's loopback-bound ports, so the API container can call
     # this without exposing it on the LAN; FAULT_RUNNER_BIND=0.0.0.0 for a Linux docker0 setup (still token-gated).
-    ThreadingHTTPServer((os.environ.get("FAULT_RUNNER_BIND", "127.0.0.1"), PORT), Handler).serve_forever()
+    ThreadingHTTPServer((setting("FAULT_RUNNER_BIND", "127.0.0.1"), PORT), Handler).serve_forever()

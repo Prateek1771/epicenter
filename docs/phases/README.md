@@ -22,7 +22,7 @@ don't copy them. If a phase file and a design doc disagree, the design doc wins;
 | 8 | [Web UI](phase-08-web-ui.md) | Next.js screens, live canvas, overlay | 6 (7 for memory / explanation panels) |
 | 9 | [Live environments](phase-09-live-environments.md) | OTel adapter, flip-commerce scripts, `/runs` | 2, 6 |
 | 10 | [Eval, hardening, demo](phase-10-eval-demo.md) | AC@1/AC@3 + ablations, frozen weights, demo assets | all |
-| 11 | [Demo deployment, setup, evaluator](phase-11-production-demo.md) | AWS demo box (create → demo → destroy), [SETUP.md](../SETUP.md), `syscheck.py`, small / medium / huge samples | 9, 10 |
+| 11 | [Deployment plan, setup, evaluator](phase-11-production-demo.md) | AWS deployment plan (scripted, not run; the event demo is local, ADR 0014), [SETUP.md](../SETUP.md), `syscheck.py`, small / medium / huge samples | 9, 10 |
 | 12 | [Investigation UI upgrades](phase-12-ui-upgrades.md) | Competitor-research P0/P1 UI, Graph \| Data on every graph, `/map`, test reports (findings + agent context) | 8, 9 |
 
 ```mermaid
@@ -42,7 +42,7 @@ flowchart LR
     P2 --> P9[9 Live envs]
     P6 --> P9
     P8 & P9 --> P10[10 Eval + demo]
-    P10 --> P11[11 Deploy + setup + evaluator]
+    P10 --> P11[11 Deploy plan + setup + evaluator]
     P8 & P9 --> P12[12 UI upgrades + reports]
     P12 -.-> P11
 ```
@@ -103,7 +103,7 @@ Every requirement, endpoint and planned test lands in exactly one phase.
 | smoke (pinned FalkorDB) | 0 |
 | eval | 10 |
 | end-to-end flip-commerce | 9 |
-| demo deployment (AWS, create → destroy) | 11 |
+| deployment plan (AWS, scripted; event demo local) | 11 |
 | setup guide for judges / evaluators | 11 |
 | system evaluator (`syscheck`), small / medium / huge samples | 11 |
 | competitor-research UI (P0 / P1), Graph \| Data toggle, `/map`, `GET /graph/topology` | 12 |

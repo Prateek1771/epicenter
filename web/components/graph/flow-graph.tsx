@@ -100,6 +100,7 @@ interface Props {
   selected?: string | null;
   focus?: string | null; // centre on this node when it changes (search)
   onSelect?: (id: string | null) => void;
+  onExpand?: (id: string) => void; // double-click a node (the map's neighbourhood view); double-click no longer zooms
   label: string;
 }
 
@@ -110,7 +111,7 @@ function edgeStyle(e: GEdge, maxRps: number, lit: boolean) {
   return { color, width: lit ? Math.max(w, 2.5) : w, animated: err > 0.05 || lit };
 }
 
-function Graph({ nodes, edges, direction = "RIGHT", selected, focus, onSelect, label }: Props) {
+function Graph({ nodes, edges, direction = "RIGHT", selected, focus, onSelect, onExpand, label }: Props) {
   const [pos, setPos] = useState<Record<string, XY>>({});
   const flow = useReactFlow();
   const fitted = useRef(false);
@@ -187,6 +188,8 @@ function Graph({ nodes, edges, direction = "RIGHT", selected, focus, onSelect, l
       proOptions={{ hideAttribution: true }}
       onNodeClick={(_, n) => onSelect?.(n.id === selected ? null : n.id)}
       onPaneClick={() => onSelect?.(null)}
+      onNodeDoubleClick={onExpand && ((_, n) => onExpand(n.id))}
+      zoomOnDoubleClick={!onExpand}
       aria-label={label}
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgb(255 255 255 / 5%)" />
@@ -196,7 +199,7 @@ function Graph({ nodes, edges, direction = "RIGHT", selected, focus, onSelect, l
         zoomable
         position="bottom-left"
         style={{ width: 160, height: 100 }}
-        className="!rounded-lg !border !border-border"
+        className="!rounded-lg !border !border-border max-sm:!hidden"
         nodeColor={(x) => {
           const n = (x.data as Data).n;
           return n.tone === "source" || n.tone === "anomaly" ? "var(--color-st-refuted)" : n.tone === "root" ? "var(--color-st-confirmed)" : "var(--color-smoke)";

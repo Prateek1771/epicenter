@@ -278,9 +278,10 @@ owners) on startup; every statement in it is idempotent (`MERGE`, `CREATE INDEX`
 
 ### 5.3 Demo deployment (AWS)
 
-Phase 11, not built yet ([ADR 0013](adr/0013-ephemeral-demo-deployment.md),
-[phase 11](phases/phase-11-production-demo.md)). The laptop topology runs on one EC2 VM during the event, then the VM
-is destroyed.
+**Planned and scripted (`deploy/`), not executed:** the event demo runs locally
+([ADR 0014](adr/0014-local-event-demo.md)); this is the deployment plan ([ADR 0013](adr/0013-ephemeral-demo-deployment.md),
+[DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md)). The laptop topology runs on one EC2 VM behind Caddy, then the VM is
+destroyed.
 
 ```mermaid
 flowchart LR

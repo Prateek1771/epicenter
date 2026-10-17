@@ -1,0 +1,15 @@
+# HTTPS + basic auth in front of the UI and the API (one origin, so the browser sends the login with every fetch and
+# EventSource). /mcp, falkordb-mcp and the FalkorDB browser are not exposed: `aws.sh ssh` tunnels them.
+{$EPICENTER_HOST} {
+	basic_auth {
+		{$DEMO_USER} {$DEMO_PASSWORD_HASH}
+	}
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1 # SSE: send each event as it happens
+		}
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

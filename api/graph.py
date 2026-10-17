@@ -286,6 +286,37 @@ QUERIES: dict[str, str] = {
         UNWIND $rows AS r
         MATCH (o:Operation {id: r.op})
         CREATE (sim)-[:PREDICTS {p: r.p, hops: r.hops, kind: r.kind}]->(o)""",
+    # /map Network view (FalkorDB-browser style): every label, bounded. Topology first, then incident artefacts.
+    # ponytail: a label scan of the env graph; fine at demo sizes, page by label with an index past ~100k nodes
+    "explore_counts": """
+        MATCH (n) WHERE NOT n:Conversation AND NOT n:Message
+        RETURN labels(n)[0] AS label, count(n) AS n
+        ORDER BY label""",
+    "explore_nodes": """
+        MATCH (n) WHERE NOT n:Conversation AND NOT n:Message
+        WITH n, labels(n)[0] AS label, coalesce(n.id, n.name, n.handle) AS key
+        WITH n, label, key,
+             CASE label WHEN 'Service' THEN 0 WHEN 'Operation' THEN 1 WHEN 'Team' THEN 2 WHEN 'Person' THEN 3
+                        WHEN 'Incident' THEN 4 WHEN 'Change' THEN 5 WHEN 'Runbook' THEN 6 WHEN 'Hypothesis' THEN 7
+                        WHEN 'Anomaly' THEN 8 ELSE 9 END AS pri
+        RETURN label, key, n.name AS name, n.kind AS kind, n.status AS status, n.score AS score, n.summary AS summary,
+               n.type AS type
+        ORDER BY pri, label, key
+        LIMIT $limit""",
+    "explore_edges": """
+        MATCH (a)-[r]->(b)
+        WHERE coalesce(a.id, a.name, a.handle) IN $keys AND coalesce(b.id, b.name, b.handle) IN $keys
+        RETURN labels(a)[0] AS a_label, coalesce(a.id, a.name, a.handle) AS a, type(r) AS type,
+               labels(b)[0] AS b_label, coalesce(b.id, b.name, b.handle) AS b, r.rps AS rps, r.err_rate AS err_rate
+        ORDER BY a, type, b
+        LIMIT $limit""",
+    "simulations_recent": """
+        MATCH (s:Simulation)
+        OPTIONAL MATCH (s)-[p:PREDICTS]->(o:Operation)
+        RETURN s.id AS id, s.target AS target, s.kind AS kind, s.ts AS ts, s.rules_version AS rules_version,
+               count(DISTINCT o) AS operations
+        ORDER BY ts DESC, id DESC
+        LIMIT $limit""",
     "simulation_predictions": """
         MATCH (:Simulation {id: $id})-[p:PREDICTS]->(o:Operation)
         RETURN o.id AS op, p.kind AS kind, p.p AS p, p.hops AS hops
@@ -384,16 +415,20 @@ QUERIES: dict[str, str] = {
     # One point per reason: team member, fixed an incident rooted here, authored a change here
     "who_knows": """
         MATCH (s:Service {name: $svc})
-        OPTIONAL MATCH (s)-[:OWNED_BY]->(:Team)<-[:MEMBER_OF]-(m:Person)
-        WITH s, collect(DISTINCT m) AS members
+        OPTIONAL MATCH (s)-[:OWNED_BY]->(t:Team)
+        OPTIONAL MATCH (t)<-[:MEMBER_OF]-(m:Person)
+        WITH s, t, collect(DISTINCT m) AS members
         OPTIONAL MATCH (f:Person)-[:FIXED]->(fi:Incident)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(:Operation)
                        <-[:HAS_OP]-(s)
         WHERE rc.run = fi.run
-        WITH s, members, collect(f) AS fixers
+        WITH s, t, members, collect(f) AS fixers
         OPTIONAL MATCH (a:Person)-[:AUTHORED]->(:Change)-[:CHANGED]->(s)
-        WITH members, fixers, collect(a) AS authors
-        UNWIND members + fixers + authors AS p
-        RETURN p.handle AS handle, p.name AS name, count(*) AS score
+        WITH t, members, fixers, collect(a) AS authors
+        WITH t, [x IN members | [x, 'MEMBER_OF']] + [x IN fixers | [x, 'FIXED']]
+                + [x IN authors | [x, 'AUTHORED']] AS links
+        UNWIND links AS l
+        WITH t, l[0] AS p, l[1] AS via
+        RETURN p.handle AS handle, p.name AS name, count(*) AS score, collect(DISTINCT via) AS via, t.name AS team
         ORDER BY score DESC, handle""",
     # --- REST API (phase 6, API.md) ---
     # An alert re-sent with the same id lands on the incident it already opened
@@ -410,12 +445,58 @@ QUERIES: dict[str, str] = {
         MATCH (r:Run {id: $id})
         RETURN r.id AS id, r.scenario AS scenario, r.status AS status, r.incident AS incident,
                r.started_at AS started_at, r.detail AS detail""",
+    # Ask conversations (phase 12+): shared history in the env graph, one Message per turn; no telemetry in them
+    "conv_create": """
+        CREATE (c:Conversation {id: $id, title: $title, incident: $incident, created: $ts, updated: $ts, n: 0})
+        RETURN c.id AS id""",
+    "conv_about": """
+        MATCH (c:Conversation {id: $id}), (i:Incident {id: $incident})
+        MERGE (c)-[:ABOUT]->(i)""",
+    "conv_title": """
+        MATCH (c:Conversation {id: $id})
+        WHERE c.title = ''
+        SET c.title = $title""",
+    "conv_get": """
+        MATCH (c:Conversation {id: $id})
+        RETURN c.id AS id, c.title AS title, c.incident AS incident, c.created AS created, c.updated AS updated,
+               c.n AS n""",
+    # newest first; cursor (updated, id) from the last row; optional incident scope and title search
+    "conv_list": """
+        MATCH (c:Conversation)
+        WHERE ($incident IS NULL OR c.incident = $incident)
+          AND ($q IS NULL OR toLower(c.title) CONTAINS toLower($q))
+          AND ($cur_ts IS NULL OR c.updated < $cur_ts OR (c.updated = $cur_ts AND c.id < $cur_id))
+        RETURN c.id AS id, c.title AS title, c.incident AS incident, c.created AS created, c.updated AS updated,
+               c.n AS n
+        ORDER BY updated DESC, id DESC
+        LIMIT $limit""",
+    "msg_add": """
+        MATCH (c:Conversation {id: $conv})
+        SET c.updated = $ts, c.n = coalesce(c.n, 0) + 1
+        CREATE (c)-[:HAS_MESSAGE]->(m:Message {id: $id, role: $role, text: $text, ts: $ts, path: $path,
+                                              tools: $tools, cypher: $cypher, attachments: $attachments})
+        RETURN m.id AS id""",
+    "conv_messages": """
+        MATCH (:Conversation {id: $conv})-[:HAS_MESSAGE]->(m:Message)
+        RETURN m.id AS id, m.role AS role, m.text AS text, m.ts AS ts, m.path AS path, m.tools AS tools,
+               m.cypher AS cypher, m.attachments AS attachments
+        ORDER BY ts, id""",
+    "conv_delete_messages": """
+        MATCH (:Conversation {id: $id})-[:HAS_MESSAGE]->(m:Message)
+        DETACH DELETE m""",
+    "conv_delete": """
+        MATCH (c:Conversation {id: $id})
+        DETACH DELETE c""",
+    # with each run's verdict, so /runs can say "matches expected" (Scenario.expect)
     "runs_recent": """
         MATCH (r:Run)
+        WITH r ORDER BY r.started_at DESC, r.id DESC LIMIT $limit
+        OPTIONAL MATCH (i:Incident {id: r.incident})
+        OPTIONAL MATCH (i)-[rc:ROOT_CAUSE {rank: 1}]->(:Hypothesis)-[:BLAMES]->(o:Operation)
+        WHERE rc.run = i.run
         RETURN r.id AS id, r.scenario AS scenario, r.status AS status, r.incident AS incident,
-               r.started_at AS started_at, r.detail AS detail
-        ORDER BY started_at DESC, id DESC
-        LIMIT $limit""",
+               r.started_at AS started_at, r.detail AS detail, i.status AS incident_status, o.id AS root_cause
+        ORDER BY started_at DESC, id DESC""",
     "run_set_status": """
         MATCH (r:Run {id: $id})
         SET r.status = $status, r.detail = $detail""",
@@ -608,6 +689,23 @@ QUERIES: dict[str, str] = {
         WHERE h.run = i.run AND o.id IN $ops
         RETURN h.id AS id, o.id AS op, h.status AS status, h.score AS score
         ORDER BY id""",
+    # /blast-radius dossier (phase 12+): a service's runbooks, and the env's riskiest services (callers, incidents)
+    "service_runbooks": """
+        MATCH (rb:Runbook)-[:FOR]->(:Service {name: $svc})
+        RETURN rb.id AS id, rb.kind AS kind, rb.steps AS steps, rb.success AS success
+        ORDER BY id""",
+    "services_risk": """
+        MATCH (s:Service)
+        OPTIONAL MATCH (s)-[:HAS_OP]->(:Operation)<-[:CALLS]-(:Operation)<-[:HAS_OP]-(cs:Service)
+        WHERE cs <> s
+        WITH s, count(DISTINCT cs) AS callers
+        OPTIONAL MATCH (i:Incident)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(:Operation)<-[:HAS_OP]-(s)
+        WHERE rc.run = i.run
+        WITH s, callers, count(DISTINCT i) AS incidents
+        OPTIONAL MATCH (s)-[:OWNED_BY]->(t:Team)
+        RETURN s.name AS name, s.kind AS kind, callers, incidents, t.name AS owner
+        ORDER BY incidents DESC, callers DESC, name
+        LIMIT $limit""",
     "service_past_incidents": """
         MATCH (i:Incident)-[rc:ROOT_CAUSE]->(:Hypothesis)-[:BLAMES]->(:Operation)<-[:HAS_OP]-(:Service {name: $svc})
         WHERE rc.run = i.run
@@ -708,6 +806,8 @@ QUERIES: dict[str, str] = {
     "idx_hypothesis": "CREATE INDEX FOR (h:Hypothesis) ON (h.id)",
     "idx_person": "CREATE INDEX FOR (p:Person) ON (p.handle)",
     "idx_simulation": "CREATE INDEX FOR (s:Simulation) ON (s.id)",
+    "idx_conversation": "CREATE INDEX FOR (c:Conversation) ON (c.id)",
+    "idx_message": "CREATE INDEX FOR (m:Message) ON (m.id)",
     "idx_signal": "CREATE INDEX FOR (s:Signal) ON (s.id)",
     "idx_signal_text": "CALL db.idx.fulltext.createNodeIndex('Signal', 'text')",
     "idx_incident_signature": "CREATE VECTOR INDEX FOR (i:Incident) ON (i.signature) "

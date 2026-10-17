@@ -5,6 +5,7 @@ the API never gets the Docker socket and never touches an environment itself. RC
 `RCAEVAL_DIR`, replayed and diagnosed.
 """
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,9 +27,25 @@ class Scenario:
     symptom: str = ""  # the operation the alert fires on
     settle_s: int = 60  # fault → alert: long enough for the symptoms to show, shorter than the 120 s pre-alert window
     change: dict | None = None  # {service, service_kind, type, summary}: written before the fault, like a deploy
+    expect: dict | None = (
+        None  # machine-readable `expected`: {"target_prefix": "redis/"} or {"status": "no_root_cause"}
+    )
 
 
-EXAMPLE_DIRS = {"flip-commerce": "flip-commerce", "astronomy-shop": "otel-demo"}  # env → examples/<dir>
+NO_ROOT_CAUSE = {"status": "no_root_cause"}
+
+
+def matches(expect: dict | None, status: str | None, root_cause: str | None) -> bool | None:
+    """Does a verdict match a scenario's `expect`? None when there is nothing to compare (no expect, or no verdict)."""
+    if not expect or status in (None, "open", "diagnosing"):
+        return None
+    if "status" in expect:
+        return status == expect["status"]
+    return root_cause is not None and root_cause.startswith(expect["target_prefix"])
+
+
+# env → examples/<dir>
+EXAMPLE_DIRS = {"flip-commerce": "flip-commerce", "astronomy-shop": "otel-demo"}
 FLIP_PRODUCTS = "nginx/GET /node/products"
 FLIP_CART = "nginx/GET /node/cart"
 FLIP_ADD_TO_CART = "nginx/POST /node/cart"
@@ -40,39 +57,42 @@ LIVE: list[Scenario] = [
              "no_root_cause: the replica set fails over in < 1 s and reads stay up (primaryPreferred)",
              symptom=FLIP_PRODUCTS,
              change={"service": "mongodb", "service_kind": "datastore", "type": "infra",
-                     "summary": "docker stop the Mongo primary (fk-rs)"}),
+                     "summary": "docker stop the Mongo primary (fk-rs)"}, expect=NO_ROOT_CAUSE),
     Scenario("flip-commerce", "mongo-majority-lost", "Lose the Mongo majority (2 of 3 down)", "mongodb, kind down",
              symptom=FLIP_ADD_TO_CART,
              change={"service": "mongodb", "service_kind": "datastore", "type": "infra",
-                     "summary": "docker stop 2 of 3 Mongo members (fk-rs)"}),
+                     "summary": "docker stop 2 of 3 Mongo members (fk-rs)"}, expect={"target_prefix": "mongodb/"}),
     Scenario("flip-commerce", "redis-down", "Stop Redis (sessions)", "redis, kind down", symptom=FLIP_CART,
              change={"service": "redis", "service_kind": "datastore", "type": "infra",
-                     "summary": "docker stop the Redis session store"}),
+                     "summary": "docker stop the Redis session store"}, expect={"target_prefix": "redis/"}),
     Scenario("flip-commerce", "circuit-misconfig", "Config typo: flip-node can't find its replica set",
              "flip-node/*, change: config (Mongo looks down too, but it's healthy)", symptom=FLIP_PRODUCTS,
              change={"service": "flip-node", "service_kind": "app", "type": "config",
-                     "summary": "deploy flip-node with MONGO_URI replicaSet=fk-rss (typo)"}),
+                     "summary": "deploy flip-node with MONGO_URI replicaSet=fk-rss (typo)"},
+             expect={"target_prefix": "flip-node/"}),
     Scenario("flip-commerce", "cpu-saturation", "Overload one flip-node worker", "flip-node/*, kind saturation",
-             kind="load", symptom=FLIP_PRODUCTS),
+             kind="load", symptom=FLIP_PRODUCTS, expect={"target_prefix": "flip-node/"}),
     Scenario("flip-commerce", "healthy-baseline", "Healthy baseline (no fault)", "no_root_cause", kind="baseline",
-             symptom=FLIP_PRODUCTS, settle_s=30),
+             symptom=FLIP_PRODUCTS, settle_s=30, expect=NO_ROOT_CAUSE),
     # OTel Demo (EXAMPLE_RUNS §1): flagd flags; the alert fires on the frontend, the loudest symptom
     Scenario("astronomy-shop", "paymentFailure", "flagd: payment fails 50% of charges",
              "payment/*, change: flag paymentFailure on", symptom=DEMO_CHECKOUT, settle_s=90,  # ~4 checkouts / min
              change={"service": "payment", "service_kind": "app", "type": "flag",
-                     "summary": "flag paymentFailure → 50%"}),
+                     "summary": "flag paymentFailure → 50%"}, expect={"target_prefix": "payment/"}),
     Scenario("astronomy-shop", "adHighCpu", "flagd: high CPU in the ad service", "ad/*, kind cpu / latency",
              symptom=DEMO_ADS,
-             change={"service": "ad", "service_kind": "app", "type": "flag", "summary": "flag adHighCpu → on"}),
+             change={"service": "ad", "service_kind": "app", "type": "flag", "summary": "flag adHighCpu → on"},
+             expect={"target_prefix": "ad/"}),
     Scenario("astronomy-shop", "emailMemoryLeak", "flagd: memory leak in the email service",
              "no_root_cause at demo traffic: the leak grows ~10% in 90 s (one per order email), under the detector",
              symptom=DEMO_CHECKOUT, settle_s=90,
              change={"service": "email", "service_kind": "app", "type": "flag",
-                     "summary": "flag emailMemoryLeak → 100x"}),
+                     "summary": "flag emailMemoryLeak → 100x"}, expect=NO_ROOT_CAUSE),
 ]  # fmt: skip
 
 _CASE = re.compile(r"^re2(?P<sys>tt|ob)_(?P<svc>.+)_(?P<fault>cpu|mem|disk|delay|loss|socket)_(?P<n>\d+)$")
 _SYSTEM_ENV = {"tt": "rcaeval-tt", "ob": "rcaeval-ob"}
+_SYNTH = re.compile(r"^synth-(?P<size>small|medium|huge)_(?P<svc>.+)_(?P<fault>[a-z-]+)_(?P<n>\d+)$")
 
 
 def rcaeval_cases() -> list[Scenario]:
@@ -82,7 +102,15 @@ def rcaeval_cases() -> list[Scenario]:
         m = _CASE.match(d.name)
         if m and (d / "inject_time.txt").exists():
             out.append(Scenario(_SYSTEM_ENV[m["sys"]], d.name, f"RCAEval replay: {m['svc']} {m['fault']} #{m['n']}",
-                                f"{m['svc']}/*, kind {m['fault']}", kind="replay"))  # fmt: skip
+                                f"{m['svc']}/*, kind {m['fault']}", kind="replay",
+                                expect={"target_prefix": f"{m['svc']}/"}))  # fmt: skip
+    order = {"small": 0, "medium": 1, "huge": 2}  # the demo starts small
+    for d in sorted(root.glob("synth-*"), key=lambda d: (order.get(d.name[6:].split("_", 1)[0], 3), d.name)):
+        if (m := _SYNTH.match(d.name)) and (d / "labels.json").exists():
+            healthy = json.loads((d / "labels.json").read_text(encoding="utf-8"))["status"] == "no_root_cause"
+            out.append(Scenario("synthetic", d.name, f"Synthetic {m['size']}: {m['fault']} on {m['svc']}",
+                                "no_root_cause" if healthy else f"{m['svc']}/*", kind="replay",
+                                expect=NO_ROOT_CAUSE if healthy else {"target_prefix": f"{m['svc']}/"}))  # fmt: skip
     return out
 
 

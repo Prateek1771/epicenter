@@ -62,8 +62,11 @@ tests/report.py               pytest plugin: data/reports/<n>-<utc>/findings.md 
   panel, find.
 - [x] **Test reports:** `findings.md` + `agent-context.md` per pytest run (numbered, kept); the web tests append to
   the same report.
-- [ ] P0 #33 Eval per-case table: needs phase 10's eval runner (`GET /eval`).
-- [ ] `/map` side panel "recent changes" and double-click expand (UI_SCREENS §12.1).
+- [x] P0 #33 Eval per-case table: `GET /eval` `per_case` (case, split, label, our top 3, hit@1 / hit@3), with an
+  All / Misses filter on `/eval`.
+- [x] `/map` side panel "recent changes" (`GET /services/{service}/changes`, 24 h) and double-click expand: the
+  node's neighbourhood (1 hop, +1 per repeat up to 3, "Show all" resets), computed in the browser from the topology
+  already loaded (UI_SCREENS §12.1).
 
 ## Acceptance
 
@@ -123,3 +126,35 @@ Rules: [UI_SCREENS §1](../UI_SCREENS.md#1-visual-language). Web-only: no API or
 
 Every P0 / P1 row in COMPETITOR_UI_RESEARCH §8 is built or waits on a named phase. Every graph view has
 Graph | Data. A test run leaves `findings.md` + `agent-context.md`.
+
+## Addendum: UI round (2026-10-17)
+
+Shipped after "Done when" was met. API in [API.md](../API.md), new labels in [GRAPH_SCHEMA](../GRAPH_SCHEMA.md),
+query ids in [LLD §2.4](../LLD.md#24-ui-and-conversation-queries), flows in [USER_FLOW](../USER_FLOW.md).
+
+- [x] **Incident exports:** `GET /incidents/{id}/export.md?flavor=human|agent` (`deliver/report.py`, no LLM);
+  header buttons `incident_info.md` and `AGENTS.md`.
+- [x] **Incident page:** right panel collapsed by default, tabs Suspects / Timeline / Notes / Chat; Deliver menu
+  (Slack / Linear) in the header beside Rerun / Resolve.
+- [x] **Ask as a chat:** `Conversation` / `Message` in the env graph; `POST|GET|DELETE /conversations`; `POST /ask`
+  takes `conversation_id` and `attachments` (≤ 5 files, ≤ 200k chars), sends the last 6 turns as history, saves the
+  user turn even on a `502`. Env or incident scope, wiki rail.
+- [x] **Blast radius dossier:** `GET /services/risk`, `/services/{service}/people`, `/services/{service}/runbooks`;
+  risk line, impact by hop, graph, people, incidents rooted here, changes (7 d), runbooks, callers, try-it links.
+- [x] **What-if lab:** six kinds side by side, spread timeline, `POST /simulate/compare`, `GET /rules`,
+  `GET /simulations`.
+- [x] **Map Network view:** `GET /graph/explore` (bounded, every label, `Label:key` ids); Layers | Network | Data,
+  legend toggles, highlight search.
+- [x] **Eval page:** `GET /eval` adds `per_case[].confidence / diagnose_ms / variants / parts`, `history`, `synth`;
+  KPIs, run history, ablation deltas, by fault, calibration, synthetic scale, score parts, where misses go, time to
+  verdict, per-case drill-down.
+- [x] **Landing:** scroll text reveal; optional illustration slots `web/public/landing/<name>.webp`.
+
+Tests added:
+- [x] `tests/test_api.py::test_export_markdown_human_and_agent`
+- [x] `tests/test_api.py::test_blast_radius_dossier_routes`
+- [x] `tests/test_api.py::test_simulate_lab_routes`
+- [x] `tests/test_api.py::test_graph_explore_is_bounded_and_spans_labels`
+- [x] `tests/test_api.py::test_service_changes_for_the_map_side_panel`
+- [x] `tests/test_ask.py::test_conversation_keeps_history_attachments_and_survives_a_502`
+- [x] `tests/test_eval.py::test_get_eval` (extended: `per_case` drill-down fields, `history`, `synth`)

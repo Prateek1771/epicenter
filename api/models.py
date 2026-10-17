@@ -244,9 +244,24 @@ class DeliverOut(BaseModel):
     results: list[DeliverResult]
 
 
+class Attachment(BaseModel):
+    """A text file the user attached (.md, .log, .json, …), read in the browser: context, never a command."""
+
+    name: str = Field(min_length=1, max_length=200)
+    text: str = Field(max_length=200_000)
+
+
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     incident_id: str | None = None
+    conversation_id: str | None = None  # continue a saved conversation: its last turns go to the model as history
+    attachments: list[Attachment] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def _attachments_fit(self) -> "AskIn":
+        if sum(len(a.text) for a in self.attachments) > 200_000:
+            raise ValueError("attachments: 200 KB of text in total at most")
+        return self
 
 
 class ToolUse(BaseModel):
@@ -259,6 +274,42 @@ class AskOut(BaseModel):
     path: list[str]
     tools_used: list[ToolUse]
     cypher: str | None  # set when the answer came from the read-only falkordb-mcp fallback
+    conversation_id: str | None = None
+    message_id: str | None = None  # the saved answer, when the question belonged to a conversation
+
+
+class ConversationIn(BaseModel):
+    title: str | None = Field(default=None, max_length=120)
+    incident_id: str | None = None
+
+
+class ConversationOut(BaseModel):
+    id: str
+    title: str
+    incident: str | None
+    created: datetime
+    updated: datetime
+    messages: int
+
+
+class Conversations(BaseModel):
+    items: list[ConversationOut]
+    next_cursor: str | None = None
+
+
+class MessageOut(BaseModel):
+    id: str
+    role: Literal["user", "assistant"]
+    text: str
+    ts: datetime
+    path: list[str] = []
+    tools_used: list[ToolUse] = []
+    cypher: str | None = None
+    attachments: list[str] = []  # names only: the text is never stored
+
+
+class ConversationDetail(ConversationOut):
+    message_list: list[MessageOut]
 
 
 class GraphEvidence(BaseModel):
@@ -349,6 +400,11 @@ class Subgraph(BaseModel):
     edges: list[GraphEdge]
 
 
+class Explore(Subgraph):
+    label_counts: dict[str, int]  # every node in the env, by label (the legend)
+    truncated: bool
+
+
 class TopologyNode(BaseModel):
     id: str  # service name, or operation id at level=operation
     service: str
@@ -423,6 +479,53 @@ class SimulateOut(BaseModel):
     edges: list[GraphCall] = []  # CALLS among the predicted ops: the graph view
 
 
+class SimCompare(BaseModel):
+    incident: str
+    observed: int
+    coverage: float
+    precision: float
+    footprint: float
+    explains: str
+    matched: list[str]
+    missed: list[str]
+    unexplained: list[str]
+
+
+class SimCompareOut(BaseModel):
+    target: str
+    kind: str
+    items: list[SimCompare]
+
+
+class SimulationItem(BaseModel):
+    id: str
+    target: str
+    kind: str
+    ts: int
+    rules_version: str | None
+    operations: int
+
+
+class Simulations(BaseModel):
+    items: list[SimulationItem]
+
+
+class RuleOut(BaseModel):
+    id: str
+    cause_kinds: list[str]
+    symptom_kind: str
+    direction: str
+    p: float
+    delay_s_max: int
+    service_kind: str | None
+    caller_kind: str | None
+    version: str
+
+
+class Rules(BaseModel):
+    items: list[RuleOut]
+
+
 class ServiceItem(BaseModel):
     name: str
     kind: str | None
@@ -433,9 +536,81 @@ class Services(BaseModel):
     items: list[ServiceItem]
 
 
+class RunbookOut(BaseModel):
+    id: str
+    kind: str | None
+    steps: list[str]
+    success: dict[str, int]  # step → times it fixed an incident
+
+
+class Runbooks(BaseModel):
+    items: list[RunbookOut]
+
+
+class ServiceRisk(BaseModel):
+    name: str
+    kind: str | None
+    callers: int  # distinct calling services
+    incidents: int  # incidents rooted here (current run's root cause)
+    owner: str | None
+
+
+class ServicesRisk(BaseModel):
+    items: list[ServiceRisk]
+
+
 class Envs(BaseModel):
     items: list[str]
     default: str
+
+
+class EvalScore(BaseModel):
+    ac1: float | None
+    ac3: float | None = None
+
+
+class EvalCase(BaseModel):
+    case: str
+    split: str | None
+    service: str  # the labelled root-cause service
+    fault: str
+    top3: list[str]  # our top-3 services, verdict first; empty = no_root_cause
+    hit1: bool
+    hit3: bool
+    confidence: float | None = None
+    diagnose_ms: float | None = None
+    variants: dict[str, str | None] = {}  # ablation → its top-1 service
+    parts: dict[str, float] = {}  # the verdict's score parts
+
+
+class EvalRun(BaseModel):
+    run: str
+    ac1: float | None
+    ac3: float | None
+    cases: int
+    weights_version: str | None
+
+
+class EvalSummary(BaseModel):
+    """GET /eval: the newest `python -m api.eval` result (data/eval), with its N1/N2 timings and one row per case."""
+
+    run: str
+    suite: str
+    system: str
+    cases: int
+    ac1: float | None
+    ac3: float | None
+    by_fault: dict[str, dict[str, float | int | None]]
+    split: dict[str, dict[str, float | int | None]]
+    ablations: dict[str, EvalScore]
+    memory: dict[str, float | int | None]
+    weights_version: str | None
+    rules_version: str
+    n1_ms: dict[str, float | None] | None = None
+    n2_p95_ms: dict[str, float] | None = None
+    per_case: list[EvalCase] = []
+    history: list[EvalRun] = []  # every stored RE2 run, oldest first
+    synth: dict | None = None  # the newest synthetic-suite summary (by_size), reported apart
 
 
 class Health(BaseModel):
@@ -458,6 +633,7 @@ class ScenarioOut(BaseModel):
     expected: str
     kind: Literal["fault", "load", "baseline", "replay"]
     ready: bool  # live: its example environment is up (fault runner health); replay: the case is on disk
+    expect: dict[str, str] | None = None  # machine-readable `expected` (runs.matches): target_prefix or status
 
 
 class Scenarios(BaseModel):
@@ -493,6 +669,8 @@ class RunOut(BaseModel):
     started_at: datetime
     alert_at: datetime
     detail: str | None = None
+    verdict: str | None = None  # the root cause, or the incident status when there is none (no_root_cause, diagnosing)
+    matches: bool | None = None  # the verdict against the scenario's `expect`; None until there is a verdict
 
 
 class Runs(BaseModel):

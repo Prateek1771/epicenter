@@ -16,17 +16,31 @@ type Scenario = S["ScenarioOut"];
 type Run = S["RunOut"];
 
 const ENV_INFO: Record<string, { title: string; blurb: string; start: string }> = {
+  synthetic: {
+    title: "Demo 1 · Synthetic (small)",
+    blurb: "Generated systems with a known answer, in the RCAEval file layout: replayed into the graph, then diagnosed. Start with the small cases.",
+    start: "docker compose exec api python examples/synthetic/gen.py --size small --fault cpu",
+  },
+  "rcaeval-tt": {
+    title: "Demo 2 · RCAEval Train-Ticket (medium)",
+    blurb: "Real faults recorded by the RCAEval benchmark: replayed into the graph, then diagnosed. Same engine, measured.",
+    start: "docker compose exec api python -m api.ingest.rcaeval --case <case> --env rcaeval-tt --download",
+  },
   "flip-commerce": {
     title: "flip-commerce",
     blurb: "Your own system: nginx → flip-node → Mongo replica set + Redis. Real failures, shallow graph.",
     start: "python examples/flip-commerce/run.py up",
   },
   "astronomy-shop": {
-    title: "OpenTelemetry Demo",
+    title: "Demo 3 · OpenTelemetry Demo (real-world)",
     blurb: "~20 services, flagd feature flags as faults. The multi-hop story.",
     start: "python examples/otel-demo/run.py up",
   },
 };
+
+// the demo order (SETUP §5): small → medium → real-world, then anything else
+const ORDER = ["synthetic", "rcaeval-tt", "astronomy-shop"];
+const rank = (env: string) => (ORDER.indexOf(env) + ORDER.length + 1) % (ORDER.length + 1);
 
 const KIND: Record<Scenario["kind"], { label: string; Icon: typeof Radio; cls: string }> = {
   fault: { label: "fault", Icon: CircleAlert, cls: "text-st-refuted bg-st-refuted/10" },
@@ -82,8 +96,15 @@ function RunCard({ run, now, onUndo, busy }: { run: Run; now: number; onUndo: ()
             <div className="h-full bg-signal transition-[width] duration-1000" style={{ width: `${pct * 100}%` }} />
           </div>
         </>
+      ) : run.matches == null ? (
+        <p className="mt-2 text-sm text-muted-foreground">Alert fired. The diagnosis is running.</p>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">Alert fired. The diagnosis is running or done.</p>
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          Verdict <span className="font-mono text-foreground">{run.verdict}</span>
+          <span className={`rounded px-1.5 py-0.5 text-[11px] ${run.matches ? "bg-st-confirmed/12 text-st-confirmed" : "bg-st-refuted/12 text-st-refuted"}`}>
+            {run.matches ? "matches expected" : "differs from expected"}
+          </span>
+        </p>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button asChild size="sm" variant={left > 0 || run.status === "fault_failed" ? "outline" : "default"}>
@@ -117,7 +138,7 @@ export default function RunsPage() {
   const groups = useMemo(() => {
     const m = new Map<string, Scenario[]>();
     for (const x of s.data?.items ?? []) m.set(x.env, [...(m.get(x.env) ?? []), x]);
-    return [...m.entries()];
+    return [...m.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
   }, [s.data]);
 
   // a run's page opens by itself when its alert fires (unless the user already left for it)
@@ -206,7 +227,7 @@ export default function RunsPage() {
                 </span>
                 {(info || replay) && (
                   <p className="w-full text-xs text-muted-foreground">
-                    {replay ? "RCAEval RE2 cases on disk: replayed into the graph, then diagnosed. Same engine, measured." : info.blurb}
+                    {info?.blurb ?? "Recorded cases on disk: replayed into the graph, then diagnosed."}
                     {!up && !replay && info && (
                       <> Start it with <code className="rounded bg-muted px-1 font-mono text-foreground">{info.start}</code>.</>
                     )}

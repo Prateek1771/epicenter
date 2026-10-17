@@ -17,13 +17,15 @@ behind it, so flows trace straight into [docs/API.md](API.md) and [LLD.md](LLD.m
 
 | Screen | Route | Purpose |
 |---|---|---|
-| Incidents list | `/` | Open and past incidents, environment switcher |
-| Incident | `/incident/[id]` | Live graph canvas, verdict card, evidence, explanation, why-not box, memory panel, deliver |
-| Blast radius | `/blast-radius` | Pick a service → what's reachable, who owns it |
-| What-if | `/simulate` | Pick a service and a failure kind → predicted impact with probability and order (Fault Simulator) |
-| Ask | `/ask` | Question → answer + highlighted path |
+| Landing | `/` | Scroll text reveal; optional illustration slots (`web/public/landing/<name>.webp`, hidden until the file exists) |
+| Incidents list | `/incidents` | Open and past incidents, environment switcher |
+| Incident | `/incident/[id]` | Live graph canvas, verdict card, evidence, explanation, why-not box, memory panel. Header: Rerun, Resolve, a **Deliver** menu (Slack / Linear) and two downloads, `incident_info.md` (people) and `AGENTS.md` (agent context, `GET /incidents/{id}/export.md`). Right panel collapsed by default, tabs **Suspects / Timeline / Notes / Chat** |
+| Blast radius | `/blast-radius` | Bento dossier for one service: risk line, impact by hop, graph, people to page, incidents rooted here, changes (7 d), runbooks, who calls it, try-it links. With none picked: the riskiest services (`GET /services/risk`) |
+| What-if lab | `/simulate` | Pick a service → all six failure kinds side by side, spread timeline, "did it happen before?" (`POST /simulate/compare`), the rules behind it (`GET /rules`), saved experiments (`GET /simulations`) |
+| Map | `/map` | **Layers \| Network \| Data**. Network = force-directed graph of every label (`GET /graph/explore`, FalkorDB-browser style), legend toggles per label, highlight search |
+| Ask | `/ask` | Chat with saved history, file attachments, scope (env or one incident) and a wiki rail; answers show their path |
 | Example runs | `/runs` | Start a scripted fault on an example environment, or replay an RCAEval case |
-| Eval | `/eval` | RCAEval accuracy table |
+| Eval | `/eval` | KPIs, run history, ablation deltas, by fault, confidence calibration, synthetic scale, score parts (hits vs misses), where misses go, time to verdict, per-case drill-down |
 
 ---
 
@@ -60,7 +62,8 @@ journey
 | 6 | Types "cart" into why-not | Incident: why-not box | `GET /incidents/{id}/why-not/cart` | refuting `Evidence` + path, or "not upstream" |
 | 7 | Clicks `[E3]` in the explanation | Incident: explanation | — | highlights that evidence's path on the canvas |
 | 8 | Reads "seen before" | Incident: memory panel | SSE `memory.similar` | **Q5**, `SIMILAR_TO` |
-| 9 | Clicks **Send** | Incident | `POST /incidents/{id}/deliver` | `Action.delivery` updated |
+| 9 | Opens **Deliver** in the header, picks Slack / Linear | Incident | `POST /incidents/{id}/deliver` | `Incident.delivery` updated |
+| 9b | Downloads `incident_info.md` or `AGENTS.md` (for a coding agent on the failing repo) | Incident: header | `GET /incidents/{id}/export.md?flavor=human\|agent` | none (built from the incident, no LLM) |
 | 10 | Clicks **Resolved**, picks what fixed it | Incident | `POST /incidents/{id}/resolve` | `RESOLVED_BY`, runbook success count +1, `Person -[:FIXED]->` |
 
 **Edge cases**
@@ -104,10 +107,11 @@ Arjun wants to restart Redis during business hours.
 
 | # | User does | Screen | API | Graph work |
 |---|---|---|---|---|
-| 1 | Opens Blast radius, picks `redis` | Blast radius | `GET /blast-radius/redis` | reverse `CALLS*1..6` into redis operations |
-| 2 | Sees 3 services / 9 operations affected, grouped by hops | Blast radius | — | — |
-| 3 | Sees owners for each affected service | Blast radius | — | `OWNED_BY` |
-| 4 | Clicks "past incidents involving redis" | Blast radius | `GET /incidents?cause=redis` | `ROOT_CAUSE → BLAMES → redis ops` |
+| 0 | Opens Blast radius with nothing picked; sees the riskiest services | Blast radius | `GET /services/risk` | incidents rooted per service, calling services |
+| 1 | Picks `redis` | Blast radius | `GET /blast-radius/redis` | reverse `CALLS*1..6` into redis operations |
+| 2 | Reads the risk line and impact by hop (3 services / 9 operations), with the graph | Blast radius | — | — |
+| 3 | Sees owners and the people to page | Blast radius | `GET /services/redis/people` | `OWNED_BY`, `MEMBER_OF`, `FIXED`, `AUTHORED` |
+| 4 | Sees incidents rooted at redis, its changes in the last 7 d, its runbooks and who calls it | Blast radius | `GET /incidents?cause=redis`, `GET /services/redis/changes?hours=168`, `GET /services/redis/runbooks` | `ROOT_CAUSE → BLAMES → redis ops`, `CHANGED`, `FOR` |
 | 5 | Clicks "simulate a failure" to see *how likely* each breaks, not just *whether* it's reachable | → What-if (Flow 8) | — | — |
 
 ---
@@ -120,6 +124,11 @@ Arjun wants to restart Redis during business hours.
 | 2 | Gets "team-payments (owner); Ravi fixed the last two checkout incidents" | Ask | — | `OWNED_BY`, `FIXED`, `AUTHORED` |
 | 3 | Clicks the answer | Ask | — | path shown: Ravi → FIXED → INC-17 → ROOT_CAUSE → checkout/PlaceOrder |
 | 4 | Asks something no tool covers ("which operation has the most callers?") | Ask | `POST /ask` | ask agent uses `falkordb-mcp` `query_graph_readonly`; the Cypher it ran is shown under the answer |
+| 5 | Attaches a log file and asks a follow-up in the same chat | Ask | `POST /ask {conversation_id, attachments}` | last 6 turns go to the model; question and answer saved as `Message`s (file names only) |
+| 6 | Reopens the chat later, or from another device; searches past chats in the rail | Ask | `GET /conversations?q=`, `GET /conversations/{id}` | `Conversation -[:HAS_MESSAGE]-> Message` |
+
+A chat is scoped to the env or to one incident (`POST /conversations {incident_id}`; the incident page's Chat tab uses
+that scope). If the LLM is down the question still lands in the thread and the answer shows the `502`.
 
 ---
 
@@ -192,3 +201,8 @@ sequenceDiagram
 | 3 | Sees owners per affected service and pings them | What-if | — | `OWNED_BY` |
 | 4 | Saves the simulation and links it in the change ticket | What-if | `save: true` | `Simulation -[:PREDICTS]->` |
 | 5 | After the restart, opens the incident (if any): prediction vs. reality side by side | Incident | `GET /incidents/{id}` | compares footprint with the saved `Simulation` |
+
+The What-if lab runs all six kinds for the picked service side by side, with a spread timeline (when each operation
+is expected to break). "Did it happen before?" matches the prediction against each past incident rooted at that
+service (`POST /simulate/compare`: coverage, precision, footprint, "explains N of M"). It also lists the propagation
+rules behind the prediction (`GET /rules`) and the saved experiments (`GET /simulations`).

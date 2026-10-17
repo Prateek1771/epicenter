@@ -6,30 +6,32 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design system: design_reference/ ("Linear: midnight precision instrument"). Near-black surfaces, paper-white type,
- * hairline borders instead of shadows, weights 400–590, three radii (6 / 12 / pill), and one acid-lime accent used only
- * for the primary action, the active nav item and playheads. UI_SCREENS §1 has the rules.
+ * Design system: one palette from the landing page in (2026-10-17): black surfaces, warm cream type, hairline
+ * borders instead of shadows, weights 400–590, three radii (6 / 12 / pill), and one gold accent used only for the
+ * primary action, the active nav item and playheads. Status colours (red / green / amber / teal) keep their meaning.
+ * Page titles use the landing's Instrument Serif italic (--font-display).
  */
 @theme {
   /* raw palette (design_reference/tailwind_v4.md) */
-  --color-void: #08090a;
-  --color-carbon: #0f1011;
-  --color-obsidian: #161718;
-  --color-graphite: #23252a;
-  --color-smoke: #383b3f;
-  --color-ash: #62666d; /* decorative only: 3.4:1 on void */
-  --color-fog: #8a8f98;
-  --color-mist: #d0d6e0;
-  --color-bone: #e5e5e6;
-  --color-paper: #ffffff;
-  --color-acid-lime: #e4f222;
+  --color-void: #050505;
+  --color-carbon: #0a0a0a;
+  --color-obsidian: #131210;
+  --color-graphite: #26241f; /* warm hairline */
+  --color-smoke: #3b382f;
+  --color-ash: #6b675c; /* decorative only */
+  --color-fog: #9d998c; /* muted text: 7:1 on void */
+  --color-mist: #dedbc8; /* = cream: body text */
+  --color-bone: #ebe8d8;
+  --color-paper: #f6f3e4; /* headings: warm white */
+  --color-cream: #dedbc8;
+  --color-gold: #e6c77d; /* the one accent (was acid lime) */
   --color-pulse-green: #27a644;
   --color-coral-red: #eb5757;
   --color-signal-teal: #02b8cc;
   --color-iris-violet: #6366f1;
   --color-lavender: #8b5cf6;
-  /* Iris Violet lightened to 8.4:1 on void: links, citations, spotlight, "live" (lime stays for the one action) */
-  --color-signal: #9ea0f6;
+  /* links, citations, spotlight, "live": a pale gold, so the one action (gold) still stands out */
+  --color-signal: #d8c79c;
 
   /* type scale */
   --text-caption: 13px;
@@ -75,6 +77,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-landing-serif);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -118,37 +121,37 @@
 .dark {
   color-scheme: dark; /* native scrollbars, inputs and selects follow the theme */
   --radius: 6px;
-  --background: #08090a; /* void */
-  --foreground: #d0d6e0; /* mist: body text; headings are paper */
-  --card: #0f1011; /* carbon */
-  --card-foreground: #d0d6e0;
-  --popover: #161718; /* obsidian */
-  --popover-foreground: #d0d6e0;
-  --primary: #e4f222; /* acid lime: the one action per view */
-  --primary-foreground: #08090a;
-  --secondary: #161718;
-  --secondary-foreground: #d0d6e0;
-  --muted: #161718;
-  --muted-foreground: #8a8f98; /* fog */
-  --accent: rgb(255 255 255 / 5%); /* the pill / ghost fill */
-  --accent-foreground: #ffffff;
+  --background: #050505; /* void */
+  --foreground: #dedbc8; /* cream: body text; headings are paper */
+  --card: #0a0a0a; /* carbon */
+  --card-foreground: #dedbc8;
+  --popover: #131210; /* obsidian */
+  --popover-foreground: #dedbc8;
+  --primary: #e6c77d; /* gold: the one action per view */
+  --primary-foreground: #050505;
+  --secondary: #131210;
+  --secondary-foreground: #dedbc8;
+  --muted: #131210;
+  --muted-foreground: #9d998c; /* fog */
+  --accent: rgb(222 219 200 / 6%); /* the pill / ghost fill */
+  --accent-foreground: #f6f3e4;
   --destructive: #eb5757;
-  --border: #23252a; /* graphite hairline */
-  --input: rgb(255 255 255 / 8%);
-  --ring: #d0d6e0; /* focus: the edge brightens to mist */
-  --chart-1: #d0d6e0;
-  --chart-2: #8a8f98;
-  --chart-3: #62666d;
-  --chart-4: #383b3f;
-  --chart-5: #23252a;
-  --sidebar: #0f1011;
-  --sidebar-foreground: #d0d6e0;
-  --sidebar-primary: #e4f222;
-  --sidebar-primary-foreground: #08090a;
-  --sidebar-accent: rgb(255 255 255 / 5%);
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #23252a;
-  --sidebar-ring: #d0d6e0;
+  --border: #26241f; /* warm graphite hairline */
+  --input: rgb(222 219 200 / 9%);
+  --ring: #dedbc8; /* focus: the edge brightens to cream */
+  --chart-1: #e6c77d;
+  --chart-2: #dedbc8;
+  --chart-3: #9d998c;
+  --chart-4: #6b675c;
+  --chart-5: #3b382f;
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #dedbc8;
+  --sidebar-primary: #e6c77d;
+  --sidebar-primary-foreground: #050505;
+  --sidebar-accent: rgb(222 219 200 / 6%);
+  --sidebar-accent-foreground: #f6f3e4;
+  --sidebar-border: #26241f;
+  --sidebar-ring: #dedbc8;
 }
 
 @layer base {
@@ -169,14 +172,15 @@
     -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3 { color: var(--color-paper); }
-  h1 { letter-spacing: -0.012em; }
+  /* page titles in the landing's serif italic; a class (font-mono, font-sans) on an h1 still wins */
+  h1 { letter-spacing: -0.005em; font-family: var(--font-display), Georgia, serif; font-style: italic; font-weight: 400; }
   .font-mono, code, kbd { letter-spacing: -0.013em; font-feature-settings: "zero" on; }
-  ::selection { background: rgb(158 160 246 / 30%); color: var(--color-paper); }
+  ::selection { background: rgb(230 199 125 / 85%); color: #000; }
   :focus-visible { outline: 1px solid var(--ring); outline-offset: 2px; }
 }
 
 .bg-grid {
-  background-image: radial-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px);
+  background-image: radial-gradient(rgb(222 219 200 / 5%) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 
@@ -197,24 +201,38 @@
 .react-flow__controls { box-shadow: var(--shadow-subtle); border-radius: 6px; overflow: hidden; }
 .react-flow__attribution { display: none; }
 
-/* range inputs (the lanes slicer) are playheads: a graphite hairline track, a lime thumb */
+/* range inputs (the lanes slicer) are playheads: a graphite hairline track, a gold thumb */
 input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 14px; cursor: pointer; }
 input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 9999px; background: var(--color-graphite); }
 input[type="range"]::-moz-range-track { height: 3px; border-radius: 9999px; background: var(--color-graphite); }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px; border: 0;
-  border-radius: 9999px; background: var(--color-acid-lime); box-shadow: 0 0 0 3px rgb(228 242 34 / 15%); }
-input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 9999px; background: var(--color-acid-lime); }
+  border-radius: 9999px; background: var(--color-gold); box-shadow: 0 0 0 3px rgb(230 199 125 / 18%); }
+input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 9999px; background: var(--color-gold); }
 
 * { scrollbar-width: thin; scrollbar-color: var(--color-smoke) transparent; }
 
-/* --- Landing (/): its own palette from the pasted reference (black, cream #DEDBC8, gold #E6C77D) --- */
+/* --- Landing (/): the same tokens (cream, gold, void, carbon); pure black behind the hero --- */
 :root:has(.landing) { background: #000; }
 :root:has(.landing)::-webkit-scrollbar, :root:has(.landing) body::-webkit-scrollbar { width: 0px; height: 0px; }
 :root:has(.landing) { scrollbar-width: none; }
-.landing ::selection { background: #e6c77d; color: #000; }
+
 .noise-overlay {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .bg-noise {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Landing text reveal (components/landing/reveal.tsx): words rise out of a blur, staggered by --i */
+.rv-w { display: inline-block; white-space: pre; }
+[data-reveal] .rv-w {
+  opacity: 0;
+  transform: translateY(0.45em);
+  filter: blur(10px);
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 0.9s cubic-bezier(0.22, 1, 0.36, 1), filter 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--i, 0) * 55ms);
+}
+[data-reveal="in"] .rv-w { opacity: 1; transform: none; filter: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] .rv-w { opacity: 1; transform: none; filter: none; transition: none; }
 }

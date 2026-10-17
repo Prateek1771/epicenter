@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from api.ingest.rcaeval import replay
+from api.ingest.rcaeval import RcaevalAdapter, replay
 from api.search.causal import diagnose
 
 T = 1_700_000_000  # inject time
@@ -125,3 +125,26 @@ def test_rereplay_retires_anomalies_and_keeps_old_runs_intact(graph, case_dir):
     }
     assert {e["anomaly_incident"] for e in cited_after} == {f"{inc}@i1"}
     assert v["run"] == 2 and v["ingest"] == 2 and ingests == {1, 2}
+
+
+def test_logs_skip_rows_without_a_message(case_dir):
+    """Some RE2-TT cases have log rows whose message is null (pd.NA); they carry nothing; skip, no crash."""
+    pd.DataFrame(
+        {"timestamp": [T, T + 1], "container_name": ["db", "db"], "message": pd.array(["x ERROR boom", pd.NA])}
+    ).to_parquet(case_dir / "logs.parquet")
+    lines = list(RcaevalAdapter(case_dir, ENV).logs(T - 10, T + 10))
+    assert [(ln.level, ln.text) for ln in lines] == [("ERROR", "x ERROR boom")]
+
+
+def test_download_of_an_unknown_case_fails_clearly(tmp_path, monkeypatch):
+    """Every file 404s for a name that isn't in the dataset: say so, don't leave an empty dir behind a 'not found'."""
+    import urllib.error
+
+    from api.ingest import rcaeval
+
+    def not_found(url, timeout):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(rcaeval.urllib.request, "urlopen", not_found)
+    with pytest.raises(ValueError, match="inject_time.txt not on Hugging Face"):
+        rcaeval.download("re2tt_nope_cpu_1", tmp_path)

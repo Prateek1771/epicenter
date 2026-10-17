@@ -9,15 +9,15 @@ export function CopyLine({ label, cmd }: { label: string; cmd: string }) {
   const [done, setDone] = useState(false);
   return (
     <div>
-      <p className="text-[11px] tracking-[0.18em] text-[#DEDBC8]/50 uppercase">{label}</p>
+      <p className="text-[11px] tracking-[0.18em] text-cream/50 uppercase">{label}</p>
       <div className="flex items-center gap-3 border-b border-white/20 py-3">
-        <code className="min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-[#DEDBC8]">{cmd}</code>
+        <code className="min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-cream">{cmd}</code>
         <button
           onClick={() => navigator.clipboard?.writeText(cmd).then(() => (setDone(true), setTimeout(() => setDone(false), 1200)))}
-          className="shrink-0 text-[#DEDBC8]/50 transition-colors hover:text-[#E6C77D]"
+          className="shrink-0 text-cream/50 transition-colors hover:text-gold"
           aria-label={`Copy: ${cmd}`}
         >
-          {done ? <Check className="size-4 text-[#E6C77D]" /> : <Copy className="size-4" />}
+          {done ? <Check className="size-4 text-gold" /> : <Copy className="size-4" />}
         </button>
       </div>
     </div>

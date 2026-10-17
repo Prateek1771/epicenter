@@ -1,5 +1,6 @@
 """Causal search: table-driven rule tests (LLD §12 "rule tests") and a full diagnosis on a copy of mini_graph."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from api.ingest.seed import seed_indexes
 from api.search import causal
 from api.search.causal import best_path, diagnose, is_victim, propagation_passes
+from api.search.score import load_weights
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -110,3 +112,18 @@ def test_scratch_graph_deleted_even_when_pagerank_fails(graph, causal_env, monke
     v = diagnose(graph, "test-causal", "inc-1")
     assert v["pagerank_impl"] == "networkx" and v["root_cause"] == "payment/Charge"
     assert graph.scratch("inc-1").ro("count_nodes") == []  # gone (reads on a missing graph return [])
+
+
+def test_ablate_switches_rules_off(graph, causal_env, tmp_path):
+    """Eval ablations (phase 10): `temporal` drops the onset-order refute, `mechanism` the victim evidence."""
+    base = json.loads(Path("weights.json").read_text(encoding="utf-8"))
+    p = tmp_path / "ablated.json"
+    p.write_text(json.dumps(base | {"version": "t+ablate", "ablate": ["temporal", "mechanism"]}), encoding="utf-8")
+    v = diagnose(graph, "test-causal", "inc-1", str(p))
+    rows = {r["op"]: r for r in causal_env.ro("run_hypotheses", inc="inc-1", run=v["run"])}
+    kinds = {(rel, kind) for r in rows.values() for rel, kind, _ in r["evidence"]}
+    assert ("REFUTED_BY", "propagation") not in kinds and ("REFUTED_BY", "victim") not in kinds
+    bad = tmp_path / "typo.json"  # load_weights is cached per path
+    bad.write_text(json.dumps(base | {"ablate": ["typo"]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="unknown ablations"):
+        load_weights(str(bad))

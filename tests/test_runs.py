@@ -109,5 +109,20 @@ def test_replay_scenario_ingests_and_diagnoses(client, monkeypatch, case_dir):  
         assert r.status_code == 202, r.text
         inc = client.get(f"/api/v1/incidents/{r.json()['incident_id']}", params={"env": env}).json()
         assert inc["verdict"]["root_cause"]["target"].startswith("db/")  # the synthetic case's slow database
+        [run] = client.get("/api/v1/runs", params={"env": env}).json()["items"]
+        # the card's badge: the case is named after `back` (its expect), the slow op is db, so it says "differs"
+        assert run["verdict"].startswith("db/") and run["matches"] is False
     finally:
         client.app.state.graph.env(env).delete()
+
+
+def test_every_scenario_has_a_machine_readable_expect_and_matches_reads_it():
+    from api.runs import LIVE, NO_ROOT_CAUSE, matches
+
+    assert all(s.expect for s in LIVE)  # syscheck and the /runs card compare against it
+    assert matches({"target_prefix": "redis/"}, "diagnosed", "redis/GET") is True
+    assert matches({"target_prefix": "redis/"}, "diagnosed", "redisx/GET") is False
+    assert matches({"target_prefix": "redis/"}, "no_root_cause", None) is False
+    assert matches(NO_ROOT_CAUSE, "no_root_cause", None) is True
+    assert matches(NO_ROOT_CAUSE, "diagnosed", "redis/GET") is False
+    assert matches(NO_ROOT_CAUSE, "diagnosing", None) is None and matches(None, "diagnosed", "x/y") is None

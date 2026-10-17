@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Crosshair, FlaskConical, GitFork, Gauge, MessageSquareText, Network, PlayCircle, Search } from "@/components/icons";
+import { Activity, Crosshair, FlaskConical, GitFork, Gauge, Menu, MessageSquareText, Network, PlayCircle, Search, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -53,13 +53,13 @@ function HealthDot() {
   );
 }
 
-function EnvSwitcher() {
+function EnvSwitcher({ className }: { className?: string }) {
   const [env, setEnv] = useEnv();
   const envs = useQuery("envs", () => call(api.GET("/api/v1/envs")));
   const current = env ?? envs.data?.default ?? "";
   return (
     <Select value={current} onValueChange={setEnv}>
-      <SelectTrigger size="sm" className="h-8 w-[170px] font-mono text-xs" aria-label="Environment">
+      <SelectTrigger size="sm" className={cn("h-8 w-[170px] font-mono text-xs", className)} aria-label="Environment">
         <SelectValue placeholder="environment" />
       </SelectTrigger>
       <SelectContent>
@@ -130,7 +130,10 @@ function CommandPalette() {
 export function TopBar() {
   const pathname = usePathname();
   const [env] = useEnv();
+  const [menu, setMenu] = useState(false);
+  useEffect(() => setMenu(false), [pathname]); // a tap on a link closes the menu
   if (pathname === "/") return null; // ponytail: the landing has its own nav; a route group if more pages need that
+  const isActive = (href: string) => (href === "/incidents" ? pathname.startsWith("/incident") : pathname.startsWith(href));
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-void/85 backdrop-blur-xl">
       <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
@@ -140,22 +143,22 @@ export function TopBar() {
           </span>
           <span className="hidden sm:inline">Epicenter</span>
         </Link>
-        <nav className="flex items-center gap-0.5 overflow-x-auto" aria-label="Main">
+        <nav className="hidden items-center gap-0.5 md:flex" aria-label="Main">
           {NAV.map(({ href, label, Icon }) => {
-            const active = href === "/incidents" ? pathname.startsWith("/incident") : pathname.startsWith(href);
+            const active = isActive(href);
             return (
               <Link
                 key={href}
                 href={withEnv(href, env)}
                 aria-current={active ? "page" : undefined}
-                aria-label={label} // the text label is hidden below md
+                aria-label={label} // the text label is hidden md → lg
                 className={cn(
-                  "relative flex h-14 items-center gap-1.5 px-2.5 text-[13px] text-fog transition-colors hover:text-mist",
-                  active && "text-paper after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-acid-lime",
+                  "relative flex h-14 items-center gap-1.5 px-2 text-[13px] text-fog transition-colors hover:text-mist lg:px-2.5",
+                  active && "text-paper after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-gold",
                 )}
               >
                 <Icon className="size-4" aria-hidden />
-                <span className="hidden md:inline">{label}</span>
+                <span className="hidden lg:inline">{label}</span>
               </Link>
             );
           })}
@@ -163,9 +166,27 @@ export function TopBar() {
         <div className="ml-auto flex items-center gap-2">
           <HealthDot />
           <CommandPalette />
-          <EnvSwitcher />
+          <EnvSwitcher className="hidden md:flex" />
+          <Button variant="ghost" size="sm" className="size-8 p-0 md:hidden" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-controls="mobile-nav" aria-label={menu ? "Close menu" : "Open menu"}>
+            {menu ? <X className="size-4" /> : <Menu className="size-4" />}
+          </Button>
         </div>
       </div>
+      {menu && (
+        <div id="mobile-nav" className="epi-in border-t border-border bg-void/95 px-4 pt-2 pb-4 backdrop-blur-xl md:hidden">
+          <nav className="grid grid-cols-2 gap-1" aria-label="Main">
+            {NAV.map(({ href, label, Icon }) => (
+              <Link key={href} href={withEnv(href, env)} aria-current={isActive(href) ? "page" : undefined}
+                className={cn("flex items-center gap-2 rounded-md px-3 py-2.5 text-sm text-fog hover:bg-accent hover:text-mist", isActive(href) && "bg-accent text-paper")}>
+                <Icon className="size-4" aria-hidden /> {label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            Environment <EnvSwitcher className="ml-auto w-[200px]" />
+          </div>
+        </div>
+      )}
     </header>
   );
 }

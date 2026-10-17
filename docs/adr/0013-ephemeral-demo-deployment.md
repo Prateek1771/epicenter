@@ -1,6 +1,6 @@
 # ADR 0013: The demo runs on one ephemeral EC2 host behind Caddy
 
-**Status:** Accepted · **Date:** 2026-10-16
+**Status:** Accepted as the deployment plan; superseded for the event by [ADR 0014](0014-local-event-demo.md) (the demo runs locally) · **Date:** 2026-10-16
 
 ## Context
 The event demo needs a public URL that shows the whole product, including live faults injected into the OTel Demo and

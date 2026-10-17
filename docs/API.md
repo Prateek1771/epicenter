@@ -21,7 +21,7 @@ Every error uses one shape:
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Bad body or query parameter |
 | 401 | `UNAUTHORIZED` | Missing / wrong API key (deployed mode only) |
-| 404 | `INCIDENT_NOT_FOUND`, `SERVICE_NOT_FOUND`, `ENV_NOT_FOUND`, `HYPOTHESIS_NOT_FOUND`, `ACTION_NOT_FOUND` | Unknown id |
+| 404 | `INCIDENT_NOT_FOUND`, `SERVICE_NOT_FOUND`, `ENV_NOT_FOUND`, `HYPOTHESIS_NOT_FOUND`, `ACTION_NOT_FOUND`, `EVAL_NOT_FOUND`, `CONVERSATION_NOT_FOUND` | Unknown id (or no eval result yet) |
 | 409 | `INCIDENT_STATE` | Action not allowed in the current state (e.g. resolve an `open` incident) |
 | 502 | `UPSTREAM_ERROR` | OpenConnector or a telemetry source returned an error |
 | 503 | `GRAPH_UNAVAILABLE` | FalkorDB unreachable |
@@ -110,6 +110,14 @@ published, measured by the run that produced the current verdict.
 When nothing explains the alert, `status` is `no_root_cause`, `verdict` is `null`, and the response has
 `"no_root_cause": { "summary": "Nothing in the graph explains this alert", "checked": ["h-1", "h-2"], "max_coverage": 0.31 }`.
 When a second, independent fault is found, `verdict.second_root_cause` holds a hypothesis in the same shape as `root_cause`.
+
+### `GET /incidents/{id}/export.md`
+Query: `flavor` = `human` (default) or `agent`. The incident as `text/markdown`, sent as a download:
+`Content-Disposition: attachment; filename="{id}.incident_info.md"` (human) or `"{id}.agent.md"` (agent).
+`human` is the report for people (facts, verdict, evidence, ruled out, explanation); `agent` is an AGENTS-style
+context file for a coding agent opened on the failing service's repo (where to look, what's established, what not to
+do). Built from `GET /incidents/{id}` by `deliver/report.py`: no LLM, so the same incident always gives the same file.
+`400 VALIDATION_ERROR` for another `flavor`; `404 INCIDENT_NOT_FOUND`.
 
 ### `POST /incidents/{id}/diagnose`
 Runs the agent flow, or resumes it after a crash. `202` → `{ "incident_id": "inc-42", "status": "diagnosing" }`.
@@ -226,11 +234,52 @@ hit).
 At `level=service`, an edge sums `rps` and takes the max `err_rate` / `p95_ms` over the operation calls between two
 services; calls inside one service aren't edges.
 
+### `GET /graph/explore`
+The `/map` Network view: every label in the env graph, bounded. Query: `limit` (10–2000, default 300) nodes. Same
+shape as `/graph/subgraph`, plus `label_counts` (every node in the env, by label: the legend) and `truncated` (more
+nodes exist than were sent). Node ids are `Label:key` (key = `id`, else `name`, else `handle`), since keys repeat
+across labels. Nodes come topology first (Service, Operation, Team, Person, Incident, Change, Runbook, Hypothesis,
+Anomaly, then the rest); edges are the relationships among the sent nodes. `Conversation` and `Message` are left out.
+```json
+{ "nodes": [ { "id": "Service:payment", "label": "Service", "props": { "key": "payment", "name": "payment", "kind": "app" } } ],
+  "edges": [ { "from": "Service:payment", "to": "Team:payments", "type": "OWNED_BY", "props": {} } ],
+  "label_counts": { "Anomaly": 41, "Operation": 37, "Service": 12 }, "truncated": true }
+```
+
 ### `GET /services`
 Services in the env graph with their kind and operation count (the UI's service pickers).
 ```json
 { "items": [ { "name": "client", "kind": "external", "operations": 1 },
              { "name": "ts-admin-basic-info-service", "kind": "app", "operations": 3 } ] }
+```
+
+### `GET /services/{service}/changes`
+Query: `hours` (1–168, default 24). Changes on one service in that window, newest first, with their authors (the
+`/map` side panel). Bounded by time, so no cursor; an unknown service gives an empty list.
+```json
+{ "items": [ { "id": "chg-run-1792242819", "type": "flag", "ts": 1792242819, "summary": "flag paymentFailure → 50%",
+               "authors": [] } ] }
+```
+
+### `GET /services/risk`
+Query: `limit` (1–50, default 12). The riskiest services, the `/blast-radius` start screen: most incidents rooted
+there (current run's root cause), then most distinct calling services.
+```json
+{ "items": [ { "name": "payment", "kind": "app", "callers": 2, "incidents": 3, "owner": "payments" } ] }
+```
+
+### `GET /services/{service}/people`
+Who to page: the owning team's members, who fixed incidents rooted here, who changed it (the `who_knows` tool).
+`404 SERVICE_NOT_FOUND`.
+```json
+{ "items": [ { "handle": "ravi", "name": "Ravi", "score": 3, "via": ["MEMBER_OF", "FIXED"], "team": "payments" } ] }
+```
+
+### `GET /services/{service}/runbooks`
+Runbooks `FOR` the service, with each step's success count (times it fixed an incident). An unknown service gives an
+empty list.
+```json
+{ "items": [ { "id": "rb-payment-flag", "kind": "errors", "steps": ["turn the flag off"], "success": { "turn the flag off": 2 } } ] }
 ```
 
 ### `GET /blast-radius/{service}`
@@ -260,19 +309,88 @@ no incident needed. Give either `operation` or `service`.
 `edges` are the `CALLS` among the predicted operations (the graph view and its Play). `kind` ∈ `errors`, `latency`, `cpu`, `mem`, `saturation`, `down`. `save: true` writes a `Simulation` node, so a later
 incident can be compared with this prediction.
 
+### `POST /simulate/compare`
+Body as `POST /simulate` (`save` is ignored). "Did it happen before?": the what-if prediction matched against each
+past incident rooted at the target's service (the last 10), with the clock started at the target's earliest observed
+onset in that incident ([LLD §7.7](LLD.md#77-what-if-mode-no-incident)). Incidents without anomalies are skipped.
+Sorted by `footprint` desc, then incident. `404 SERVICE_NOT_FOUND`.
+```json
+{ "target": "payment", "kind": "errors",
+  "items": [ { "incident": "inc-42", "observed": 7, "coverage": 0.86, "precision": 0.82, "footprint": 0.85,
+               "explains": "explains 6 of 7 symptoms", "matched": ["payment/Charge"], "missed": [], "unexplained": ["ad/GetAds"] } ] }
+```
+
+### `GET /simulations`
+Query: `limit` (1–50, default 20). Saved `Simulation` nodes (`POST /simulate` with `save: true`), newest first.
+`operations` = how many operations it predicts.
+```json
+{ "items": [ { "id": "sim-redis-down-1792242819", "target": "redis", "kind": "down", "ts": 1792242819,
+               "rules_version": "2026-10-15", "operations": 9 } ] }
+```
+
+### `GET /rules`
+The propagation rules the simulator uses (`kb:propagation`, read-only; `?env` is ignored).
+```json
+{ "items": [ { "id": "r-errors-up", "cause_kinds": ["errors", "down"], "symptom_kind": "errors", "direction": "upstream",
+               "p": 0.8, "delay_s_max": 30, "service_kind": null, "caller_kind": null, "version": "2026-10-15" } ] }
+```
+
 ### `POST /ask`
 ```json
-{ "question": "who should I page for checkout?", "incident_id": null }
+{ "question": "who should I page for checkout?", "incident_id": null, "conversation_id": "conv-1792242819000000000",
+  "attachments": [ { "name": "pod.log", "text": "…" } ] }
 ```
 ```json
 { "answer": "team-payments owns checkout; Ravi fixed the last two checkout incidents.",
   "path": ["person:ravi", "FIXED", "inc-17", "ROOT_CAUSE", "h-7", "BLAMES", "checkout/PlaceOrder"],
   "tools_used": [ { "tool": "who_knows", "args": { "service": "checkout" } } ],
-  "cypher": null }
+  "cypher": null, "conversation_id": "conv-1792242819000000000", "message_id": "conv-1792242819000000000:m0002" }
 ```
 `cypher` is set when the answer came from the read-only `falkordb-mcp` fallback, so the user can see the query.
 `path` only contains ids that appeared in tool results (plus relationship types). Needs the LLM: `502 UPSTREAM_ERROR`
 when OpenRouter is unavailable.
+
+`attachments`: up to 5 text files read in the browser (`name` ≤ 200 chars), ≤ 200,000 chars of text in total; context
+for the model, never commands. `conversation_id` (optional) continues a saved conversation: its last 6 messages go to
+the model as history, and the question and the answer are saved as `Message` nodes (attachment names only, never the
+text). The question is saved before the model is called, so a `502` still leaves it in the thread. `message_id` is the
+saved answer (`null` without a conversation). The first question becomes the conversation's title (≤ 60 chars, cut on
+a word). `404 CONVERSATION_NOT_FOUND`.
+
+### `POST /conversations`
+```json
+{ "title": null, "incident_id": "inc-42" }
+```
+`201` → a conversation (below). Created before the first question, so the client holds its id even when the LLM is
+down. `incident_id` scopes it to an incident (`404 INCIDENT_NOT_FOUND`); `null` = the whole env. Conversations live
+in the env graph, shared by every viewer.
+
+### `GET /conversations`
+Query: `incident` (only that incident's), `q` (title contains, case-insensitive, ≤ 100 chars), `limit` (1–100,
+default 30), `cursor`. Newest `updated` first.
+```json
+{ "items": [ { "id": "conv-1792242819000000000", "title": "who should I page for checkout?", "incident": null,
+               "created": "2026-10-17T10:00:19Z", "updated": "2026-10-17T10:00:24Z", "messages": 2 } ],
+  "next_cursor": null }
+```
+`title` is `"New chat"` until the first question.
+
+### `GET /conversations/{id}`
+The conversation plus `message_list`, oldest first.
+```json
+{ "id": "conv-1792242819000000000", "title": "who should I page for checkout?", "incident": null,
+  "created": "…", "updated": "…", "messages": 2,
+  "message_list": [ { "id": "conv-1792242819000000000:m0001", "role": "user", "text": "who should I page for checkout?",
+                      "ts": "…", "path": [], "tools_used": [], "cypher": null, "attachments": ["pod.log"] },
+                    { "id": "conv-1792242819000000000:m0002", "role": "assistant", "text": "team-payments owns checkout…",
+                      "ts": "…", "path": ["person:ravi", "FIXED", "inc-17"],
+                      "tools_used": [ { "tool": "who_knows", "args": { "service": "checkout" } } ],
+                      "cypher": null, "attachments": [] } ] }
+```
+`404 CONVERSATION_NOT_FOUND`.
+
+### `DELETE /conversations/{id}`
+`204`. Deletes the conversation and its messages. `404 CONVERSATION_NOT_FOUND`.
 
 ---
 
@@ -292,7 +410,13 @@ case is on disk. `runner`: the fault runner answered.
                "expected": "ts-auth-service/*, kind cpu", "kind": "replay", "ready": true } ] }
 ```
 `kind`: `fault` (writes a `Change`, then injects) · `load` (traffic is the cause, no `Change`) · `baseline` (nothing
-injected; a hand-fired alert that should end `no_root_cause`) · `replay` (RCAEval).
+injected; a hand-fired alert that should end `no_root_cause`) · `replay` (RCAEval, or a synthetic case in env
+`synthetic`). Each item also carries `expect`: `{"target_prefix": "payment/"}` or `{"status": "no_root_cause"}`.
+
+### `GET /runs?env=&limit=`
+The env's latest runs, newest first (the shared record: `Run` nodes). Each has `verdict` (the root-cause operation, or
+the incident status when there is none) and `matches` (the verdict against the scenario's `expect`; `null` until
+there is a verdict); the `/runs` cards show it as "matches expected" / "differs from expected".
 
 ### `POST /runs`
 ```json
@@ -320,11 +444,30 @@ Undo: the fault runner runs `faults.py <scenario> --undo`, which restores exactl
 (history), marked `undone`.
 
 ### `GET /eval`
+The newest result of `python -m api.eval` (`data/eval/<n>-re2-<system>-<weights>-<rules>.json`) with its timings, or
+`404 EVAL_NOT_FOUND` before the first run. The suite never runs on a request.
 ```json
-{ "suite": "re2", "system": "tt", "cases": 90, "ac1": 0.0, "ac3": 0.0,
-  "ablations": { "no_pagerank": { "ac1": 0.0 }, "no_temporal": { "ac1": 0.0 }, "no_mechanism": { "ac1": 0.0 } } }
+{ "run": "0003-re2-tt-2026-10-16.v3-2026-10-16", "suite": "re2", "system": "tt", "cases": 90,
+  "ac1": 0.0, "ac3": 0.0,
+  "split": { "dev": { "cases": 60, "ac1": 0.0, "ac3": 0.0 }, "test": { "cases": 30, "ac1": 0.0, "ac3": 0.0 } },
+  "by_fault": { "cpu": { "cases": 15, "ac1": 0.0 } },
+  "ablations": { "no_pagerank": { "ac1": 0.0, "ac3": 0.0 }, "no_temporal": { "ac1": 0.0, "ac3": 0.0 },
+                 "no_mechanism": { "ac1": 0.0, "ac3": 0.0 }, "no_footprint": { "ac1": 0.0, "ac3": 0.0 } },
+  "memory": { "cases": 88, "p_at_3": 0.0 },
+  "weights_version": "2026-10-16.v3", "rules_version": "2026-10-16",
+  "n1_ms": { "p50": 0.0, "p95": 0.0, "max": 0.0 }, "n2_p95_ms": { "Q1": 0.0, "Q2": 0.0, "Q3": 0.0, "Q4": 0.0, "Q5": 0.0 },
+  "per_case": [ { "case": "re2tt_ts-auth-service_cpu_1", "split": "dev", "service": "ts-auth-service", "fault": "cpu",
+                  "top3": ["ts-auth-service", "ts-user-service"], "hit1": true, "hit3": true } ] }
 ```
-(Values are placeholders until the eval runs.)
+`per_case`: one row per case, sorted by name, for the `/eval` table (our top-3 services, verdict first; empty when the
+verdict was `no_root_cause`). Each row also has `confidence`, `diagnose_ms` (from the timing file, else `null`),
+`variants` (ablation → its top-1 service) and `parts` (the verdict's score parts) for the per-case drill-down.
+`history`: every stored RE2 run, oldest first, as `{ "run", "ac1", "ac3", "cases", "weights_version" }`.
+`synth`: the newest synthetic-suite summary (`--suite synth`), reported apart, or `null`:
+`{ "run", "suite", "seed", "by_size": { "small": { "cases", "ac1", "ac3" } }, "weights_version", "rules_version" }`.
+A hit means the verdict's root-cause operation belongs to the case's labelled service; AC@3 counts the labelled service
+among the first three distinct services of the ranking. `no_root_cause` is a miss at every k. The values in the README
+results table are the measured ones.
 
 ---
 

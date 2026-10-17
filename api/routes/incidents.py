@@ -3,12 +3,13 @@
 import asyncio
 import json
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from api.config import get_settings
+from api.deliver.report import incident_markdown
 from api.events import bus
 from api.graph import EnvGraph
 from api.models import (
@@ -181,6 +182,17 @@ def get_incident(incident_id: str, env: Env, request: Request) -> IncidentOut:
                    for a in acts]  # fmt: skip
     out.delivery = json.loads(inc["delivery"]) if inc["delivery"] else None
     return out
+
+
+@router.get("/incidents/{incident_id}/export.md", response_class=PlainTextResponse)
+def export_markdown(
+    incident_id: str, env: Env, request: Request, flavor: Annotated[Literal["human", "agent"], Query()] = "human"
+) -> PlainTextResponse:
+    """The incident as Markdown: `human` (incident_info.md) or `agent` (a context file for coding agents)."""
+    md = incident_markdown(get_incident(incident_id, env, request), flavor)
+    name = f"{incident_id}.agent.md" if flavor == "agent" else f"{incident_id}.incident_info.md"
+    return PlainTextResponse(md, media_type="text/markdown; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{name}"'})  # fmt: skip
 
 
 @router.get("/incidents/{incident_id}/graph", response_model=IncidentGraph)

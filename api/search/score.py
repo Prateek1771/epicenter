@@ -12,6 +12,7 @@ from pathlib import Path
 
 FEATURES = ("onset_earliness", "strength", "mechanism_fit", "pagerank", "change_match", "footprint")
 SELF_CAUSED_KINDS = {"cpu", "mem", "down", "errors"}
+ABLATIONS = {"temporal", "mechanism"}  # rules the eval can switch off (phase 10); weights alone can't remove a refute
 
 
 @lru_cache
@@ -26,6 +27,9 @@ def load_weights(path: str) -> dict:
         raise ValueError(f"{path}: unknown features {sorted(unknown)}")
     if abs(sum(w["w"].values()) - 1.0) > 1e-6:
         raise ValueError(f"{path}: weights sum to {sum(w['w'].values())}, expected 1")
+    bad = set(w.get("ablate", [])) - ABLATIONS
+    if bad:
+        raise ValueError(f"{path}: unknown ablations {sorted(bad)}")
     return w
 
 

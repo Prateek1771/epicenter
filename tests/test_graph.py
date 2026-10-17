@@ -92,7 +92,11 @@ def test_recent_changes(env_test):
 
 def test_who_knows(env_test):
     rows = env_test.ro("who_knows", svc="payment")
-    assert [(r["handle"], r["score"]) for r in rows] == [("alice", 2), ("bob", 2), ("carol", 1)]
+    assert [(r["handle"], r["score"], sorted(r["via"]), r["team"]) for r in rows] == [
+        ("alice", 2, ["AUTHORED", "MEMBER_OF"], "payments"),
+        ("bob", 2, ["FIXED", "MEMBER_OF"], "payments"),
+        ("carol", 1, ["FIXED"], "payments"),
+    ]
 
 
 def test_injection_is_inert(env_test):
