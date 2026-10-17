@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Receipt } from "lucide-react";
+import { ChevronDown, ChevronRight, Receipt } from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import type { Receipts as R } from "@/lib/incident-state";

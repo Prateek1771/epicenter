@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CircleAlert, FlaskConical, Gauge, Loader2, PlayCircle, Radio, RotateCcw, ShieldCheck, Undo2 } from "lucide-react";
+import { ArrowRight, CircleAlert, FlaskConical, Gauge, Loader2, PlayCircle, Radio, RotateCcw, ShieldCheck, Undo2 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";

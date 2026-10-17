@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenCheck, History, Loader2, MessageSquarePlus, Send, ShieldCheck } from "lucide-react";
+import { BookOpenCheck, History, Loader2, MessageSquarePlus, Send, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";

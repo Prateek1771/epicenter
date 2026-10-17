@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDashed, CircleDot, CircleHelp, CircleSlash, CircleX, Loader2, Send, ShieldCheck } from "lucide-react";
+import { CircleCheck, CircleDashed, CircleDot, CircleHelp, CircleSlash, CircleX, Loader2, Send, ShieldCheck } from "@/components/icons";
 
 import { STATUS_LABEL } from "@/lib/format";
 import { cn } from "@/lib/utils";

@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, GitFork, History, Users } from "lucide-react";
+import { FlaskConical, GitFork, History, Users } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -113,7 +113,7 @@ export default function BlastRadiusPage() {
                 )) : <li className="text-sm text-muted-foreground">none</li>}
               </ul>
               {br.data.past_incidents.length > 0 && (
-                <Link className="mt-2 block text-xs text-signal hover:underline" href={withEnv(`/?cause=${encodeURIComponent(service!)}`, env)}>All incidents caused by {service} →</Link>
+                <Link className="mt-2 block text-xs text-signal hover:underline" href={withEnv(`/incidents?cause=${encodeURIComponent(service!)}`, env)}>All incidents caused by {service} →</Link>
               )}
             </div>
             <Button asChild variant="outline" className="w-full">

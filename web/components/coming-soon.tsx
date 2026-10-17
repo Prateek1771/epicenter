@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { Clock } from "@/components/icons";
 
 /** The intentional state for screens whose endpoints arrive in a later phase (the page still checks the API). */
 export function ComingSoon({ phase, what, endpoint }: { phase: number; what: string; endpoint: string }) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Table2 } from "lucide-react";
+import { Network, Table2 } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 

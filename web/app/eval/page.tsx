@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge } from "lucide-react";
+import { Gauge } from "@/components/icons";
 
 import { ComingSoon } from "@/components/coming-soon";
 import { Skeleton } from "@/components/ui/skeleton";

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Check, Copy, Download, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Download, Search } from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";

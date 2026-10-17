@@ -1,6 +1,6 @@
 "use client";
 
-import { HelpCircle, Loader2, Search } from "lucide-react";
+import { HelpCircle, Loader2, Search } from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusPill } from "@/components/status";

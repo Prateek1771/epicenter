@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Pause, Play, RotateCcw, Save } from "lucide-react";
+import { FlaskConical, Pause, Play, RotateCcw, Save } from "@/components/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";

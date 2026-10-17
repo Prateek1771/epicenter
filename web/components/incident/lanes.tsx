@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Pause, Play, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, Pause, Play, RotateCcw } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

@@ -57,7 +57,9 @@ Type: Inter (variable) with `cv01`, `ss03` and `zero` on, body 15px / −0.011em
 `semibold` and `bold` are capped at 590). Mono is JetBrains Mono (the reference's substitute for Berkeley Mono), for
 ids, operations, numbers and kbd only. Radii: 6px (buttons, inputs), 12px (cards; never more), pill, and 4px badges.
 Elevation comes from hairlines and the inset `shadow-subtle`; `shadow-xl` only on floating layers. No decorative
-gradients. Icons are single-colour line art in fog.
+gradients. Icons: [Phosphor](https://phosphoricons.com), **Light** weight (thin strokes to match the hairlines
+and the 400–510 type), single-colour (`currentColor`), all through `web/components/icons.tsx` so the set or weight
+changes in one file.
 
 Rules the UI keeps:
 - **Status is colour + icon + word**, never colour alone (`StatusPill`: a Linear pill, white / 5% fill, mist word,
@@ -129,7 +131,7 @@ Command palette:
 
 ---
 
-## 3. Incidents list `/`
+## 3. Incidents list `/incidents`
 
 File: `app/page.tsx` · Persona: everyone · Status: **built**
 
@@ -979,9 +981,23 @@ the `who_knows` tool already exists. **Ref:** PagerDuty service directory, Rootl
 └───────────────────────────────┴──────────────────────────────────────────────┘
 ```
 
-### 12.10 Landing page `/about`
+### 12.10 Landing page `/` (built)
 
-**Why:** judges arrive cold. **Data:** static + `GET /eval`.
+**Why:** judges arrive cold. **Data:** static. **Built** in `web/app/page.tsx` + `web/components/landing/`.
+
+It deliberately uses its own palette, not the app's design system (§1): black, cream `#DEDBC8`, gold `#E6C77D`,
+Almarai + Instrument Serif italic, SVG grain, hidden scrollbars (scoped by `:root:has(.landing)`). The app's top bar is
+hidden on `/`. Sections:
+1. a hero with a background video (hotlinked; copy it into `web/public/` before a demo if the link may expire), the
+   shockwave graph canvas (`lib/shockwave.ts`) and a glass nav;
+2. "where you might be";
+3. philosophy (with the George E. P. Box quote);
+4. the agents, drawn as SVG glyphs in place of team photos;
+5. what it does;
+6. under the hood;
+7. measured stats and the "Run it yourself" commands.
+
+No tracking scripts. The sketch below was the original idea:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -1022,4 +1038,4 @@ the `who_knows` tool already exists. **Ref:** PagerDuty service directory, Rootl
 | P2 | G5 Ask inside incident · G2 notes on canvas · G6 latency | gaps | medium | low |
 | P3 | Changes feed | new | medium | medium |
 | P3 | Teams · Runbooks · Report | new | medium | low–medium each |
-| P3 | War-room · Landing | new | medium (demo polish) | low |
+| P3 | War-room · Landing (built) | new | medium (demo polish) | low |

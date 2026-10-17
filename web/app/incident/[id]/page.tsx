@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, BellRing, Loader2, Play, RotateCcw, WifiOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BellRing, Loader2, Play, RotateCcw, WifiOff } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -212,7 +212,7 @@ export default function IncidentPage() {
         <AlertTriangle className="mx-auto size-8 text-ov-missed" aria-hidden />
         <h1 className="mt-3 text-lg font-semibold">{loadErr.code === "INCIDENT_NOT_FOUND" ? "Incident not found" : loadErr.code === "GRAPH_UNAVAILABLE" ? "The graph is offline" : "Couldn't load the incident"}</h1>
         <p className="mt-1 font-mono text-sm text-muted-foreground">{loadErr.message}</p>
-        <Button asChild variant="outline" className="mt-6"><Link href={withEnv("/", env)}><ArrowLeft className="size-4" /> All incidents</Link></Button>
+        <Button asChild variant="outline" className="mt-6"><Link href={withEnv("/incidents", env)}><ArrowLeft className="size-4" /> All incidents</Link></Button>
       </main>
     );
   }
@@ -224,7 +224,7 @@ export default function IncidentPage() {
     <main className="flex h-[calc(100vh-3.5rem)] flex-col">
       {/* header strip */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2.5 lg:px-6">
-        <Link href={withEnv("/", env)} className="text-muted-foreground hover:text-foreground" aria-label="All incidents">
+        <Link href={withEnv("/incidents", env)} className="text-muted-foreground hover:text-foreground" aria-label="All incidents">
           <ArrowLeft className="size-4" />
         </Link>
         <h1 className="font-mono text-sm font-semibold">{incident}</h1>

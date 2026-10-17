@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CircleHelp, CircleX, Clock, Crown, EyeOff, GitCommitHorizontal, Lightbulb, Sparkles, Users } from "lucide-react";
+import { ArrowRight, CircleHelp, CircleX, Clock, Crown, EyeOff, GitCommitHorizontal, Lightbulb, Sparkles, Users } from "@/components/icons";
 
 import { Meter } from "@/components/status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

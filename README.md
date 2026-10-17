@@ -95,7 +95,7 @@ docker compose up -d                                                    # falkor
 
 | URL | What |
 |---|---|
-| http://localhost:3001 | Epicenter UI |
+| http://localhost:3001 | Epicenter landing page; the app starts at `/incidents` |
 | http://localhost:8000/docs | API (Swagger) |
 | http://localhost:3002 | FalkorDB browser (connect to host `falkordb`, port 6379 from inside Docker, or `localhost:6380` from the host) |
 
@@ -140,7 +140,7 @@ If something fails, fix the query in [LLD §2](docs/LLD.md#2-graphpy) before bui
 ```bash
 docker compose exec api python -m api.ingest.rcaeval --case re2tt_ts-auth-service_cpu_2 --env rcaeval-tt --download
 ```
-Then open http://localhost:3001 and the new incident.
+Then open http://localhost:3001/incidents and the new incident.
 
 **OTel Demo (multi-hop)** and **flip-commerce (your system-design-journey, real Mongo failover)**: see
 [docs/EXAMPLE_RUNS.md](docs/EXAMPLE_RUNS.md). Run one example environment at a time; both want port 8080.

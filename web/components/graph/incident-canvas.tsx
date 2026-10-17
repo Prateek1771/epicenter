@@ -15,7 +15,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import { BellRing, Crown } from "lucide-react";
+import { BellRing, Crown } from "@/components/icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { serviceColor, splitOp, STATUS_LABEL } from "@/lib/format";

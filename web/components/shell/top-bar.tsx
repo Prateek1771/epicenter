@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Crosshair, FlaskConical, GitFork, Gauge, MessageSquareText, Network, PlayCircle, Search } from "lucide-react";
+import { Activity, Crosshair, FlaskConical, GitFork, Gauge, MessageSquareText, Network, PlayCircle, Search } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,7 +22,7 @@ import { useEnv, useQuery, withEnv } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 export const NAV = [
-  { href: "/", label: "Incidents", Icon: Activity },
+  { href: "/incidents", label: "Incidents", Icon: Activity },
   { href: "/map", label: "Map", Icon: Network },
   { href: "/blast-radius", label: "Blast radius", Icon: GitFork },
   { href: "/simulate", label: "What-if", Icon: FlaskConical },
@@ -130,6 +130,7 @@ function CommandPalette() {
 export function TopBar() {
   const pathname = usePathname();
   const [env] = useEnv();
+  if (pathname === "/") return null; // ponytail: the landing has its own nav; a route group if more pages need that
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-void/85 backdrop-blur-xl">
       <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
@@ -141,7 +142,7 @@ export function TopBar() {
         </Link>
         <nav className="flex items-center gap-0.5 overflow-x-auto" aria-label="Main">
           {NAV.map(({ href, label, Icon }) => {
-            const active = href === "/" ? pathname === "/" || pathname.startsWith("/incident/") : pathname.startsWith(href);
+            const active = href === "/incidents" ? pathname.startsWith("/incident") : pathname.startsWith(href);
             return (
               <Link
                 key={href}

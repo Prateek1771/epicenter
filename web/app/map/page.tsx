@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, FlaskConical, GitFork, History, Loader2, Network, Search, TriangleAlert, Users } from "lucide-react";
+import { Crown, FlaskConical, GitFork, History, Loader2, Network, Search, TriangleAlert, Users } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -61,7 +61,7 @@ function Side({ n, t, env, onClose }: { n: S["TopologyNode"]; t: S["Topology"]; 
       <div className="mt-auto grid gap-2">
         <Button asChild variant="outline" size="sm"><Link href={withEnv(`/blast-radius?service=${encodeURIComponent(n.service)}`, env)}><GitFork className="size-3.5" /> Blast radius</Link></Button>
         <Button asChild variant="outline" size="sm"><Link href={withEnv(`/simulate?service=${encodeURIComponent(n.id)}`, env)}><FlaskConical className="size-3.5" /> What-if</Link></Button>
-        <Button asChild variant="ghost" size="sm"><Link href={withEnv(`/?cause=${encodeURIComponent(n.service)}`, env)}><History className="size-3.5" /> Past incidents{incidents.length ? ` · ${incidents.length} open` : ""}</Link></Button>
+        <Button asChild variant="ghost" size="sm"><Link href={withEnv(`/incidents?cause=${encodeURIComponent(n.service)}`, env)}><History className="size-3.5" /> Past incidents{incidents.length ? ` · ${incidents.length} open` : ""}</Link></Button>
       </div>
     </aside>
   );

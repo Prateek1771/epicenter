@@ -6,7 +6,7 @@ import {
   Loader2Icon,
   OctagonXIcon,
   TriangleAlertIcon,
-} from "lucide-react"
+} from "@/components/icons"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 // dark-first app: no theme switching, so no next-themes

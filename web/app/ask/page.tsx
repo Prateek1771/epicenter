@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Copy, Loader2, MessageSquareText, Sparkles, Wrench } from "lucide-react";
+import { ArrowRight, Check, Copy, Loader2, MessageSquareText, Sparkles, Wrench } from "@/components/icons";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";

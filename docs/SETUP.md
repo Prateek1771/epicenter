@@ -139,7 +139,7 @@ On a tier-1 machine, start only the core: `docker compose up -d falkordb api web
 
 | URL | What |
 |---|---|
-| http://localhost:3001 | Epicenter UI |
+| http://localhost:3001 | Epicenter landing page; the app starts at `/incidents` |
 | http://localhost:8000/docs | API (Swagger) |
 | http://localhost:3002 | FalkorDB browser (host `localhost`, port 6379 from inside its container, or `localhost:6380` from your machine; password from `.env`) |
 
@@ -178,7 +178,7 @@ Expect: the labelled operation (in `labels.json`), kind `cpu`.
 ```bash
 docker compose exec api python -m api.ingest.rcaeval --case re2tt_ts-auth-service_cpu_2 --env rcaeval-tt --download
 ```
-Open http://localhost:3001 → the incident `rc-re2tt_ts-auth-service_cpu_2`. Expect `ts-auth-service/*`, kind `cpu`.
+Open http://localhost:3001/incidents → the incident `rc-re2tt_ts-auth-service_cpu_2`. Expect `ts-auth-service/*`, kind `cpu`.
 Also try `re2tt_ts-auth-service_cpu_1` and `re2tt_ts-order-service_delay_1`, or start them from `/runs`.
 
 **Synthetic medium (phase 11):** 30 services, including a two-fault and a "loud victim" case.

@@ -15,7 +15,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import { Crown } from "lucide-react";
+import { Crown } from "@/components/icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { serviceColor, splitOp } from "@/lib/format";
