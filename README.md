@@ -146,8 +146,9 @@ If you are judging, the [quick start](#quick-start-10-minutes-any-laptop) above 
 [docs/SETUP.md](docs/SETUP.md) goes further. `python syscheck.py` sizes your machine, then the guide walks you through
 three demos. Small uses the committed synthetic samples (known answers, any laptop). Medium uses real recorded faults
 from the RCAEval benchmark, downloaded per case. Real-world runs live faults in the OpenTelemetry Demo shop, which
-`run.py up` fetches. We planned and scripted a hosted deployment but did not run it for the event:
-[docs/DEPLOYMENT_PLAN.md](docs/DEPLOYMENT_PLAN.md).
+`run.py up` fetches. The hosted demo above runs from [docs/DEPLOYMENT_PLAN.md](docs/DEPLOYMENT_PLAN.md) §6.
+
+The story behind the project, with the benchmark results and what didn't work: [docs/BLOG.md](docs/BLOG.md).
 
 What's where:
 
