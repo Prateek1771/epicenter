@@ -278,7 +278,7 @@ export default function IncidentPage() {
             <BellRing className="size-3.5 text-signal" aria-hidden /> alert on <OpLabel op={view.symptom} className="text-foreground" />
           </span>
         )}
-        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+        <div data-tour="act" className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
           {stream === "reconnecting" && (
             <span className="flex items-center gap-1.5 rounded-full bg-ov-missed/12 px-2 py-0.5 text-xs text-ov-missed" role="status">
               <WifiOff className="size-3.5" aria-hidden /> reconnecting…
@@ -346,7 +346,7 @@ export default function IncidentPage() {
 
         {/* canvas (Graph) or its tables (Data), with the timeline lanes underneath */}
         <div className="flex flex-col max-lg:order-1 lg:min-h-[420px]">
-          <div className="relative h-[60vh] min-h-[360px] bg-grid lg:h-auto lg:min-h-0 lg:flex-1">
+          <div data-tour="canvas" className="relative h-[60vh] min-h-[360px] bg-grid lg:h-auto lg:min-h-0 lg:flex-1">
             {!view ? (
               <div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading graph" /></div>
             ) : !Object.keys(view.nodes).length ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Crosshair, FlaskConical, GitFork, Gauge, Menu, MessageSquareText, Network, PlayCircle, Search, X } from "@/components/icons";
+import { Activity, CircleHelp, Crosshair, FlaskConical, GitFork, Gauge, Menu, MessageSquareText, Network, PlayCircle, Search, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -59,7 +59,7 @@ function EnvSwitcher({ className }: { className?: string }) {
   const current = env ?? envs.data?.default ?? "";
   return (
     <Select value={current} onValueChange={setEnv}>
-      <SelectTrigger size="sm" className={cn("h-8 w-[170px] font-mono text-xs", className)} aria-label="Environment">
+      <SelectTrigger data-tour="env" size="sm" className={cn("h-8 w-[170px] font-mono text-xs", className)} aria-label="Environment">
         <SelectValue placeholder="environment" />
       </SelectTrigger>
       <SelectContent>
@@ -96,7 +96,7 @@ function CommandPalette() {
   };
   return (
     <>
-      <Button variant="outline" size="sm" className="h-8 gap-2 text-fog" onClick={() => setOpen(true)}>
+      <Button data-tour="jump" variant="outline" size="sm" className="h-8 gap-2 text-fog" onClick={() => setOpen(true)}>
         <Search className="size-3.5" aria-hidden />
         <span className="sr-only md:not-sr-only">Jump to…</span>
         <kbd className="hidden rounded-sm bg-white/5 px-1 font-mono text-[10px] text-fog md:inline">⌘K</kbd>
@@ -165,6 +165,14 @@ export function TopBar() {
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <HealthDot />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm" className="size-8 p-0 text-fog" onClick={() => window.dispatchEvent(new Event("epi:tour"))} aria-label="Take the tour">
+                <CircleHelp className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Take the tour</TooltipContent>
+          </Tooltip>
           <CommandPalette />
           <EnvSwitcher className="hidden md:flex" />
           <Button variant="ghost" size="sm" className="size-8 p-0 md:hidden" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-controls="mobile-nav" aria-label={menu ? "Close menu" : "Open menu"}>

@@ -3,6 +3,7 @@ import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { Suspense } from "react";
 
 import { TopBar } from "@/components/shell/top-bar";
+import { Tour } from "@/components/shell/tour";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Suspense>
             <TopBar />
             {children}
+            <Tour />
           </Suspense>
           <Toaster position="bottom-right" />
         </TooltipProvider>
