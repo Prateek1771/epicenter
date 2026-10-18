@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # phase 9: envs whose alerts ingest live telemetry before diagnosis (comma list: flip-commerce,astronomy-shop)
     live_envs: str = ""
     live_tick_s: int = 0  # topology roll-up every N s for the live envs; 0 = off
+    live_scenarios: bool = True  # list the live example environments on /runs (off on the hosted demo: none run there)
     change_journal: str | None = None  # JSON lines written by examples/*/faults.py before they act
     fault_runner_url: str = "http://host.docker.internal:8090"  # examples/fault_runner.py, on the host
     fault_runner_token: str | None = None

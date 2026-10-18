@@ -1,0 +1,468 @@
+{
+ "cases": [
+  {
+   "case": "re2tt_ts-auth-service_cpu_1",
+   "diagnose_ms": 85.2,
+   "replay_ms": 6314.3
+  },
+  {
+   "case": "re2tt_ts-auth-service_cpu_2",
+   "diagnose_ms": 103.4,
+   "replay_ms": 12059.5
+  },
+  {
+   "case": "re2tt_ts-auth-service_cpu_3",
+   "diagnose_ms": 109.0,
+   "replay_ms": 11670.2
+  },
+  {
+   "case": "re2tt_ts-auth-service_delay_1",
+   "diagnose_ms": 83.9,
+   "replay_ms": 9344.7
+  },
+  {
+   "case": "re2tt_ts-auth-service_delay_2",
+   "diagnose_ms": 205.8,
+   "replay_ms": 7670.9
+  },
+  {
+   "case": "re2tt_ts-auth-service_delay_3",
+   "diagnose_ms": 78.7,
+   "replay_ms": 8817.5
+  },
+  {
+   "case": "re2tt_ts-auth-service_disk_1",
+   "diagnose_ms": 161.1,
+   "replay_ms": 8437.6
+  },
+  {
+   "case": "re2tt_ts-auth-service_disk_2",
+   "diagnose_ms": 135.6,
+   "replay_ms": 7675.0
+  },
+  {
+   "case": "re2tt_ts-auth-service_disk_3",
+   "diagnose_ms": 174.2,
+   "replay_ms": 9631.4
+  },
+  {
+   "case": "re2tt_ts-auth-service_loss_1",
+   "diagnose_ms": 247.3,
+   "replay_ms": 13925.7
+  },
+  {
+   "case": "re2tt_ts-auth-service_loss_2",
+   "diagnose_ms": 104.2,
+   "replay_ms": 9474.3
+  },
+  {
+   "case": "re2tt_ts-auth-service_loss_3",
+   "diagnose_ms": 140.4,
+   "replay_ms": 9949.2
+  },
+  {
+   "case": "re2tt_ts-auth-service_mem_1",
+   "diagnose_ms": 165.2,
+   "replay_ms": 15815.3
+  },
+  {
+   "case": "re2tt_ts-auth-service_mem_2",
+   "diagnose_ms": 262.6,
+   "replay_ms": 14023.1
+  },
+  {
+   "case": "re2tt_ts-auth-service_mem_3",
+   "diagnose_ms": 257.3,
+   "replay_ms": 8525.7
+  },
+  {
+   "case": "re2tt_ts-auth-service_socket_1",
+   "diagnose_ms": 85.3,
+   "replay_ms": 11117.5
+  },
+  {
+   "case": "re2tt_ts-auth-service_socket_2",
+   "diagnose_ms": 83.6,
+   "replay_ms": 9219.2
+  },
+  {
+   "case": "re2tt_ts-auth-service_socket_3",
+   "diagnose_ms": 152.2,
+   "replay_ms": 12757.1
+  },
+  {
+   "case": "re2tt_ts-order-service_cpu_1",
+   "diagnose_ms": 148.0,
+   "replay_ms": 8950.6
+  },
+  {
+   "case": "re2tt_ts-order-service_cpu_2",
+   "diagnose_ms": 223.9,
+   "replay_ms": 10027.5
+  },
+  {
+   "case": "re2tt_ts-order-service_cpu_3",
+   "diagnose_ms": 337.8,
+   "replay_ms": 11731.4
+  },
+  {
+   "case": "re2tt_ts-order-service_delay_1",
+   "diagnose_ms": 583.2,
+   "replay_ms": 6061.3
+  },
+  {
+   "case": "re2tt_ts-order-service_delay_2",
+   "diagnose_ms": 179.7,
+   "replay_ms": 2167.3
+  },
+  {
+   "case": "re2tt_ts-order-service_delay_3",
+   "diagnose_ms": 117.2,
+   "replay_ms": 2006.7
+  },
+  {
+   "case": "re2tt_ts-order-service_disk_1",
+   "diagnose_ms": 313.2,
+   "replay_ms": 14921.2
+  },
+  {
+   "case": "re2tt_ts-order-service_disk_2",
+   "diagnose_ms": 109.3,
+   "replay_ms": 1723.9
+  },
+  {
+   "case": "re2tt_ts-order-service_disk_3",
+   "diagnose_ms": 103.8,
+   "replay_ms": 1830.3
+  },
+  {
+   "case": "re2tt_ts-order-service_loss_1",
+   "diagnose_ms": 334.5,
+   "replay_ms": 20673.1
+  },
+  {
+   "case": "re2tt_ts-order-service_loss_2",
+   "diagnose_ms": 70.6,
+   "replay_ms": 1797.0
+  },
+  {
+   "case": "re2tt_ts-order-service_loss_3",
+   "diagnose_ms": 66.0,
+   "replay_ms": 1768.3
+  },
+  {
+   "case": "re2tt_ts-order-service_mem_1",
+   "diagnose_ms": 267.0,
+   "replay_ms": 7607.6
+  },
+  {
+   "case": "re2tt_ts-order-service_mem_2",
+   "diagnose_ms": 281.4,
+   "replay_ms": 7942.5
+  },
+  {
+   "case": "re2tt_ts-order-service_mem_3",
+   "diagnose_ms": 447.0,
+   "replay_ms": 9645.8
+  },
+  {
+   "case": "re2tt_ts-order-service_socket_1",
+   "diagnose_ms": 351.6,
+   "replay_ms": 14362.1
+  },
+  {
+   "case": "re2tt_ts-order-service_socket_2",
+   "diagnose_ms": 123.1,
+   "replay_ms": 1710.2
+  },
+  {
+   "case": "re2tt_ts-order-service_socket_3",
+   "diagnose_ms": 256.7,
+   "replay_ms": 12811.3
+  },
+  {
+   "case": "re2tt_ts-route-service_cpu_1",
+   "diagnose_ms": 265.7,
+   "replay_ms": 11291.1
+  },
+  {
+   "case": "re2tt_ts-route-service_cpu_2",
+   "diagnose_ms": 202.4,
+   "replay_ms": 2145.2
+  },
+  {
+   "case": "re2tt_ts-route-service_cpu_3",
+   "diagnose_ms": 175.2,
+   "replay_ms": 1759.6
+  },
+  {
+   "case": "re2tt_ts-route-service_delay_1",
+   "diagnose_ms": 361.7,
+   "replay_ms": 10868.7
+  },
+  {
+   "case": "re2tt_ts-route-service_delay_2",
+   "diagnose_ms": 598.2,
+   "replay_ms": 11040.3
+  },
+  {
+   "case": "re2tt_ts-route-service_delay_3",
+   "diagnose_ms": 440.3,
+   "replay_ms": 12140.0
+  },
+  {
+   "case": "re2tt_ts-route-service_disk_1",
+   "diagnose_ms": 236.9,
+   "replay_ms": 10137.8
+  },
+  {
+   "case": "re2tt_ts-route-service_disk_2",
+   "diagnose_ms": 288.5,
+   "replay_ms": 10034.4
+  },
+  {
+   "case": "re2tt_ts-route-service_disk_3",
+   "diagnose_ms": 170.2,
+   "replay_ms": 6997.2
+  },
+  {
+   "case": "re2tt_ts-route-service_loss_1",
+   "diagnose_ms": 847.1,
+   "replay_ms": 9447.7
+  },
+  {
+   "case": "re2tt_ts-route-service_loss_2",
+   "diagnose_ms": 381.0,
+   "replay_ms": 14590.4
+  },
+  {
+   "case": "re2tt_ts-route-service_loss_3",
+   "diagnose_ms": 188.8,
+   "replay_ms": 8482.7
+  },
+  {
+   "case": "re2tt_ts-route-service_mem_1",
+   "diagnose_ms": 567.2,
+   "replay_ms": 9247.3
+  },
+  {
+   "case": "re2tt_ts-route-service_mem_2",
+   "diagnose_ms": 298.5,
+   "replay_ms": 7954.5
+  },
+  {
+   "case": "re2tt_ts-route-service_mem_3",
+   "diagnose_ms": 353.2,
+   "replay_ms": 10815.5
+  },
+  {
+   "case": "re2tt_ts-route-service_socket_1",
+   "diagnose_ms": 348.3,
+   "replay_ms": 11249.1
+  },
+  {
+   "case": "re2tt_ts-route-service_socket_2",
+   "diagnose_ms": 173.1,
+   "replay_ms": 7699.1
+  },
+  {
+   "case": "re2tt_ts-route-service_socket_3",
+   "diagnose_ms": 533.9,
+   "replay_ms": 10332.0
+  },
+  {
+   "case": "re2tt_ts-train-service_cpu_1",
+   "diagnose_ms": 360.1,
+   "replay_ms": 14072.0
+  },
+  {
+   "case": "re2tt_ts-train-service_cpu_2",
+   "diagnose_ms": 291.9,
+   "replay_ms": 10472.8
+  },
+  {
+   "case": "re2tt_ts-train-service_cpu_3",
+   "diagnose_ms": 289.1,
+   "replay_ms": 13878.4
+  },
+  {
+   "case": "re2tt_ts-train-service_delay_1",
+   "diagnose_ms": 406.2,
+   "replay_ms": 12705.7
+  },
+  {
+   "case": "re2tt_ts-train-service_delay_2",
+   "diagnose_ms": 409.7,
+   "replay_ms": 8770.5
+  },
+  {
+   "case": "re2tt_ts-train-service_delay_3",
+   "diagnose_ms": 377.4,
+   "replay_ms": 11854.3
+  },
+  {
+   "case": "re2tt_ts-train-service_disk_1",
+   "diagnose_ms": 313.8,
+   "replay_ms": 9990.7
+  },
+  {
+   "case": "re2tt_ts-train-service_disk_2",
+   "diagnose_ms": 464.5,
+   "replay_ms": 11543.7
+  },
+  {
+   "case": "re2tt_ts-train-service_disk_3",
+   "diagnose_ms": 282.7,
+   "replay_ms": 15125.6
+  },
+  {
+   "case": "re2tt_ts-train-service_loss_1",
+   "diagnose_ms": 380.7,
+   "replay_ms": 13835.5
+  },
+  {
+   "case": "re2tt_ts-train-service_loss_2",
+   "diagnose_ms": 377.5,
+   "replay_ms": 13994.2
+  },
+  {
+   "case": "re2tt_ts-train-service_loss_3",
+   "diagnose_ms": 287.1,
+   "replay_ms": 14172.7
+  },
+  {
+   "case": "re2tt_ts-train-service_mem_1",
+   "diagnose_ms": 400.0,
+   "replay_ms": 8167.7
+  },
+  {
+   "case": "re2tt_ts-train-service_mem_2",
+   "diagnose_ms": 353.7,
+   "replay_ms": 8642.7
+  },
+  {
+   "case": "re2tt_ts-train-service_mem_3",
+   "diagnose_ms": 310.3,
+   "replay_ms": 9910.1
+  },
+  {
+   "case": "re2tt_ts-train-service_socket_1",
+   "diagnose_ms": 33.0,
+   "replay_ms": 2543.4
+  },
+  {
+   "case": "re2tt_ts-train-service_socket_2",
+   "diagnose_ms": 396.2,
+   "replay_ms": 15434.3
+  },
+  {
+   "case": "re2tt_ts-train-service_socket_3",
+   "diagnose_ms": 292.3,
+   "replay_ms": 9228.7
+  },
+  {
+   "case": "re2tt_ts-travel-service_cpu_1",
+   "diagnose_ms": 141.4,
+   "replay_ms": 8443.3
+  },
+  {
+   "case": "re2tt_ts-travel-service_cpu_2",
+   "diagnose_ms": 185.2,
+   "replay_ms": 10183.9
+  },
+  {
+   "case": "re2tt_ts-travel-service_cpu_3",
+   "diagnose_ms": 328.4,
+   "replay_ms": 13190.6
+  },
+  {
+   "case": "re2tt_ts-travel-service_delay_1",
+   "diagnose_ms": 225.6,
+   "replay_ms": 12509.7
+  },
+  {
+   "case": "re2tt_ts-travel-service_delay_2",
+   "diagnose_ms": 250.8,
+   "replay_ms": 11072.3
+  },
+  {
+   "case": "re2tt_ts-travel-service_delay_3",
+   "diagnose_ms": 294.6,
+   "replay_ms": 14344.4
+  },
+  {
+   "case": "re2tt_ts-travel-service_disk_1",
+   "diagnose_ms": 219.3,
+   "replay_ms": 11921.7
+  },
+  {
+   "case": "re2tt_ts-travel-service_disk_2",
+   "diagnose_ms": 196.1,
+   "replay_ms": 2021.4
+  },
+  {
+   "case": "re2tt_ts-travel-service_disk_3",
+   "diagnose_ms": 168.8,
+   "replay_ms": 2256.7
+  },
+  {
+   "case": "re2tt_ts-travel-service_loss_1",
+   "diagnose_ms": 333.6,
+   "replay_ms": 11147.9
+  },
+  {
+   "case": "re2tt_ts-travel-service_loss_2",
+   "diagnose_ms": 318.0,
+   "replay_ms": 16843.4
+  },
+  {
+   "case": "re2tt_ts-travel-service_loss_3",
+   "diagnose_ms": 277.5,
+   "replay_ms": 12736.1
+  },
+  {
+   "case": "re2tt_ts-travel-service_mem_1",
+   "diagnose_ms": 407.6,
+   "replay_ms": 12304.8
+  },
+  {
+   "case": "re2tt_ts-travel-service_mem_2",
+   "diagnose_ms": 430.0,
+   "replay_ms": 11918.1
+  },
+  {
+   "case": "re2tt_ts-travel-service_mem_3",
+   "diagnose_ms": 253.7,
+   "replay_ms": 7226.8
+  },
+  {
+   "case": "re2tt_ts-travel-service_socket_1",
+   "diagnose_ms": 125.6,
+   "replay_ms": 1856.9
+  },
+  {
+   "case": "re2tt_ts-travel-service_socket_2",
+   "diagnose_ms": 229.9,
+   "replay_ms": 9255.3
+  },
+  {
+   "case": "re2tt_ts-travel-service_socket_3",
+   "diagnose_ms": 223.8,
+   "replay_ms": 9641.9
+  }
+ ],
+ "diagnose_ms": {
+  "p50": 262.6,
+  "p95": 533.9
+ },
+ "n1_ms": {
+  "max": 21007.6,
+  "p50": 10304.5,
+  "p95": 15408.3
+ },
+ "n2_p95_ms": {
+  "Q1": 2.8,
+  "Q2": 2.8,
+  "Q3": 0.9
+ }
+}

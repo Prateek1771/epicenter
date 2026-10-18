@@ -1,0 +1,160 @@
+{
+ "cases": [
+  {
+   "case": "synth-small_svc-0_cpu_1",
+   "diagnose_ms": 144.2,
+   "replay_ms": 458.9,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_svc-0_mem_1",
+   "diagnose_ms": 24.0,
+   "replay_ms": 324.3,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_svc-0_delay_1",
+   "diagnose_ms": 36.4,
+   "replay_ms": 288.4,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_svc-0_error_1",
+   "diagnose_ms": 68.2,
+   "replay_ms": 341.5,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_mongodb_down_1",
+   "diagnose_ms": 146.9,
+   "replay_ms": 567.2,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_svc-0_config_1",
+   "diagnose_ms": 62.1,
+   "replay_ms": 372.7,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_mongodb_loud-victim_1",
+   "diagnose_ms": 428.6,
+   "replay_ms": 722.7,
+   "size": "small"
+  },
+  {
+   "case": "synth-small_none_healthy_1",
+   "diagnose_ms": 11.7,
+   "replay_ms": 302.2,
+   "size": "small"
+  },
+  {
+   "case": "synth-medium_svc-2_cpu_1",
+   "diagnose_ms": 62.7,
+   "replay_ms": 1439.1,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_svc-16_mem_1",
+   "diagnose_ms": 54.0,
+   "replay_ms": 996.4,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_svc-9_delay_1",
+   "diagnose_ms": 88.2,
+   "replay_ms": 1253.8,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_svc-9_error_1",
+   "diagnose_ms": 76.5,
+   "replay_ms": 1021.1,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_redis_down_1",
+   "diagnose_ms": 968.8,
+   "replay_ms": 1474.5,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_svc-11_config_1",
+   "diagnose_ms": 47.1,
+   "replay_ms": 1004.4,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_svc-7_two_1",
+   "diagnose_ms": 97.9,
+   "replay_ms": 1113.6,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_mysql_loud-victim_1",
+   "diagnose_ms": 402.4,
+   "replay_ms": 1638.3,
+   "size": "medium"
+  },
+  {
+   "case": "synth-medium_none_healthy_1",
+   "diagnose_ms": 32.6,
+   "replay_ms": 1300.6,
+   "size": "medium"
+  },
+  {
+   "case": "synth-huge_svc-32_cpu_1",
+   "diagnose_ms": 148.6,
+   "replay_ms": 3052.8,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_svc-32_mem_1",
+   "diagnose_ms": 77.1,
+   "replay_ms": 2911.2,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_svc-57_delay_1",
+   "diagnose_ms": 174.8,
+   "replay_ms": 2771.0,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_svc-94_error_1",
+   "diagnose_ms": 80.0,
+   "replay_ms": 2341.8,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_store-2_down_1",
+   "diagnose_ms": 176.2,
+   "replay_ms": 2840.7,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_svc-141_config_1",
+   "diagnose_ms": 82.4,
+   "replay_ms": 2442.4,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_svc-141_two_1",
+   "diagnose_ms": 186.4,
+   "replay_ms": 3126.3,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_store-9_loud-victim_1",
+   "diagnose_ms": 117.5,
+   "replay_ms": 2986.0,
+   "size": "huge"
+  },
+  {
+   "case": "synth-huge_none_healthy_1",
+   "diagnose_ms": 128.2,
+   "replay_ms": 3421.5,
+   "size": "huge"
+  }
+ ]
+}

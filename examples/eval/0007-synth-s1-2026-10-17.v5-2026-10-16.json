@@ -1,0 +1,318 @@
+{
+ "rows": [
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_svc-0_cpu_1",
+   "expected": "svc-0",
+   "fault": "cpu",
+   "got": "svc-0/op /svc-0/r3",
+   "ops": 14,
+   "size": "small",
+   "spans": 30683
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_svc-0_mem_1",
+   "expected": "svc-0",
+   "fault": "mem",
+   "got": "svc-0/op /svc-0/r3",
+   "ops": 14,
+   "size": "small",
+   "spans": 30718
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_svc-0_delay_1",
+   "expected": "svc-0",
+   "fault": "delay",
+   "got": "svc-0/op /svc-0/r2",
+   "ops": 14,
+   "size": "small",
+   "spans": 30629
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_svc-0_error_1",
+   "expected": "svc-0",
+   "fault": "error",
+   "got": "svc-0/op /svc-0/r3",
+   "ops": 14,
+   "size": "small",
+   "spans": 30621
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_mongodb_down_1",
+   "expected": "mongodb",
+   "fault": "down",
+   "got": "mongodb/find 0",
+   "ops": 14,
+   "size": "small",
+   "spans": 30706
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_svc-0_config_1",
+   "expected": "svc-0",
+   "fault": "config",
+   "got": "svc-0/op /svc-0/r0",
+   "ops": 14,
+   "size": "small",
+   "spans": 30682
+  },
+  {
+   "fault": "two",
+   "size": "small",
+   "skipped": "two: no fault independent of svc-0/op /svc-0/r3 in this topology; try another --seed"
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_mongodb_loud-victim_1",
+   "expected": "mongodb",
+   "fault": "loud-victim",
+   "got": "mongodb/find 0",
+   "ops": 14,
+   "size": "small",
+   "spans": 34884
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-small_none_healthy_1",
+   "expected": "no_root_cause",
+   "fault": "healthy",
+   "got": "no_root_cause",
+   "ops": 14,
+   "size": "small",
+   "spans": 30523
+  },
+  {
+   "ac1": false,
+   "ac3": true,
+   "case": "synth-medium_svc-2_cpu_1",
+   "expected": "svc-2",
+   "fault": "cpu",
+   "got": "api-3/GET /api-3/r1",
+   "ops": 145,
+   "size": "medium",
+   "spans": 132231
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_svc-16_mem_1",
+   "expected": "svc-16",
+   "fault": "mem",
+   "got": "svc-16/op /svc-16/r3",
+   "ops": 145,
+   "size": "medium",
+   "spans": 131906
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_svc-9_delay_1",
+   "expected": "svc-9",
+   "fault": "delay",
+   "got": "svc-9/op /svc-9/r3",
+   "ops": 145,
+   "size": "medium",
+   "spans": 131793
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_svc-9_error_1",
+   "expected": "svc-9",
+   "fault": "error",
+   "got": "svc-9/op /svc-9/r0",
+   "ops": 145,
+   "size": "medium",
+   "spans": 132722
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_redis_down_1",
+   "expected": "redis",
+   "fault": "down",
+   "got": "redis/get 1",
+   "ops": 145,
+   "size": "medium",
+   "spans": 132004
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_svc-11_config_1",
+   "expected": "svc-11",
+   "fault": "config",
+   "got": "svc-11/op /svc-11/r1",
+   "ops": 145,
+   "size": "medium",
+   "spans": 131853
+  },
+  {
+   "ac1": false,
+   "ac3": true,
+   "case": "synth-medium_svc-7_two_1",
+   "expected": "svc-7",
+   "fault": "two",
+   "got": "svc-7/op /svc-7/r2",
+   "ops": 145,
+   "size": "medium",
+   "spans": 131841
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_mysql_loud-victim_1",
+   "expected": "mysql",
+   "fault": "loud-victim",
+   "got": "mysql/get 1",
+   "ops": 145,
+   "size": "medium",
+   "spans": 140812
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-medium_none_healthy_1",
+   "expected": "no_root_cause",
+   "fault": "healthy",
+   "got": "no_root_cause",
+   "ops": 145,
+   "size": "medium",
+   "spans": 131857
+  },
+  {
+   "ac1": false,
+   "ac3": false,
+   "case": "synth-huge_svc-32_cpu_1",
+   "expected": "svc-32",
+   "fault": "cpu",
+   "got": "svc-173/op /svc-173/r7",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 294967
+  },
+  {
+   "ac1": false,
+   "ac3": true,
+   "case": "synth-huge_svc-32_mem_1",
+   "expected": "svc-32",
+   "fault": "mem",
+   "got": "api-25/GET /api-25/r4",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 296262
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-huge_svc-57_delay_1",
+   "expected": "svc-57",
+   "fault": "delay",
+   "got": "svc-57/op /svc-57/r4",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 294931
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-huge_svc-94_error_1",
+   "expected": "svc-94",
+   "fault": "error",
+   "got": "svc-94/op /svc-94/r3",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 295370
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-huge_store-2_down_1",
+   "expected": "store-2",
+   "fault": "down",
+   "got": "store-2/get 1",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 294164
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-huge_svc-141_config_1",
+   "expected": "svc-141",
+   "fault": "config",
+   "got": "svc-141/op /svc-141/r3",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 295357
+  },
+  {
+   "ac1": false,
+   "ac3": false,
+   "case": "synth-huge_svc-141_two_1",
+   "expected": "svc-141",
+   "fault": "two",
+   "got": "store-8/find 0",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 295643
+  },
+  {
+   "ac1": true,
+   "ac3": true,
+   "case": "synth-huge_store-9_loud-victim_1",
+   "expected": "store-9",
+   "fault": "loud-victim",
+   "got": "store-9/get 1",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 296520
+  },
+  {
+   "ac1": false,
+   "ac3": false,
+   "case": "synth-huge_none_healthy_1",
+   "expected": "no_root_cause",
+   "fault": "healthy",
+   "got": "svc-173/op /svc-173/r7",
+   "ops": 1814,
+   "size": "huge",
+   "spans": 295229
+  }
+ ],
+ "summary": {
+  "by_size": {
+   "huge": {
+    "ac1": 0.5556,
+    "ac3": 0.6667,
+    "cases": 9
+   },
+   "medium": {
+    "ac1": 0.7778,
+    "ac3": 1.0,
+    "cases": 9
+   },
+   "small": {
+    "ac1": 1.0,
+    "ac3": 1.0,
+    "cases": 8
+   }
+  },
+  "rules_version": "2026-10-16",
+  "seed": 1,
+  "suite": "synth",
+  "weights_version": "2026-10-17.v5"
+ }
+}

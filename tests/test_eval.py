@@ -91,6 +91,7 @@ def test_suite_end_to_end_is_deterministic(graph, case_dir, tmp_path):  # noqa: 
 
 def test_get_eval(client, tmp_path, monkeypatch):
     monkeypatch.setattr(ev, "OUT", tmp_path)
+    monkeypatch.setattr(ev, "COMMITTED", tmp_path / "none")  # no committed fallback either
     r = client.get("/api/v1/eval")
     assert r.status_code == 404 and r.json()["error"]["code"] == "EVAL_NOT_FOUND"
     summary = {"suite": "re2", "system": "tt", "cases": 2, "ac1": 0.5, "ac3": 1.0, "by_fault": {}, "split": {},
@@ -123,3 +124,12 @@ def test_get_eval(client, tmp_path, monkeypatch):
         "ac1"
     ] == 0.0
     assert body["synth"]["run"] == "0003-synth-s1-v-r" and body["synth"]["by_size"]["small"]["ac1"] == 1.0
+
+
+def test_get_eval_falls_back_to_committed_results(client, tmp_path, monkeypatch):
+    """No local eval run (a fresh clone, the hosted demo): /eval shows the committed measured runs."""
+    monkeypatch.setattr(ev, "OUT", tmp_path)  # empty
+    monkeypatch.setattr(ev, "COMMITTED", ev.Path("examples/eval"))
+    body = client.get("/api/v1/eval").json()
+    assert body["run"].startswith("0008-re2-tt-") and body["ac1"] == 0.8778
+    assert len(body["history"]) == 6 and body["synth"]["by_size"]["small"]["ac1"] == 1.0

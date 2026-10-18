@@ -36,6 +36,7 @@ from api.search.simulate import load_rules
 
 HF_TREE = "https://huggingface.co/api/datasets/phamquiluan/RCAEval/tree/main"
 OUT = Path("data/eval")
+COMMITTED = Path("examples/eval")  # the measured runs, committed: /eval works on a fresh clone or a hosted box
 N2_QUERIES = ("Q1", "Q2", "Q3", "Q3b", "Q4a", "Q4_blame", "Q4b", "Q5")  # Q4 runs as its three parts
 GRID_STEP = 0.05
 
@@ -291,8 +292,14 @@ def run_suite(graph: Graph, case_dirs: list[Path], system: str, weights_path: st
 def latest(out: Path | None = None) -> dict | None:
     """The newest result's summary with its timings, every earlier RE2 run's headline, and the newest synthetic
     result (GET /eval)."""
+
+    def re2(d: Path) -> list[Path]:
+        return sorted(p for p in d.glob("[0-9]*-re2-*.json") if not p.name.endswith(".timing.json"))
+
     out = out or OUT
-    files = sorted(p for p in out.glob("[0-9]*-re2-*.json") if not p.name.endswith(".timing.json"))
+    files = re2(out)
+    if not files and re2(COMMITTED):  # no local run yet: show the committed one
+        out, files = COMMITTED, re2(COMMITTED)
     if not files:
         return None
     res = json.loads(files[-1].read_text(encoding="utf-8"))

@@ -12,10 +12,12 @@ first (api/ingest/live.py). A replay scenario re-ingests the RCAEval case and di
 
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 
 from api import runs
+from api.config import get_settings
 from api.ingest import rcaeval, write
 from api.ingest.base import ChangeEvent
 from api.ingest.seed import seed_indexes
@@ -39,7 +41,7 @@ FLUSH_S = 5  # the collector's file exporter and Jaeger need a moment to hold th
 
 @router.get("/runs/scenarios", response_model=Scenarios)
 def list_scenarios(request: Request) -> Scenarios:
-    up = request.app.state.runner.health()
+    up = request.app.state.runner.health() if get_settings().live_scenarios else {}  # no runner to ask on the demo box
     items = [
         ScenarioOut(
             env=s.env,
@@ -78,8 +80,16 @@ def _diagnose_at(diagnosis, env: str, incident: str, alert_ts: int) -> None:
     diagnosis.start(env, incident, False)
 
 
-def _replay(request: Request, env: str, case: str) -> None:
-    out = rcaeval.replay(runs.case_dir(case), env, graph(request))
+def _replay(request: Request, env: str, case: str, run_id: str) -> None:
+    d = runs.case_dir(case)
+    if d is None:  # a curated RCAEval case that isn't on disk yet: fetch it first
+        try:
+            d = rcaeval.download(case, Path(get_settings().rcaeval_dir))
+        except Exception as e:  # noqa: BLE001 (network or dataset errors: record them on the run)
+            graph(request).env(env).rw("run_set_status", id=run_id, status="fault_failed",
+                                       detail=f"download failed: {e}"[:500])  # fmt: skip
+            return
+    out = rcaeval.replay(d, env, graph(request))
     request.app.state.diagnosis.start(env, out["incident"], False)
 
 
@@ -96,7 +106,7 @@ def start_run(body: RunIn, request: Request, background: BackgroundTasks) -> Run
     if sc.kind == "replay":
         incident = f"rc-{sc.id}"
         g.rw("run_create", id=run_id, scenario=sc.id, ts=ts, incident=incident)
-        background.add_task(_replay, request, sc.env, sc.id)
+        background.add_task(_replay, request, sc.env, sc.id, run_id)
         return RunAccepted(run_id=run_id, incident_id=incident, alert_at=iso(ts))
 
     runner = request.app.state.runner

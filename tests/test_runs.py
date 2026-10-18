@@ -40,6 +40,7 @@ def live(client, monkeypatch):
 
 
 def test_scenarios_list_live_and_replay_with_readiness(live, monkeypatch, tmp_path):
+    monkeypatch.setattr(runs, "CURATED", [])  # only what's on disk here
     (tmp_path / "re2tt_ts-auth-service_cpu_1").mkdir()
     (tmp_path / "re2tt_ts-auth-service_cpu_1" / "inject_time.txt").write_text("1")
     monkeypatch.setattr(get_settings(), "rcaeval_dir", str(tmp_path))
@@ -154,3 +155,33 @@ def test_committed_samples_match_the_generator(tmp_path):
         committed = Path(get_settings().samples_dir) / made.name
         assert sorted(f.name for f in made.iterdir()) == sorted(f.name for f in committed.iterdir())
         assert all((made / f.name).read_bytes() == f.read_bytes() for f in committed.iterdir()), made.name
+
+
+def test_curated_rcaeval_cases_download_on_first_run(client, monkeypatch, tmp_path, case_dir):  # noqa: F811
+    """/runs offers one RCAEval case per fault before any download; the first run fetches it, then replays."""
+    s = get_settings()
+    monkeypatch.setattr(s, "rcaeval_dir", str(tmp_path / "rc"))
+    monkeypatch.setattr(s, "live_scenarios", False)
+    items = client.get("/api/v1/runs/scenarios").json()["items"]
+    assert not [i for i in items if i["kind"] != "replay"]  # live examples hidden where they can't run
+    rc = [i for i in items if i["env"] == "rcaeval-tt"]
+    assert sorted(i["id"] for i in rc) == sorted(runs.CURATED) and all("downloads" in i["title"] for i in rc)
+    fetched = []
+
+    def fake_download(case, root):
+        fetched.append(case)
+        import shutil
+
+        return shutil.copytree(case_dir, root / case)
+
+    monkeypatch.setattr("api.routes.runs.rcaeval.download", fake_download)
+    assert client.post("/api/v1/runs", json={"env": "rcaeval-tt", "scenario": runs.CURATED[0]}).status_code == 202
+    from starlette.requests import Request
+
+    from api.routes.runs import _replay
+
+    _replay(Request({"type": "http", "app": client.app}), "rcaeval-tt", runs.CURATED[0], "run-x")  # the background task
+    assert fetched[-1] == runs.CURATED[0]
+    assert runs.case_dir(runs.CURATED[0]) is not None  # on disk now: listed without the download note
+    assert "downloads" not in next(i for i in client.get("/api/v1/runs/scenarios").json()["items"]
+                                   if i["id"] == runs.CURATED[0])["title"]  # fmt: skip

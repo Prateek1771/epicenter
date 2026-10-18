@@ -84,3 +84,17 @@ def test_missing_config_and_wrong_state(client, monkeypatch):
     assert "SLACK_CHANNEL" in res["results"][0]["message"] and "LINEAR_TEAM_ID" in res["results"][1]["message"]
     assert client.get("/api/v1/incidents/inc-1", params=Q).json()["status"] == "diagnosed"  # nothing went out
     assert client.post("/api/v1/incidents/inc-1/deliver", params=Q, json={"targets": []}).status_code == 400
+
+
+def test_deliver_not_configured_is_under_construction(client, monkeypatch):
+    """A deployment without OpenConnector (the hosted demo) answers 'under construction' and records nothing."""
+    monkeypatch.setattr(get_settings(), "openconnector_url", None)
+    diagnosed(client)
+    r = client.post("/api/v1/incidents/inc-1/deliver", params=Q, json={"targets": ["slack", "linear"]}).json()
+    assert [(x["target"], x["ok"], x["error"]) for x in r["results"]] == [
+        ("slack", False, "NOT_CONFIGURED"),
+        ("linear", False, "NOT_CONFIGURED"),
+    ]
+    assert "under construction" in r["results"][0]["message"]
+    inc = client.get("/api/v1/incidents/inc-1", params=Q).json()
+    assert inc["status"] == "diagnosed" and not inc["delivery"]

@@ -74,6 +74,8 @@ export function DeliverMenu({ incident, env, delivery, status, onChanged }: { in
       );
       for (const r of res.results) {
         if (r.ok) toast.success(`Sent to ${r.target}`, { description: r.url ?? undefined });
+        else if (r.error === "NOT_CONFIGURED")
+          toast.info("Under construction", { description: `${r.target === "slack" ? "Slack" : "Linear"} delivery isn't connected on this demo yet. Download incident_info.md to share the verdict.` });
         else toast.error(`${r.target} failed`, { description: r.message ?? r.error ?? undefined });
       }
       onChanged();

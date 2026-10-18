@@ -929,7 +929,7 @@ export interface components {
             /** Url */
             url?: string | null;
             /** Error */
-            error?: "UPSTREAM_ERROR" | null;
+            error?: ("UPSTREAM_ERROR" | "NOT_CONFIGURED") | null;
             /** Message */
             message?: string | null;
         };

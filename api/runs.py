@@ -113,13 +113,29 @@ def _case_dirs(pattern: str) -> list[Path]:
     return [seen[k] for k in sorted(seen)]
 
 
+# RCAEval cases offered on /runs even before they're downloaded: one per fault kind, all diagnosed right in eval run
+# 0008, mostly the held-out rep 3. The first run fetches ~25 MB from the benchmark's dataset.
+CURATED = [
+    "re2tt_ts-auth-service_cpu_2",
+    "re2tt_ts-order-service_delay_3",
+    "re2tt_ts-route-service_disk_3",
+    "re2tt_ts-train-service_loss_3",
+    "re2tt_ts-travel-service_mem_3",
+    "re2tt_ts-order-service_socket_3",
+]
+
+
 def rcaeval_cases() -> list[Scenario]:
     out = []
-    for d in _case_dirs("re2*"):
+    on_disk = {d.name for d in _case_dirs("re2*")}
+    for name in sorted(on_disk | set(CURATED)):
+        d = Path(name)
         m = _CASE.match(d.name)
-        if m and (d / "inject_time.txt").exists():
-            out.append(Scenario(_SYSTEM_ENV[m["sys"]], d.name, f"RCAEval replay: {m['svc']} {m['fault']} #{m['n']}",
-                                f"{m['svc']}/*, kind {m['fault']}", kind="replay",
+        ready = case_dir(name) is not None
+        if m and (ready or name in CURATED):  # complete on disk, or fetched on its first run
+            note = "" if ready else " (downloads ~25 MB first)"
+            title = f"RCAEval replay: {m['svc']} {m['fault']} #{m['n']}{note}"
+            out.append(Scenario(_SYSTEM_ENV[m["sys"]], d.name, title, f"{m['svc']}/*, kind {m['fault']}", kind="replay",
                                 expect={"target_prefix": f"{m['svc']}/"}))  # fmt: skip
     order = {"small": 0, "medium": 1, "huge": 2}  # the demo starts small
     for d in sorted(_case_dirs("synth-*"), key=lambda d: (order.get(d.name[6:].split("_", 1)[0], 3), d.name)):
@@ -132,7 +148,7 @@ def rcaeval_cases() -> list[Scenario]:
 
 
 def scenarios() -> list[Scenario]:
-    return LIVE + rcaeval_cases()
+    return (LIVE if get_settings().live_scenarios else []) + rcaeval_cases()
 
 
 def find(env: str, scenario_id: str) -> Scenario | None:

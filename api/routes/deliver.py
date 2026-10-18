@@ -80,6 +80,12 @@ def deliver(incident_id: str, body: DeliverIn, env: Env, request: Request) -> De
         raise ApiError(409, "INCIDENT_STATE", f"Incident {incident_id!r} is {raw['status']}; nothing to deliver yet")
     inc = get_incident(incident_id, env, request)
     s = get_settings()
+    if not s.openconnector_url:  # no delivery service on this deployment (the hosted demo): say so, record nothing
+        return DeliverOut(results=[
+            DeliverResult(target=t, ok=False, error="NOT_CONFIGURED",
+                          message=f"{t.capitalize()} delivery is under construction on this deployment")
+            for t in dict.fromkeys(body.targets)
+        ])  # fmt: skip
     results = []
     for target in dict.fromkeys(body.targets):  # dedupe, keep order
         key = f"{env.key}:{incident_id}:r{inc.run}:{target}"  # scope; run_action adds the payload hash

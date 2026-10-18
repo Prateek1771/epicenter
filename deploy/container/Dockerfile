@@ -45,7 +45,7 @@ RUN useradd -m -u 1000 user && mkdir -p /app/data/rcaeval /app/data/redis \
     && chmod +x /app/deploy/start.sh && chown -R user:user /app/data
 USER user
 ENV HOME=/home/user XDG_CONFIG_HOME=/app/data XDG_DATA_HOME=/app/data \
-    ENV_NAME=synthetic LIVE_ENVS= LIVE_TICK_S=0 \
+    ENV_NAME=synthetic LIVE_ENVS= LIVE_TICK_S=0 LIVE_SCENARIOS=false \
     SAMPLES_DIR=/app/examples/samples RCAEVAL_DIR=/app/data/rcaeval CHECKPOINT_DB=/app/data/checkpoints.db
 EXPOSE 7860
 CMD ["/app/deploy/start.sh"]

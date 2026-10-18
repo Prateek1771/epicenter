@@ -236,7 +236,7 @@ class DeliverResult(BaseModel):
     target: Literal["slack", "linear"]
     ok: bool
     url: str | None = None
-    error: Literal["UPSTREAM_ERROR"] | None = None
+    error: Literal["UPSTREAM_ERROR", "NOT_CONFIGURED"] | None = None
     message: str | None = None
 
 

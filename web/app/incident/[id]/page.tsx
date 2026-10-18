@@ -110,7 +110,7 @@ export default function IncidentPage() {
         .catch((e) => {
           if (!live) return;
           const err = e instanceof ApiError ? e : new ApiError("CLIENT", String(e), 0);
-          if (err.code === "INCIDENT_NOT_FOUND" && tries++ < 30) timer = setTimeout(load, 2000);
+          if (err.code === "INCIDENT_NOT_FOUND" && tries++ < 75) timer = setTimeout(load, 2000); // ~150 s: a first RCAEval run downloads, then ingests
           else setLoadErr(err);
         });
     load();

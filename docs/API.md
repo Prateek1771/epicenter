@@ -197,6 +197,8 @@ else `404 SERVICE_NOT_FOUND`). The change is a normal `Change` node, so the next
 { "targets": ["slack", "linear"], "slack_channel": "#incidents" }
 ```
 `200` → `{ "results": [ { "target": "slack", "ok": true, "url": "https://…" }, { "target": "linear", "ok": false, "error": "UPSTREAM_ERROR", "message": "LINEAR_TEAM_ID not set" } ] }`
+Without OpenConnector configured (the hosted demo), every target returns `"error": "NOT_CONFIGURED"` ("under construction")
+and nothing is recorded on the incident.
 Allowed on `diagnosed`, `delivered`, `no_root_cause` (else `409 INCIDENT_STATE`). Through OpenConnector
 (`slack.post_message` + `slack.get_message_permalink`, `linear.create_linear_issue`); `slack_channel` defaults to
 `SLACK_CHANNEL`, the Linear team to `LINEAR_TEAM_ID`. Each target succeeds or fails alone; the result is stored on the
@@ -398,7 +400,9 @@ The conversation plus `message_list`, oldest first.
 
 ### `GET /runs/scenarios`
 Live scenarios from the registry (`api/runs.py`, EXAMPLE_RUNS tables) plus every replay case found in `RCAEVAL_DIR`
-and in the committed `examples/samples/` (`SAMPLES_DIR`; a name in `RCAEVAL_DIR` wins).
+and in the committed `examples/samples/` (`SAMPLES_DIR`; a name in `RCAEVAL_DIR` wins), plus six curated RCAEval
+cases that aren't downloaded yet (title says "downloads ~25 MB first"; `POST /runs` fetches them before replaying).
+With `LIVE_SCENARIOS=false` (the hosted demo) the live examples are left out.
 `ready`: a live env is up (the host fault runner's `/health`, [ADR 0012](adr/0012-host-fault-runner.md)); a replay
 case is on disk. `runner`: the fault runner answered.
 ```json
