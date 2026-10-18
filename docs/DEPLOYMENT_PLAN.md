@@ -76,14 +76,15 @@ run Epicenter for real:
 5. The same compose files run on any Linux VM; Kubernetes (EKS) is the next step only when there is more than one
    tenant.
 
-## 6. Hosted demo (Hugging Face Space)
+## 6. Hosted demo
 
-For the event we also run a public copy on a Hugging Face Space ([ADR 0015](adr/0015-hf-space-demo.md)): one Docker
-container with FalkorDB, the API and the web app behind Caddy on port 7860, built from `deploy/hf/`. Its Dockerfile
-clones this repo, so a push to GitHub plus "Factory rebuild" in the Space settings redeploys it. It runs Demo 1 and
-Demo 2. The live OTel shop, the fault runner and Slack / Linear stay local. Nothing persists: a restart starts from
-empty graphs and the samples replay on demand. To run the same image locally:
+For the event we also run a small public copy: one EC2 `t3.large` running a single container with FalkorDB, the API and
+the web app behind Caddy (`deploy/container/`), served on port 80. The box builds the image from this repo's `main` at
+boot (`deploy/cloud-init-lite.sh`). It runs Demo 1 (the committed samples) and Demo 2 (RCAEval replays, downloaded on
+demand). The live OTel shop, the fault runner and Slack / Linear stay local. Nothing persists: a restart starts from
+empty graphs, and every sample replays in seconds.
 
 ```bash
-docker build -t epicenter-hf deploy/hf && docker run -p 7860:7860 epicenter-hf    # http://localhost:7860
+INSTANCE_TYPE=t3.large DISK_GB=30 USER_DATA=deploy/cloud-init-lite.sh deploy/aws.sh create   # then status / stop / destroy
+docker build -t epicenter-demo deploy/container && docker run -p 7860:7860 epicenter-demo     # the same image locally
 ```

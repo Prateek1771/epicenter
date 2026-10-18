@@ -24,7 +24,7 @@ AI assistance, disclosed per the event rules. We used AI coding assistants (Clau
 documentation. We directed the design and reviewed the changes. Every decision is recorded in the [ADRs](docs/adr/)
 and [phase files](docs/phases/). We ran every demo and benchmark result reported here ourselves.
 
-**Live demo:** LIVE_DEMO_URL (no install; the synthetic and RCAEval demos run there, see [ADR 0015](docs/adr/0015-hf-space-demo.md))
+**Live demo:** LIVE_DEMO_URL (no install; the synthetic and RCAEval demos run there, see [DEPLOYMENT_PLAN §6](docs/DEPLOYMENT_PLAN.md#6-hosted-demo))
 
 **Demo video:** _add the link before submitting_ · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
 
@@ -160,7 +160,7 @@ What's where:
 
 [Setup guide](docs/SETUP.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Implementation phases](docs/phases/) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
 [API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
-[Deployment plan](docs/DEPLOYMENT_PLAN.md) · [ADRs 0001–0015](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
+[Deployment plan](docs/DEPLOYMENT_PLAN.md) · [ADRs 0001–0014](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
 [Planning notes](docs/planning/)
 
 ---

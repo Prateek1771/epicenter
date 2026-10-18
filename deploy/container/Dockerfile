@@ -1,6 +1,6 @@
-# Epicenter as one Hugging Face Space (Docker SDK, port 7860): FalkorDB + API + web behind Caddy in a single container.
-# The Space repo holds only this folder; the app itself is cloned from GitHub at build time (REF = branch or tag).
-# The compose stack in the repo root is unchanged; this image is for the hosted demo only (ADR 0015).
+# The hosted demo as one container: FalkorDB + API + web behind Caddy on port 7860.
+# Build context is this folder; the app itself is cloned from GitHub at build time (REF = branch or tag).
+# The compose stack in the repo root is unchanged; this image is for the hosted demo only (DEPLOYMENT_PLAN §6).
 
 FROM alpine/git:2.47.2 AS src
 ARG REPO=https://github.com/Prateek1771/epicenter
@@ -40,7 +40,7 @@ COPY --from=web /web/.next/static/ /app/web/.next/static/
 COPY --from=web /web/public/ /app/web/public/
 COPY Caddyfile start.sh /app/deploy/
 
-# HF runs the container as uid 1000: everything it writes lives under /app/data
+# runs as an unprivileged user; everything it writes lives under /app/data
 RUN useradd -m -u 1000 user && mkdir -p /app/data/rcaeval /app/data/redis \
     && chmod +x /app/deploy/start.sh && chown -R user:user /app/data
 USER user

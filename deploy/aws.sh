@@ -57,7 +57,7 @@ create)
   ami=$(aws ssm get-parameters --names /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id \
     --query 'Parameters[0].Value' --output text)
   id=$(ec2 run-instances --image-id "$ami" --instance-type "$TYPE" --key-name "$NAME" --security-group-ids "$sg" \
-    --user-data "file://$ROOT/deploy/cloud-init.sh" \
+    --user-data "file://${USER_DATA:-$ROOT/deploy/cloud-init.sh}" \
     --metadata-options HttpTokens=required,HttpEndpoint=enabled \
     --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=$DISK_GB,VolumeType=gp3,DeleteOnTermination=true}" \
     --tag-specifications "ResourceType=instance,Tags=[{$TAG},{Key=Name,Value=$NAME}]" "ResourceType=volume,Tags=[{$TAG}]" \
