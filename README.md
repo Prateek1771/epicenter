@@ -2,6 +2,8 @@
 
 **Find where every outage started.**
 
+![Epicenter landing page](docs/demo/landing_page.png)
+
 *An epicenter is where a quake starts and where the shockwave spreads out from. When production breaks, Epicenter
 finds that point and shows how the failure spread.*
 
@@ -30,6 +32,8 @@ The live site has one example incident ready to open; start more from **Runs**. 
 first visit and walks through every page and the incident view. The **?** button in the top bar replays it.
 
 **Demo video:** [docs/demo/demo_vid.mp4](docs/demo/demo_vid.mp4) · captioned walkthrough: [docs/demo/epicenter-demo.mp4](docs/demo/epicenter-demo.mp4) · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) · **Video shot list:** [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
+
+**Blog post:** [The loudest service is usually innocent](https://medium.com/@hitliprateek6/the-loudest-service-is-usually-innocent-6f731f192886)
 
 ## Quick start (10 minutes, any laptop)
 
@@ -65,6 +69,8 @@ docker compose ps               # wait until api and falkordb are "healthy"
 Tests run inside the container: `docker compose exec api pytest`.
 
 ## How it works
+
+![Epicenter diagnosis workflow: suspects, evidence, blame graph, fault simulation, scoring](docs/demo/agentic_workflow.png)
 
 1. Map. Every 30 s we roll traces up into a graph of services, operations and who calls whom. Deploys, flag flips
    and config changes go in as they happen.
