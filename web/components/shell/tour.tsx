@@ -122,7 +122,7 @@ export function Tour() {
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Product tour">
       <div className="absolute inset-0" onClick={stop} />
       <div
-        className="pointer-events-none absolute rounded-lg ring-2 ring-gold transition-all duration-300 ease-out"
+        className="pointer-events-none absolute rounded-lg outline-2 outline-gold transition-all duration-300 ease-out"
         style={{
           top: rect.top - PAD,
           left: rect.left - PAD,

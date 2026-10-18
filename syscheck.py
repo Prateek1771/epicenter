@@ -193,8 +193,10 @@ def probe() -> dict:
         "stack": health if code == 200 else None,
         "flip_repo": bool(os.environ.get("FLIP_REPO")) or Path(r"D:\vertical_scaling\system-design-journey").exists(),
         # the OTel Demo: already cloned, or fetchable (examples/otel-demo/run.py up clones the pinned tag with git)
-        "demo_dir": bool(os.environ.get("DEMO_DIR")) or (ROOT / "examples" / "otel-demo" / "upstream").exists()
-        or (ROOT.parent / "opentelemetry-demo").exists() or bool(shutil.which("git")),
+        "demo_dir": bool(os.environ.get("DEMO_DIR"))
+        or (ROOT / "examples" / "otel-demo" / "upstream").exists()
+        or (ROOT.parent / "opentelemetry-demo").exists()
+        or bool(shutil.which("git")),
     }
     p["bench"] = bench()
     return p
