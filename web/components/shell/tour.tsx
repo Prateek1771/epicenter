@@ -21,6 +21,8 @@ const STEPS: Step[] = [
   { sel: nav("/ask"), title: "Ask", body: "Ask the graph a question in plain English. Answers are read-only and show the path they came from." },
   { sel: nav("/runs"), title: "Runs", body: "Start a sample or an RCAEval benchmark incident yourself and watch it get diagnosed live." },
   { sel: nav("/eval"), title: "Eval", body: "How often the verdict is right on RCAEval (87.8% top-1), what each feature is worth, and where it misses." },
+  // phone width: the nav lives in the menu, so one step covers it
+  { sel: '[aria-controls="mobile-nav"]', title: "Menu", body: "Incidents, the system Map, Blast radius, What-if (the Fault Simulator), Ask, Runs to start an incident yourself, and Eval for benchmark accuracy." },
   { sel: '[data-tour="env"]', title: "Environment", body: "One graph per environment. Switch here; every page follows." },
   { sel: '[data-tour="jump"]', title: "Jump to  ⌘K", body: "Any incident or page, from the keyboard." },
   { sel: 'aside[aria-label="Verdict and explanation"]', title: "The verdict", body: "The root cause, its confidence, the score breakdown, and why every other suspect was ruled out.", when: onIncident },
