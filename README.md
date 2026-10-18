@@ -26,7 +26,10 @@ and [phase files](docs/phases/). We ran every demo and benchmark result reported
 
 **Live demo:** https://epicenter.13-204-211-105.sslip.io (no install; the synthetic and RCAEval demos run there, see [DEPLOYMENT_PLAN §6](docs/DEPLOYMENT_PLAN.md#6-hosted-demo))
 
-**Demo video:** _add the link before submitting_ · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+The live site has one example incident ready to open; start more from **Runs**. A short guided tour starts on your
+first visit and walks through every page and the incident view. The **?** button in the top bar replays it.
+
+**Demo video:** [docs/demo/epicenter-demo.mp4](docs/demo/epicenter-demo.mp4) (captioned walkthrough of the live site) · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) · **Video shot list:** [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
 
 ## Quick start (10 minutes, any laptop)
 
@@ -89,6 +92,7 @@ Details: [ARCHITECTURE](docs/ARCHITECTURE.md).
 | `/runs` | Start demo scenarios and live faults |
 | `/eval` | Benchmark analysis: run history, ablation deltas, accuracy by fault, confidence calibration, synthetic scale test, where misses go, time to verdict and a per-case drill-down |
 
+A guided tour (spotlight plus a short note per control) starts on the first visit; **?** in the top bar replays it.
 Every screen works at phone width.
 
 ## Graph model and queries
