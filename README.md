@@ -29,7 +29,7 @@ and [phase files](docs/phases/). We ran every demo and benchmark result reported
 The live site has one example incident ready to open; start more from **Runs**. A short guided tour starts on your
 first visit and walks through every page and the incident view. The **?** button in the top bar replays it.
 
-**Demo video:** [docs/demo/epicenter-demo.mp4](docs/demo/epicenter-demo.mp4) (captioned walkthrough of the live site) · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) · **Video shot list:** [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
+**Demo video:** [docs/demo/demo_vid.mp4](docs/demo/demo_vid.mp4) · captioned walkthrough: [docs/demo/epicenter-demo.mp4](docs/demo/epicenter-demo.mp4) · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) · **Video shot list:** [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
 
 ## Quick start (10 minutes, any laptop)
 
