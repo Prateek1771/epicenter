@@ -24,7 +24,7 @@ AI assistance, disclosed per the event rules. We used AI coding assistants (Clau
 documentation. We directed the design and reviewed the changes. Every decision is recorded in the [ADRs](docs/adr/)
 and [phase files](docs/phases/). We ran every demo and benchmark result reported here ourselves.
 
-**Live demo:** http://13.204.211.105 (no install; the synthetic and RCAEval demos run there, see [DEPLOYMENT_PLAN §6](docs/DEPLOYMENT_PLAN.md#6-hosted-demo))
+**Live demo:** https://epicenter.13-204-211-105.sslip.io (no install; the synthetic and RCAEval demos run there, see [DEPLOYMENT_PLAN §6](docs/DEPLOYMENT_PLAN.md#6-hosted-demo))
 
 **Demo video:** _add the link before submitting_ · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
 

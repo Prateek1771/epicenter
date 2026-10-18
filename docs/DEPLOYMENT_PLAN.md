@@ -78,13 +78,14 @@ run Epicenter for real:
 
 ## 6. Hosted demo
 
-For the event we also run a small public copy: one EC2 `t3.large` running a single container with FalkorDB, the API and
-the web app behind Caddy (`deploy/container/`), served on port 80. The box builds the image from this repo's `main` at
-boot (`deploy/cloud-init-lite.sh`). It runs Demo 1 (the committed samples) and Demo 2 (RCAEval replays, downloaded on
+For the event we also run a small public copy at https://epicenter.13-204-211-105.sslip.io: one EC2
+`m7i-flex.large` running a single container with FalkorDB, the API and the web app (`deploy/container/`). Caddy on the
+host terminates HTTPS with a Let's Encrypt certificate for `epicenter.<ip>.sslip.io`, and the bare IP redirects there.
+The box builds the image from this repo's `main` at boot (`deploy/cloud-init-lite.sh`). It runs Demo 1 (the committed samples) and Demo 2 (RCAEval replays, downloaded on
 demand). The live OTel shop, the fault runner and Slack / Linear stay local. Nothing persists: a restart starts from
 empty graphs, and every sample replays in seconds.
 
 ```bash
-INSTANCE_TYPE=t3.large DISK_GB=30 USER_DATA=deploy/cloud-init-lite.sh deploy/aws.sh create   # then status / stop / destroy
+INSTANCE_TYPE=m7i-flex.large DISK_GB=30 USER_DATA=deploy/cloud-init-lite.sh deploy/aws.sh create   # then status / stop / destroy
 docker build -t epicenter-demo deploy/container && docker run -p 7860:7860 epicenter-demo     # the same image locally
 ```
