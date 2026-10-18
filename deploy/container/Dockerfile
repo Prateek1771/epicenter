@@ -37,6 +37,7 @@ COPY --from=src /src/seed/ seed/
 COPY --from=src /src/weights.json /src/weights.v1.json ./
 COPY --from=src /src/examples/samples/ examples/samples/
 COPY --from=src /src/examples/synthetic/ examples/synthetic/
+COPY --from=src /src/examples/eval/ examples/eval/
 COPY --from=web /web/.next/standalone/ /app/web/
 COPY --from=web /web/.next/static/ /app/web/.next/static/
 COPY --from=web /web/public/ /app/web/public/
