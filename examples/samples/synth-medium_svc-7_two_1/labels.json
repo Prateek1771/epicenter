@@ -1,0 +1,13 @@
+{
+ "case": "synth-medium_svc-7_two_1",
+ "fault": "two",
+ "op": "svc-7/op /svc-7/r2",
+ "ops": 145,
+ "second_service": "svc-9",
+ "seed": 1,
+ "service": "svc-7",
+ "services": 30,
+ "size": "medium",
+ "spans": 131841,
+ "status": "diagnosed"
+}

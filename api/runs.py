@@ -95,17 +95,34 @@ _SYSTEM_ENV = {"tt": "rcaeval-tt", "ob": "rcaeval-ob"}
 _SYNTH = re.compile(r"^synth-(?P<size>small|medium|huge)_(?P<svc>.+)_(?P<fault>[a-z-]+)_(?P<n>\d+)$")
 
 
+def _roots() -> list[Path]:
+    s = get_settings()
+    return [Path(s.rcaeval_dir), Path(s.samples_dir)]  # downloaded or regenerated first, then the committed samples
+
+
+def case_dir(case: str) -> Path | None:
+    """Where a replay case lives: RCAEVAL_DIR (downloads, local regenerations) or the committed examples/samples."""
+    return next((r / case for r in _roots() if (r / case / "inject_time.txt").exists()), None)
+
+
+def _case_dirs(pattern: str) -> list[Path]:
+    seen: dict[str, Path] = {}
+    for root in _roots():
+        for d in sorted(root.glob(pattern)) if root.exists() else []:
+            seen.setdefault(d.name, d)
+    return [seen[k] for k in sorted(seen)]
+
+
 def rcaeval_cases() -> list[Scenario]:
-    root = Path(get_settings().rcaeval_dir)
     out = []
-    for d in sorted(root.glob("re2*")) if root.exists() else []:
+    for d in _case_dirs("re2*"):
         m = _CASE.match(d.name)
         if m and (d / "inject_time.txt").exists():
             out.append(Scenario(_SYSTEM_ENV[m["sys"]], d.name, f"RCAEval replay: {m['svc']} {m['fault']} #{m['n']}",
                                 f"{m['svc']}/*, kind {m['fault']}", kind="replay",
                                 expect={"target_prefix": f"{m['svc']}/"}))  # fmt: skip
     order = {"small": 0, "medium": 1, "huge": 2}  # the demo starts small
-    for d in sorted(root.glob("synth-*"), key=lambda d: (order.get(d.name[6:].split("_", 1)[0], 3), d.name)):
+    for d in sorted(_case_dirs("synth-*"), key=lambda d: (order.get(d.name[6:].split("_", 1)[0], 3), d.name)):
         if (m := _SYNTH.match(d.name)) and (d / "labels.json").exists():
             healthy = json.loads((d / "labels.json").read_text(encoding="utf-8"))["status"] == "no_root_cause"
             out.append(Scenario("synthetic", d.name, f"Synthetic {m['size']}: {m['fault']} on {m['svc']}",

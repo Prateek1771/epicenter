@@ -1,0 +1,13 @@
+{
+ "case": "synth-huge_svc-32_cpu_1",
+ "fault": "cpu",
+ "op": "svc-32/op /svc-32/r2",
+ "ops": 1814,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-32",
+ "services": 300,
+ "size": "huge",
+ "spans": 294967,
+ "status": "diagnosed"
+}

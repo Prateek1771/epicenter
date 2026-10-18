@@ -13,3 +13,8 @@ node_modules/
 # example environments: runtime state (spans, logs, pids, secrets, fault journal)
 examples/run/
 examples/*/run/
+
+# the OpenTelemetry Demo, cloned by examples/otel-demo/run.py up (upstream code, pinned tag)
+examples/otel-demo/upstream/
+
+.agents\

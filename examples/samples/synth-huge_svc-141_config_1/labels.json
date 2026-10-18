@@ -1,0 +1,13 @@
+{
+ "case": "synth-huge_svc-141_config_1",
+ "fault": "config",
+ "op": "svc-141/op /svc-141/r3",
+ "ops": 1814,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-141",
+ "services": 300,
+ "size": "huge",
+ "spans": 295357,
+ "status": "diagnosed"
+}

@@ -1,0 +1,13 @@
+{
+ "case": "synth-medium_svc-9_error_1",
+ "fault": "error",
+ "op": "svc-9/op /svc-9/r0",
+ "ops": 145,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-9",
+ "services": 30,
+ "size": "medium",
+ "spans": 132722,
+ "status": "diagnosed"
+}

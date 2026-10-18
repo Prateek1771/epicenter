@@ -1,0 +1,13 @@
+{
+ "case": "synth-huge_store-2_down_1",
+ "fault": "down",
+ "op": "store-2/get 1",
+ "ops": 1814,
+ "second_service": null,
+ "seed": 1,
+ "service": "store-2",
+ "services": 300,
+ "size": "huge",
+ "spans": 294164,
+ "status": "diagnosed"
+}

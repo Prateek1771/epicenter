@@ -1,0 +1,13 @@
+{
+ "case": "synth-huge_svc-94_error_1",
+ "fault": "error",
+ "op": "svc-94/op /svc-94/r3",
+ "ops": 1814,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-94",
+ "services": 300,
+ "size": "huge",
+ "spans": 295370,
+ "status": "diagnosed"
+}

@@ -1,0 +1,1 @@
+{"env": "synthetic", "id": "chg-synth-small_svc-0_config_1", "ref": "synthetic:synth-small_svc-0_config_1", "service": "svc-0", "service_kind": "app", "summary": "config change on svc-0", "ts": 1780431940, "type": "config"}

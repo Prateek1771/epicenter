@@ -158,3 +158,19 @@ Tests added:
 - [x] `tests/test_api.py::test_service_changes_for_the_map_side_panel`
 - [x] `tests/test_ask.py::test_conversation_keeps_history_attachments_and_survives_a_502`
 - [x] `tests/test_eval.py::test_get_eval` (extended: `per_case` drill-down fields, `history`, `synth`)
+
+## Addendum: evaluator round (2026-10-18)
+
+An outside evaluator's fresh clone had nothing to run: the samples live in the git-ignored `data/`.
+- [x] The full synthetic sample sets (small 8, medium 9, huge 9 cases, ~140 MB) are committed in `examples/samples/`
+  and read through `SAMPLES_DIR`, with `RCAEVAL_DIR` taking precedence. Nothing is generated or downloaded.
+- [x] `/incidents` empty state: **Run a sample incident**.
+- [x] The OTel Demo is fetched by `examples/otel-demo/run.py up` (upstream tag 3.1.0, into the git-ignored
+  `examples/otel-demo/upstream/`). The compose project name is pinned, so an existing clone keeps working.
+- [x] README: a quick start, the graph model and queries, a demo video slot; [DEMO_SCRIPT](../DEMO_SCRIPT.md).
+- [x] Stale "design only" banners removed (AGENTS, ARCHITECTURE, phases README).
+
+Tests added:
+- [x] `tests/test_runs.py::test_committed_samples_are_listed_and_replayable`
+- [x] `tests/test_runs.py::test_committed_samples_match_the_generator`
+- [x] `tests/test_otel_run.py::test_demo_is_fetched_pinned_and_overridable`

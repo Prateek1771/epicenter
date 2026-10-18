@@ -1,0 +1,13 @@
+{
+ "case": "synth-small_svc-0_delay_1",
+ "fault": "delay",
+ "op": "svc-0/op /svc-0/r2",
+ "ops": 14,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-0",
+ "services": 5,
+ "size": "small",
+ "spans": 30629,
+ "status": "diagnosed"
+}

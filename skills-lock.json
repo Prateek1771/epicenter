@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "hackathon-judging": {
+      "source": "samber/dev-event-organizer-skills",
+      "sourceType": "github",
+      "skillPath": "skills/hackathon-judging/SKILL.md",
+      "computedHash": "3f43cab5ba0281a17b539de0078e44baae2c2979acd8413d55b01e244f63b83b"
+    }
+  }
+}

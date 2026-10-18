@@ -144,13 +144,27 @@ the engine improved in phase 9 ([EXAMPLE_RUNS §1](EXAMPLE_RUNS.md#1-opentelemet
 
 A generated 5-service system with one injected fault and a known answer, in the RCAEval file layout, so it goes
 through the same ingest as the benchmark. Any laptop, no internet.
+
+**Nothing to prepare:** the samples are committed in [`examples/samples/`](../examples/samples/README.md). That's 26
+cases, every fault at three sizes:
+
+| Size | Services | Cases | Expect (AC@1) |
+|---|---|---|---|
+| small | 5 | 8 | 8 / 8 |
+| medium | 30 | 9 | 7 / 9 |
+| huge | 300 | 9 | 5 / 9 |
+
+The misses are explained in [EXAMPLE_RUNS §4](EXAMPLE_RUNS.md#4-synthetic-samples-self-made). Open
+http://localhost:3001/incidents → **Run a sample incident**, or `/runs` → *Demo 1 · Synthetic*, where each card says
+whether the verdict matched.
+
+From the command line:
 ```bash
 docker compose exec api python -m api.selftest                                                     # 7 hand-made graphs → 7/7 PASS
 docker compose exec api python examples/synthetic/gen.py --size small --fault cpu --seed 1 --run   # one JSON line: expected, got, ok
 docker compose exec api python -m api.eval --suite synth --size small                              # every fault: 8/8, ~4 s of diagnosis
 ```
-To see a case in the UI, generate it without `--run`, then start it from `/runs` (env `synthetic`); the card says
-whether the verdict matches the expected one. Faults: `cpu`, `mem` (a 3-hour leak, found by the slow-burn pass),
+Faults: `cpu`, `mem` (a 3-hour leak, found by the slow-burn pass),
 `delay`, `error`, `down`, `config` (with a change event), `loud-victim`, `healthy` (expect `no_root_cause`).
 
 ### Demo 2: medium, RCAEval replays (tier 2+)
@@ -172,10 +186,11 @@ docker compose exec api python -m api.eval --suite re2 --system tt --download
 The OpenTelemetry Demo: an online shop of ~15 microservices in 8 languages with real traces, metrics and logs. Faults
 are its own feature flags, flipped live. `run.py up` loads the demo's minimal core plus its observability stack
 (Jaeger, Prometheus, OpenSearch).
+The demo isn't copied into this repo: `run.py up` clones upstream's tag `3.1.0` into the git-ignored
+`examples/otel-demo/upstream/` the first time (set `DEMO_DIR` to use a clone elsewhere). See
+[examples/otel-demo/README.md](../examples/otel-demo/README.md).
 ```bash
-git clone --branch 3.1.0 https://github.com/open-telemetry/opentelemetry-demo ../opentelemetry-demo
-export DEMO_DIR="$(cd ../opentelemetry-demo && pwd)"     # PowerShell: $env:DEMO_DIR = (Resolve-Path ..\opentelemetry-demo)
-python examples/otel-demo/run.py up        # first start pulls ~10 GB of images; also starts the fault runner
+python examples/otel-demo/run.py up        # first run: clone + pull ~10 GB of images; also starts the fault runner
 python examples/otel-demo/run.py status
 ```
 After a fresh start let it warm up for **25 minutes** before the first fault (later faults need 10 minutes apart):

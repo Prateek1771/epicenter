@@ -1,7 +1,7 @@
 # Epicenter: Architecture
 
 > **Hackathon:** Graph Hacks: Context for AI Agents (powered by FalkorDB)
-> **Status:** design, pre-kickoff (no product code yet) · **Last reviewed:** 2026-10-15
+> **Status:** built and demo-ready (phases 0–12) · **Last reviewed:** 2026-10-18
 
 **Problem.** Something in production breaks. On-call engineers jump between dashboards, traces and logs to work out
 **what** broke, **where**, **why** and **what to do next**. AI SRE tools speed this up, but most ask an LLM to guess the

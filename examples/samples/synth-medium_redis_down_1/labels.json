@@ -1,0 +1,13 @@
+{
+ "case": "synth-medium_redis_down_1",
+ "fault": "down",
+ "op": "redis/get 1",
+ "ops": 145,
+ "second_service": null,
+ "seed": 1,
+ "service": "redis",
+ "services": 30,
+ "size": "medium",
+ "spans": 132004,
+ "status": "diagnosed"
+}

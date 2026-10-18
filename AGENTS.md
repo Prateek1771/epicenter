@@ -9,8 +9,8 @@ operations, calls, changes, owners), searches it upstream from an alert for the 
 **Fault Simulator** ("if this were the cause, what would we see?"), remembers past incidents and their fixes, and
 returns every answer as a graph path. Built for Graph Hacks (FalkorDB).
 
-**Status:** design docs only. Product code starts at hackathon kickoff. Build order is in
-[docs/phases/](docs/phases/README.md): find the first phase whose "Done when" isn't met and work there.
+**Status:** built and demo-ready (phases 0–12). Build order and acceptance checks are in
+[docs/phases/](docs/phases/README.md): new work starts from the first phase whose "Done when" isn't met.
 
 ## Where to look
 

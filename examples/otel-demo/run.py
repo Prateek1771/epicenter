@@ -5,8 +5,9 @@ flagd flag file that `faults.py` flips (that's how the demo injects its faults).
     python examples/otel-demo/run.py status   JSON health
     python examples/otel-demo/run.py down     stop it (containers stopped, volumes kept)
 
-`DEMO_DIR` points at the clone (default D:\\hacktober_proj\\opentelemetry-demo, tag 3.1.0). Stop flip-commerce first:
-both want ports 8080 and 4317.
+The demo is upstream's, pinned at tag 3.1.0 and never edited here. `up` clones it into the git-ignored
+`examples/otel-demo/upstream/` on first use; `DEMO_DIR`, or an existing sibling `../opentelemetry-demo` clone, wins.
+Stop flip-commerce first: both want ports 8080 and 4317.
 """
 
 import json
@@ -20,7 +21,30 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EXAMPLES = HERE.parent
-DEMO = Path(os.environ.get("DEMO_DIR", r"D:\hacktober_proj\opentelemetry-demo"))
+REPO_URL, TAG = "https://github.com/open-telemetry/opentelemetry-demo", "3.1.0"
+PROJECT = "opentelemetry-demo"  # fixed: the compose project must not change with the clone's folder name
+
+
+def demo_dir() -> Path:
+    if os.environ.get("DEMO_DIR"):
+        return Path(os.environ["DEMO_DIR"])
+    sibling = EXAMPLES.parent.parent / "opentelemetry-demo"  # the layout the earlier setup guide used
+    return sibling if (sibling / "compose.yaml").exists() and not (HERE / "upstream").exists() else HERE / "upstream"
+
+
+def clone_cmd(dest: Path) -> list[str]:
+    return ["git", "clone", "--depth", "1", "--branch", TAG, REPO_URL, str(dest)]
+
+
+def fetch() -> None:
+    """Clone the pinned demo on the first `up`. Only the flag file that faults.py flips is ever edited in it."""
+    if (DEMO / "compose.yaml").exists():
+        return
+    print(f"fetching the OpenTelemetry Demo {TAG} into {DEMO} …", flush=True)
+    subprocess.run(clone_cmd(DEMO), check=True)
+
+
+DEMO = demo_dir()
 FLAGS = DEMO / "src" / "flagd" / "demo.flagd.json"
 FRONTEND = "http://127.0.0.1:8080"
 
@@ -28,7 +52,7 @@ FRONTEND = "http://127.0.0.1:8080"
 def compose(*args: str, check: bool = True) -> str:
     files = ["-f", str(DEMO / "compose.yaml"), "-f", str(DEMO / "compose.observability.yaml"),
              "-f", str(HERE / "compose.epicenter.yaml")]  # fmt: skip
-    r = subprocess.run(["docker", "compose", "--project-directory", str(DEMO), *files, *args],
+    r = subprocess.run(["docker", "compose", "-p", PROJECT, "--project-directory", str(DEMO), *files, *args],
                        capture_output=True, text=True)  # fmt: skip
     if check and r.returncode != 0:
         raise SystemExit(r.stdout + r.stderr)
@@ -70,6 +94,7 @@ def status() -> dict:
 
 
 def up() -> None:
+    fetch()
     compose("up", "-d")
     end = time.time() + 600
     while time.time() < end and not ready():

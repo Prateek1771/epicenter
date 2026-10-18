@@ -1,0 +1,13 @@
+{
+ "case": "synth-small_none_healthy_1",
+ "fault": "healthy",
+ "op": null,
+ "ops": 14,
+ "second_service": null,
+ "seed": 1,
+ "service": null,
+ "services": 5,
+ "size": "small",
+ "spans": 30523,
+ "status": "no_root_cause"
+}

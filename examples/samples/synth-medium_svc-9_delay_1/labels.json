@@ -1,0 +1,13 @@
+{
+ "case": "synth-medium_svc-9_delay_1",
+ "fault": "delay",
+ "op": "svc-9/op /svc-9/r3",
+ "ops": 145,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-9",
+ "services": 30,
+ "size": "medium",
+ "spans": 131793,
+ "status": "diagnosed"
+}

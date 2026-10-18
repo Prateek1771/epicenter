@@ -1,0 +1,13 @@
+{
+ "case": "synth-huge_svc-57_delay_1",
+ "fault": "delay",
+ "op": "svc-57/op /svc-57/r4",
+ "ops": 1814,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-57",
+ "services": 300,
+ "size": "huge",
+ "spans": 294931,
+ "status": "diagnosed"
+}

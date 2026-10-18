@@ -5,7 +5,7 @@ The design in [ARCHITECTURE](../ARCHITECTURE.md), [HLD](../HLD.md), [LLD](../LLD
 spec, how to know it works, and what to keep in mind so it scales. The phase files **point to** the design docs and
 don't copy them. If a phase file and a design doc disagree, the design doc wins; fix the phase file.
 
-> Status: design only. No product code before hackathon kickoff.
+> Status: phases 0–12 are built and their acceptance checks pass.
 
 ## Phase order
 

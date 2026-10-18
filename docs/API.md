@@ -397,7 +397,8 @@ The conversation plus `message_list`, oldest first.
 ## Example runs and eval
 
 ### `GET /runs/scenarios`
-Live scenarios from the registry (`api/runs.py`, EXAMPLE_RUNS tables) plus every RCAEval case found in `RCAEVAL_DIR`.
+Live scenarios from the registry (`api/runs.py`, EXAMPLE_RUNS tables) plus every replay case found in `RCAEVAL_DIR`
+and in the committed `examples/samples/` (`SAMPLES_DIR`; a name in `RCAEVAL_DIR` wins).
 `ready`: a live env is up (the host fault runner's `/health`, [ADR 0012](adr/0012-host-fault-runner.md)); a replay
 case is on disk. `runner`: the fault runner answered.
 ```json

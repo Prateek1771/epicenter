@@ -1,0 +1,13 @@
+{
+ "case": "synth-small_mongodb_down_1",
+ "fault": "down",
+ "op": "mongodb/find 0",
+ "ops": 14,
+ "second_service": null,
+ "seed": 1,
+ "service": "mongodb",
+ "services": 5,
+ "size": "small",
+ "spans": 30706,
+ "status": "diagnosed"
+}

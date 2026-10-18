@@ -1,7 +1,10 @@
 """Example runs API (api/routes/runs.py): scenarios, a live run with a fake fault runner, undo, an RCAEval replay."""
 
+from pathlib import Path
+
 import pytest
 
+from api import eval as suite
 from api import runs
 from api.config import get_settings
 from tests.conftest import API_ENV
@@ -40,6 +43,7 @@ def test_scenarios_list_live_and_replay_with_readiness(live, monkeypatch, tmp_pa
     (tmp_path / "re2tt_ts-auth-service_cpu_1").mkdir()
     (tmp_path / "re2tt_ts-auth-service_cpu_1" / "inject_time.txt").write_text("1")
     monkeypatch.setattr(get_settings(), "rcaeval_dir", str(tmp_path))
+    monkeypatch.setattr(get_settings(), "samples_dir", str(tmp_path / "no-samples"))
     d = live.get("/api/v1/runs/scenarios").json()
     assert d["runner"] is True
     assert [(i["env"], i["id"], i["kind"], i["ready"]) for i in d["items"]] == [
@@ -126,3 +130,27 @@ def test_every_scenario_has_a_machine_readable_expect_and_matches_reads_it():
     assert matches(NO_ROOT_CAUSE, "no_root_cause", None) is True
     assert matches(NO_ROOT_CAUSE, "diagnosed", "redis/GET") is False
     assert matches(NO_ROOT_CAUSE, "diagnosing", None) is None and matches(None, "diagnosed", "x/y") is None
+
+
+def test_committed_samples_are_listed_and_replayable(monkeypatch, tmp_path):
+    """A fresh clone has no data/: the committed examples/samples give Demo 1 every fault at every size."""
+    monkeypatch.setattr(get_settings(), "rcaeval_dir", str(tmp_path / "empty"))
+    synth = [s for s in runs.rcaeval_cases() if s.env == "synthetic"]
+    sizes = [s.id.split("_", 1)[0] for s in synth]
+    assert (sizes.count("synth-small"), sizes.count("synth-medium"), sizes.count("synth-huge")) == (8, 9, 9)
+    assert sizes == sorted(sizes, key=["synth-small", "synth-medium", "synth-huge"].index)  # the demo starts small
+    for s in synth:
+        d = runs.case_dir(s.id)
+        assert d is not None and all((d / f).exists() for f in ("labels.json", "traces.parquet", "metrics.parquet",
+                                                                 "logs.parquet", "inject_time.txt"))  # fmt: skip
+    assert runs.case_dir("synth-small_nope_cpu_1") is None
+
+
+def test_committed_samples_match_the_generator(tmp_path):
+    """The committed samples are exactly what examples/synthetic/gen.py writes for seed 1 (no drift)."""
+    gen = suite.synth_gen()
+    for size, fault in (("small", "loud-victim"), ("medium", "config")):
+        made = gen.generate(size, fault, 1, tmp_path)
+        committed = Path(get_settings().samples_dir) / made.name
+        assert sorted(f.name for f in made.iterdir()) == sorted(f.name for f in committed.iterdir())
+        assert all((made / f.name).read_bytes() == f.read_bytes() for f in committed.iterdir()), made.name

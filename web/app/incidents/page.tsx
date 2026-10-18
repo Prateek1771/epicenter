@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Meter, StatusPill } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, call, type S } from "@/lib/api";
+import { api, ApiError, call, type S } from "@/lib/api";
 import { pct, relTime, splitOp } from "@/lib/format";
 import { useEnv, useQuery, withEnv } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,41 @@ const FILTERS = [
 ] as const;
 
 type Item = S["IncidentSummary"];
+
+const SAMPLE = "synth-small_svc-0_cpu_1"; // examples/synthetic/gen.py, small, cpu, seed 1
+
+/** The empty state's one click: replay the small synthetic CPU sample (generated on the API's first start). */
+function SampleRun() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      // seed 1 is deterministic, so the CPU sample's id is known; list the scenarios only if it's missing
+      let id = SAMPLE;
+      const start = () => call(api.POST("/api/v1/runs", { body: { env: "synthetic", scenario: id } }));
+      const r = await start().catch(async (e) => {
+        if (!(e instanceof ApiError) || e.code !== "SCENARIO_NOT_FOUND") throw e;
+        const sc = (await call(api.GET("/api/v1/runs/scenarios"))).items.filter((x) => x.env === "synthetic" && x.id.startsWith("synth-small_"));
+        if (!sc.length) throw new Error("No samples found: check examples/samples/ is in your clone, then open Runs.");
+        id = sc[0].id;
+        return start();
+      });
+      router.push(withEnv(`/incident/${encodeURIComponent(r.incident_id)}`, "synthetic"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Button onClick={run} disabled={busy}>{busy ? "Starting…" : "Run a sample incident"} <ArrowRight className="size-4" /></Button>
+      {err && <p className="text-xs text-st-refuted">{err}</p>}
+    </>
+  );
+}
 
 function Op({ op, className }: { op: string | null; className?: string }) {
   if (!op) return <span className="text-muted-foreground">—</span>;
@@ -136,8 +171,13 @@ export default function IncidentsPage() {
             <Radar className="size-8 text-muted-foreground" aria-hidden />
             <p className="font-medium">No incidents here yet</p>
             <p className="max-w-md text-sm text-muted-foreground">
-              Fire an alert with <span className="font-mono text-foreground">POST /api/v1/alerts</span>, replay an RCAEval case,
-              or start a scripted fault from <Link href={withEnv("/runs", env)} className="text-signal hover:underline">Runs</Link>.
+              Run a sample: a generated 5-service system with one injected fault and a known answer, replayed into the graph
+              and diagnosed in a few seconds. No setup needed.
+            </p>
+            <SampleRun />
+            <p className="max-w-md text-xs text-muted-foreground">
+              Or pick any demo in <Link href={withEnv("/runs", env)} className="text-signal hover:underline">Runs</Link>, or fire
+              an alert with <span className="font-mono text-foreground">POST /api/v1/alerts</span>.
             </p>
           </div>
         )}

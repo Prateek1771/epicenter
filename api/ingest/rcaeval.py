@@ -231,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(s.rcaeval_dir)
     try:
         case_dir = download(a.case, root) if a.download else root / a.case
+        if not case_dir.exists() and (Path(s.samples_dir) / a.case).exists():  # the committed synthetic samples
+            case_dir = Path(s.samples_dir) / a.case
     except ValueError as e:
         print(e, file=sys.stderr)
         return 2

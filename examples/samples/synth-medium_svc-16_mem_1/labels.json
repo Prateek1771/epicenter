@@ -1,0 +1,13 @@
+{
+ "case": "synth-medium_svc-16_mem_1",
+ "fault": "mem",
+ "op": "svc-16/op /svc-16/r2",
+ "ops": 145,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-16",
+ "services": 30,
+ "size": "medium",
+ "spans": 131906,
+ "status": "diagnosed"
+}

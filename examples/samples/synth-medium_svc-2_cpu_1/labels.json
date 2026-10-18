@@ -1,0 +1,13 @@
+{
+ "case": "synth-medium_svc-2_cpu_1",
+ "fault": "cpu",
+ "op": "svc-2/op /svc-2/r4",
+ "ops": 145,
+ "second_service": null,
+ "seed": 1,
+ "service": "svc-2",
+ "services": 30,
+ "size": "medium",
+ "spans": 132231,
+ "status": "diagnosed"
+}

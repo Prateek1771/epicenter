@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     fault_runner_token: str | None = None
 
     rcaeval_dir: str = "./data/rcaeval"
+    samples_dir: str = "./examples/samples"  # the committed synthetic samples (Demo 1), read-only; RCAEVAL_DIR wins
     baseline_s: int = 480
     window_after_s: int = 300
     slow_burn_lookback_s: int = 21600

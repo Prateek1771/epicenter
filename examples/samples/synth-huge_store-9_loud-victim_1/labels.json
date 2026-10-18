@@ -1,0 +1,13 @@
+{
+ "case": "synth-huge_store-9_loud-victim_1",
+ "fault": "loud-victim",
+ "op": "store-9/get 1",
+ "ops": 1814,
+ "second_service": null,
+ "seed": 1,
+ "service": "store-9",
+ "services": 300,
+ "size": "huge",
+ "spans": 296520,
+ "status": "diagnosed"
+}

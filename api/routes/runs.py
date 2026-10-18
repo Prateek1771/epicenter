@@ -12,16 +12,23 @@ first (api/ingest/live.py). A replay scenario re-ingests the RCAEval case and di
 
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 
 from api import runs
-from api.config import get_settings
 from api.ingest import rcaeval, write
 from api.ingest.base import ChangeEvent
 from api.ingest.seed import seed_indexes
-from api.models import AlertIn, RunAccepted, RunIn, RunOut, Runs, RunUndone, ScenarioOut, Scenarios
+from api.models import (
+    AlertIn,
+    RunAccepted,
+    RunIn,
+    RunOut,
+    Runs,
+    RunUndone,
+    ScenarioOut,
+    Scenarios,
+)
 from api.routes.alerts import open_alert
 from api.routes.deps import ApiError, graph, iso, resolve_env
 
@@ -72,7 +79,7 @@ def _diagnose_at(diagnosis, env: str, incident: str, alert_ts: int) -> None:
 
 
 def _replay(request: Request, env: str, case: str) -> None:
-    out = rcaeval.replay(Path(get_settings().rcaeval_dir) / case, env, graph(request))
+    out = rcaeval.replay(runs.case_dir(case), env, graph(request))
     request.app.state.diagnosis.start(env, out["incident"], False)
 
 
