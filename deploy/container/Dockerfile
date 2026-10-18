@@ -5,7 +5,9 @@
 FROM alpine/git:2.47.2 AS src
 ARG REPO=https://github.com/Prateek1771/epicenter
 ARG REF=main
-RUN git clone --depth 1 --branch "$REF" "$REPO" /src
+# pass a new value (e.g. the date) on every deploy: a changed ARG re-runs the clone instead of reusing a cached one
+ARG FRESH=0
+RUN echo "fresh=$FRESH" && git clone --depth 1 --branch "$REF" "$REPO" /src
 
 FROM node:24-trixie-slim AS web
 WORKDIR /web

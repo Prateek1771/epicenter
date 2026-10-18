@@ -8,7 +8,7 @@ apt-get update
 apt-get install -y docker.io git caddy
 systemctl enable --now docker
 git clone --depth 1 https://github.com/Prateek1771/epicenter /opt/epicenter
-docker build -t epicenter-demo /opt/epicenter/deploy/container
+docker build --build-arg FRESH="$(date +%s)" -t epicenter-demo /opt/epicenter/deploy/container
 
 # the public IP (IMDSv2) names the site: an Elastic IP associated after boot shows up here once it's attached
 TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
