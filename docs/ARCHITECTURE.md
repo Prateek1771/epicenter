@@ -26,7 +26,7 @@ you can click, rerun and argue with.
 | [docs/API.md](API.md) | REST + SSE reference |
 | [docs/GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) | Every label, edge, property and index |
 | [docs/EXAMPLE_RUNS.md](EXAMPLE_RUNS.md) | The three environments we demo on |
-| [docs/adr/](adr/) | Decision records 0001–0014 |
+| [docs/adr/](adr/) | Decision records 0001–0015 |
 | [docs/phases/](phases/README.md) | Build order: phases 0–12 with tasks, acceptance checks and scalability notes |
 | [docs/COMPETITORS.md](COMPETITORS.md) | Competitor landscape, pricing, gaps, positioning |
 | [docs/TECH_RESEARCH.md](TECH_RESEARCH.md) | How competitors find root causes, and why we added the Fault Simulator |

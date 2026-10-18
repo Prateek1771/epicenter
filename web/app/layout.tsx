@@ -8,7 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
 
-// design_reference: Inter Variable for all UI; Berkeley Mono (commercial) → JetBrains Mono, the listed substitute.
+// Inter Variable for all UI; JetBrains Mono for ids and queries (a free stand-in for Berkeley Mono).
 // The variable names stay --font-geist-* so globals.css and inline styles don't change.
 const geistSans = Inter({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = JetBrains_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });

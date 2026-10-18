@@ -86,7 +86,7 @@ def detect_down(
 
     The silence can start before the alert (from the window start, t − 120 s): an alert often fires a minute after the
     fault, and an operation whose callers stopped calling it (a client-side gate in front of a dead datastore) leaves
-    no other trace. ponytail: a gap that ended inside the window (an outage that recovered before ingest ran) isn't
+    no other trace. Limit: a gap that ended inside the window (an outage that recovered before ingest ran) isn't
     `down`; RCAEval's bursty load generator leaves 20-60 s gaps on healthy operations, so a mid-window gap needs a
     per-operation burstiness baseline before it can count."""
     in_base = (count.ts >= base[0]) & (count.ts < base[1])

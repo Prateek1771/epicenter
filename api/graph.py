@@ -287,7 +287,7 @@ QUERIES: dict[str, str] = {
         MATCH (o:Operation {id: r.op})
         CREATE (sim)-[:PREDICTS {p: r.p, hops: r.hops, kind: r.kind}]->(o)""",
     # /map Network view (FalkorDB-browser style): every label, bounded. Topology first, then incident artefacts.
-    # ponytail: a label scan of the env graph; fine at demo sizes, page by label with an index past ~100k nodes
+    # Limit: a label scan of the env graph; fine at demo sizes, page by label with an index past ~100k nodes
     "explore_counts": """
         MATCH (n) WHERE NOT n:Conversation AND NOT n:Message
         RETURN labels(n)[0] AS label, count(n) AS n
@@ -757,7 +757,7 @@ QUERIES: dict[str, str] = {
         WITH a.name AS name, i.id AS incident ORDER BY incident DESC
         RETURN name, collect(DISTINCT incident)[..5] AS incidents
         ORDER BY name""",
-    # Service map (/map). ponytail: a full scan of the env's CALLS, capped by $limit; past a few thousand operations
+    # Service map (/map). Limit: a full scan of the env's CALLS, capped by $limit; past a few thousand operations
     # serve it from a periodic roll-up (the topology tick could write per-service CALLS) instead.
     "topology_services": """
         MATCH (s:Service)
@@ -859,7 +859,7 @@ class GraphUnavailable(Exception):
     """FalkorDB unreachable after the retry; the API maps it to 503 GRAPH_UNAVAILABLE."""
 
 
-# ponytail: per-process timings; if the API ever runs as several replicas, /health shows one replica's view
+# Limit: per-process timings; if the API ever runs as several replicas, /health shows one replica's view
 _timings: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=200))
 
 

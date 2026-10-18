@@ -12,7 +12,7 @@
  * Page titles use the landing's Instrument Serif italic (--font-display).
  */
 @theme {
-  /* raw palette (design_reference/tailwind_v4.md) */
+  /* raw palette */
   --color-void: #050505;
   --color-carbon: #0a0a0a;
   --color-obsidian: #131210;

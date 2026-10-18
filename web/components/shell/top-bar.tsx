@@ -132,7 +132,7 @@ export function TopBar() {
   const [env] = useEnv();
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [pathname]); // a tap on a link closes the menu
-  if (pathname === "/") return null; // ponytail: the landing has its own nav; a route group if more pages need that
+  if (pathname === "/") return null; // Note: the landing has its own nav; a route group if more pages need that
   const isActive = (href: string) => (href === "/incidents" ? pathname.startsWith("/incident") : pathname.startsWith(href));
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-void/85 backdrop-blur-xl">

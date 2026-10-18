@@ -15,7 +15,7 @@ Design decisions: [ADR 0013](adr/0013-ephemeral-demo-deployment.md). Diagram and
 | Front door | Caddy 2.10: HTTPS (Let's Encrypt) + basic auth | UI and API share one origin, so basic auth covers `fetch` and `EventSource`; `/api/*` is proxied with `flush_interval -1` so SSE arrives live |
 | Name | `<elastic-ip-with-dashes>.sslip.io` | a real certificate without buying a domain; fallback: own domain or `tls internal` |
 | Address | Elastic IP | the URL survives stop / start |
-| Metadata | IMDSv2 required | blocks SSRF-style reads of instance credentials |
+| Metadata | IMDSv2 required | blocks SSRF-style reads of instance metadata |
 | Tags | `Project=epicenter-demo` on every resource | `destroy` finds and deletes everything by tag |
 
 ## 2. Security boundary
@@ -34,7 +34,7 @@ Design decisions: [ADR 0013](adr/0013-ephemeral-demo-deployment.md). Diagram and
 ## 3. Lifecycle and cost
 
 ```bash
-export AWS_PROFILE=<iam-user-profile> AWS_REGION=ap-south-1    # an IAM user with EC2 rights, never root keys
+export AWS_PROFILE=<profile> AWS_REGION=ap-south-1             # a profile with EC2 rights
 deploy/aws.sh create        # key pair, security group, Elastic IP, Ubuntu box + tools + clones; waits for /opt/READY
 deploy/aws.sh ssh           # shell with tunnels for 3002 / 8000
   cd /opt/epicenter && deploy/demo.sh up       # .env, compose up behind Caddy, smoke, replays, OTel Demo; prints URL + login
@@ -75,3 +75,15 @@ run Epicenter for real:
    through the existing adapters.
 5. The same compose files run on any Linux VM; Kubernetes (EKS) is the next step only when there is more than one
    tenant.
+
+## 6. Hosted demo (Hugging Face Space)
+
+For the event we also run a public copy on a Hugging Face Space ([ADR 0015](adr/0015-hf-space-demo.md)): one Docker
+container with FalkorDB, the API and the web app behind Caddy on port 7860, built from `deploy/hf/`. Its Dockerfile
+clones this repo, so a push to GitHub plus "Factory rebuild" in the Space settings redeploys it. It runs Demo 1 and
+Demo 2. The live OTel shop, the fault runner and Slack / Linear stay local. Nothing persists: a restart starts from
+empty graphs and the samples replay on demand. To run the same image locally:
+
+```bash
+docker build -t epicenter-hf deploy/hf && docker run -p 7860:7860 epicenter-hf    # http://localhost:7860
+```

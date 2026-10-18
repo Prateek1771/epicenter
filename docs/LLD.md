@@ -815,7 +815,7 @@ Why not replay from the incident subgraph: rebuilding events from hypotheses and
 seq of live events (statuses are overwritten, rounds interleave), and a stream is one write per event with no Cypher.
 The graph stays the source of truth for the incident itself (`GET /incidents/{id}`); the stream is its change log.
 
-ponytail: the SSE tail is one blocking read per subscriber in the threadpool; move to `redis.asyncio` if subscriber
+Limit: the SSE tail is one blocking read per subscriber in the threadpool; move to `redis.asyncio` if subscriber
 count grows past the pool.
 
 ---

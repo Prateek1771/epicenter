@@ -63,7 +63,7 @@ the demo, back up the graph and destroy everything.
 | Address | Elastic IP | the hostname stays the same across stop/start |
 | Hostname | `<a-b-c-d>.sslip.io` (the Elastic IP with dashes) | a public name for Let's Encrypt without buying a domain; fallback: your own domain, or `tls internal` (browser warning) |
 | Region | the one nearest the presenter | lower latency on stage |
-| Metadata | IMDSv2 required | blocks SSRF-style reads of instance credentials |
+| Metadata | IMDSv2 required | blocks SSRF-style reads of instance metadata |
 | Tags | `Project=epicenter-demo` on every resource | `destroy` finds and deletes everything by tag |
 
 **Cost** (on-demand, rough; check the AWS pricing page for your region):

@@ -6,7 +6,7 @@ triage → investigator × N (Send, parallel) → scorer ⇄ skeptic (≤ 2 chal
 → scorer2] → finalize → historian → narrator → jev_gate → responder. State holds ids, flags and counters only
 (ADR 0007); every step rebuilds what it needs from the graph, which is why any process can resume a run.
 
-ponytail: the checkpointer is SQLite on local disk, one API process. With more replicas use LangGraph's Postgres or
+Limit: the checkpointer is SQLite on local disk, one API process. With more replicas use LangGraph's Postgres or
 Redis checkpointer, same interface.
 """
 

@@ -97,7 +97,7 @@ def ranked_ops(verdict: dict) -> list[str]:
 
 def rescore(parts: list[dict], w: dict) -> list[str]:
     """Re-rank stored round-1 hypotheses (op, onset, score_parts) under other weights → ops in rank order.
-    ponytail: ignores the skeptic re-rank and the no-root-cause decision; the grid's pick is confirmed by a real run."""
+    Limit: ignores the skeptic re-rank and the no-root-cause decision; the grid's pick is confirmed by a real run."""
     hyps = [{"op": p["op"], "onset": p["onset"], "score": sc.score(p["parts"], w)} for p in parts if p["parts"]]
     return [h["op"] for h in sc.ranking(hyps)]
 
@@ -132,7 +132,7 @@ def grid(rows: list[dict], base: dict[str, float], step: float = GRID_STEP) -> d
 def precision_at_3(sigs: dict[str, list[float]]) -> dict:
     """Leave-one-out memory recall: for each case, the 3 most similar other cases by cosine; a neighbour is relevant
     when it has the same service and fault. Cases with an empty signature get no recall (as in `historian.remember`).
-    ponytail: measures the signature, not Q5's vector index + re-rank; Q5 has its own test (test_memory)."""
+    Limit: measures the signature, not Q5's vector index + re-rank; Q5 has its own test (test_memory)."""
     live = {c: v for c, v in sorted(sigs.items()) if any(v)}
 
     def cos(a: list[float], b: list[float]) -> float:

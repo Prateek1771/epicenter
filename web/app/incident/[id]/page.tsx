@@ -96,9 +96,29 @@ export default function IncidentPage() {
   useEffect(() => {
     setView(null);
     setLoadErr(null);
-    loadGraph()
-      .then((g) => setView(hydrate(g)))
-      .catch((e) => setLoadErr(e instanceof ApiError ? e : new ApiError("CLIENT", String(e), 0)));
+    // a replay just started from /runs or the sample button: its incident appears once ingest finishes, so wait
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    let live = true;
+    const load = () =>
+      loadGraph()
+        .then((g) => {
+          if (!live) return;
+          setView(hydrate(g));
+          if (tries) detail.reload();
+        })
+        .catch((e) => {
+          if (!live) return;
+          const err = e instanceof ApiError ? e : new ApiError("CLIENT", String(e), 0);
+          if (err.code === "INCIDENT_NOT_FOUND" && tries++ < 30) timer = setTimeout(load, 2000);
+          else setLoadErr(err);
+        });
+    load();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `detail` changes every render; reload is only needed once
   }, [loadGraph]);
 
   // refetch the detail (and the graph's enrichment) shortly after a burst of meaningful events

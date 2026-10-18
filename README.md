@@ -2,23 +2,29 @@
 
 **Find where every outage started.**
 
-*An epicenter is the point where a quake starts and the shockwave spreads out from. When production breaks, Epicenter
+*An epicenter is where a quake starts and where the shockwave spreads out from. When production breaks, Epicenter
 finds that point and shows how the failure spread.*
 
 Epicenter keeps a live FalkorDB graph of your production system. When an alert fires, it searches the graph upstream
-from the alert for the root cause. Several agents work the incident together through that same graph. Epicenter
-remembers every incident and what fixed it, and every answer comes with the graph path behind it.
+from the alert for the root cause. Several agents work the incident together, and they share state through that same
+graph. Epicenter remembers every incident and what fixed it. Every answer comes with the graph path behind it.
 
-Its key feature is the **Fault Simulator**. For every suspect it asks: *"if this were the cause, what would we see?"*
-It predicts which operations should break and in what order, compares that with what actually broke, and scores the
-match ("explains 6 of 7 symptoms"). The same check finds a second, independent fault when there is one, and says
-"no root cause" when nothing in the graph explains the alert. It can also answer "what breaks if X fails?" before you
-ship a change.
+The part we care most about is the **Fault Simulator**. For every suspect it asks *"if this were the cause, what would
+we see?"* It predicts which operations should break and in what order, compares that with what actually broke, and
+scores the match ("explains 6 of 7 symptoms"). The same check finds a second, independent fault when there is one. It
+says "no root cause" when nothing in the graph explains the alert. You can also ask it "what breaks if X fails?" before
+you ship a change.
 
-Built for **Graph Hacks: Context for AI Agents** (FalkorDB), **Track 01: Agents That Act on Connected Data**. Incident
-memory (similar past incidents and their fixes) is a supporting feature.
+We built it for **Graph Hacks: Context for AI Agents** (FalkorDB). Tracks entered: Track 01 only, Agents That Act on
+Connected Data. Incident memory (similar past incidents and their fixes) is a supporting feature.
 
 > Status: built and demo-ready (phases 0–12). Runs locally with Docker Compose.
+
+AI assistance, disclosed per the event rules. We used AI coding assistants (Claude Code) to write code and
+documentation. We directed the design and reviewed the changes. Every decision is recorded in the [ADRs](docs/adr/)
+and [phase files](docs/phases/). We ran every demo and benchmark result reported here ourselves.
+
+**Live demo:** LIVE_DEMO_URL (no install; the synthetic and RCAEval demos run there, see [ADR 0015](docs/adr/0015-hf-space-demo.md))
 
 **Demo video:** _add the link before submitting_ · **Recording script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
 
@@ -40,32 +46,33 @@ docker compose ps               # wait until api and falkordb are "healthy"
 ```
 
 1. Open **http://localhost:3001/incidents** and press **Run a sample incident**. The samples ship with the repo in
-   [`examples/samples/`](examples/samples/): 26 generated incidents, each with a known answer, at three sizes (5, 30
-   and 300 services). That's ~140 MB of the clone, so there is nothing to download or generate.
+   [`examples/samples/`](examples/samples/). There are 26 generated incidents, each with a known answer, at three
+   sizes (5, 30 and 300 services). They take up ~140 MB of the clone, so you have nothing to download or generate.
 2. Within a few seconds the incident page shows the verdict, the graph path from the alert to the root cause, every
    suspect the Fault Simulator confirmed or refuted, and the evidence.
-3. Open **http://localhost:3001/runs** for every sample: small, medium and huge. Each card says whether the verdict
-   matched the expected answer. Try `loud-victim`: the loudest service is refuted and the quiet datastore behind it is
-   blamed.
+3. Open **http://localhost:3001/runs** to see every sample, small, medium and huge. Each card says whether the verdict
+   matched the expected answer. Try `loud-victim`. The loudest service gets refuted and the quiet datastore behind it
+   gets the blame.
 4. Optional:
-   - add `OPENROUTER_API_KEY` for AI-written explanations (without it you get a template explanation; the verdict
-     never depends on the LLM);
-   - the medium demo is recorded benchmark faults and the real-world demo is a live microservice shop: see
+   - Add `OPENROUTER_API_KEY` for AI-written explanations. Without it you get a template explanation. The verdict
+     never depends on the LLM.
+   - The medium demo uses recorded benchmark faults and the real-world demo is a live microservice shop. See
      [docs/SETUP.md §5](docs/SETUP.md#5-the-three-demos).
 
 Tests run inside the container: `docker compose exec api pytest`.
 
 ## How it works
 
-1. **Map:** traces are rolled up every 30 s into a graph of services, operations and who calls whom. Deploys, flag flips
-   and config changes are added as they happen.
-2. **Alert:** Epicenter opens an incident and reads a short window of metrics, traces and logs from your existing tools
-   (plus a 6-hour lookback for slow leaks). Only the findings go into the graph.
-3. **Search:** every operation upstream of the alert that misbehaved becomes a suspect. Agents check each one in
-   parallel: did it go bad first, is it slow itself, did something change right before?
-4. **Simulate:** the Fault Simulator predicts each suspect's footprint and checks it against what actually broke.
-5. **Answer:** a deterministic score picks the root cause. Past similar incidents and their fixes are recalled, an AI
-   explanation cites the evidence (unsupported claims are dropped), and the result goes to Slack / Linear.
+1. Map. Every 30 s we roll traces up into a graph of services, operations and who calls whom. Deploys, flag flips
+   and config changes go in as they happen.
+2. Alert. Epicenter opens an incident and reads a short window of metrics, traces and logs from your existing tools,
+   plus a 6-hour lookback for slow leaks. Only the findings go into the graph.
+3. Search. Every operation upstream of the alert that misbehaved becomes a suspect. Agents check each one in
+   parallel. Did it go bad first? Is it slow itself? Did something change right before?
+4. Simulate. The Fault Simulator predicts each suspect's footprint and checks it against what actually broke.
+5. Answer. A deterministic score picks the root cause. Epicenter recalls similar past incidents and their fixes,
+   writes an AI explanation that cites the evidence (it drops unsupported claims), and sends the result to Slack /
+   Linear.
 
 Details: [ARCHITECTURE](docs/ARCHITECTURE.md).
 
@@ -86,20 +93,20 @@ Every screen works at phone width.
 
 ## Graph model and queries
 
-FalkorDB is the system of record: there is one graph per environment (`env:<name>`), a scratch graph per incident for
-PageRank, and `kb:propagation` for the Fault Simulator's rules. Take FalkorDB out and nothing works: search,
-evidence, scoring input, memory and agent hand-offs are all graph reads and writes.
+FalkorDB is the system of record. There is one graph per environment (`env:<name>`), a scratch graph per incident for
+PageRank, and `kb:propagation` for the Fault Simulator's rules. Take FalkorDB out and nothing works. Search, evidence,
+scoring input, memory and agent hand-offs are all graph reads and writes.
 
-- **Topology:** `(:Service)-[:HAS_OP]->(:Operation)-[:CALLS {rps, err_rate, p95_ms}]->(:Operation)`, rolled up
-  from traces. `(:Change)-[:CHANGED]->(:Service)`, `(:Service)-[:OWNED_BY]->(:Team)`, `(:Person)-[:MEMBER_OF]->(:Team)`.
-- **Incident:** `(:Incident)-[:HAS_HYPOTHESIS]->(:Hypothesis)-[:BLAMES]->(:Operation)`, with
+- Topology. `(:Service)-[:HAS_OP]->(:Operation)-[:CALLS {rps, err_rate, p95_ms}]->(:Operation)`, rolled up from
+  traces. `(:Change)-[:CHANGED]->(:Service)`, `(:Service)-[:OWNED_BY]->(:Team)`, `(:Person)-[:MEMBER_OF]->(:Team)`.
+- Incident. `(:Incident)-[:HAS_HYPOTHESIS]->(:Hypothesis)-[:BLAMES]->(:Operation)`, with
   `-[:SUPPORTED_BY|REFUTED_BY]->(:Evidence)`, `(:Anomaly)-[:ON]->(:Operation)` and `(:Incident)-[:ROOT_CAUSE]->(:Hypothesis)`.
-- **Memory:** `Incident.signature`, a 64-dimension vector in a vector index, plus `(:Incident)-[:RESOLVED_BY]->(:Action)`.
+- Memory. `Incident.signature` is a 64-dimension vector in a vector index, plus `(:Incident)-[:RESOLVED_BY]->(:Action)`.
 
 Full schema: [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md).
 
-The queries the product depends on all live in one dictionary, [`api/graph.py`](api/graph.py) `QUERIES`. They are
-parameterized and bounded at 6 hops. Documented in [LLD §2](docs/LLD.md#2-graphpy):
+Every query the product depends on lives in one dictionary, [`api/graph.py`](api/graph.py) `QUERIES`. They are all
+parameterized and bounded at 6 hops. [LLD §2](docs/LLD.md#2-graphpy) documents them:
 
 | Query | What it does |
 |---|---|
@@ -111,27 +118,31 @@ parameterized and bounded at 6 hops. Documented in [LLD §2](docs/LLD.md#2-graph
 | `Q6` | Fault Simulator: every caller path with live traffic into a suspect, which the propagation rules turn into a predicted footprint |
 | `explore` | The `/map` Network view: every label and relationship, bounded |
 
-Graph algorithms used: bounded variable-length path search, `algo.pageRank` on a per-incident projection, and a vector
-index for memory. Agents query the graph through typed tools; free-form Cypher only goes through the read-only
-`falkordb-mcp`.
+We use three graph algorithms: bounded variable-length path search, `algo.pageRank` on a per-incident projection, and
+a vector index for memory. Agents query the graph through typed tools. Free-form Cypher only goes through the
+read-only `falkordb-mcp`.
 
 ## Why Epicenter
 
 - **The graph does the reasoning.** Suspects, evidence, memory and agent handoffs all live in FalkorDB, and the same
   input always gives the same answer.
-- **It explains the whole pattern, not the loudest symptom.** Fixating on the most visible symptom is the most common way
-  AI SRE agents get it wrong.
+- **It explains the whole pattern, not the loudest symptom.** AI SRE agents most often go wrong by fixating on the
+  most visible symptom.
 - **It doesn't invent a cause.** When nothing fits, it says so.
+- **It acts, but never on production by itself.** Each verdict comes with ranked actions built from the graph: the
+  runbook for that service and kind, and the fixes that resolved similar past incidents. Epicenter delivers them to
+  Slack and Linear for a human to run. It is read-only towards the systems it watches, on purpose. A root-cause tool
+  that restarts services on a wrong guess makes the outage worse ([AGENTS.md](AGENTS.md#hard-rules), rule 9).
 
 How others do it: [competitors](docs/COMPETITORS.md) · [technical research](docs/TECH_RESEARCH.md).
 
 ## Docs
 
-**Judges and evaluators:** the [quick start](#quick-start-10-minutes-any-laptop) above is enough to see it work.
-[docs/SETUP.md](docs/SETUP.md) goes further: `python syscheck.py` sizes your machine, then it walks you through three
-demos. **Small** uses the committed synthetic samples (known answers, any laptop). **Medium** uses real recorded
-faults from the RCAEval benchmark, downloaded per case. **Real-world** is live faults in the OpenTelemetry Demo shop,
-which `run.py up` fetches. The hosted deployment is planned and scripted, not run for the event:
+If you are judging, the [quick start](#quick-start-10-minutes-any-laptop) above is enough to see it work.
+[docs/SETUP.md](docs/SETUP.md) goes further. `python syscheck.py` sizes your machine, then the guide walks you through
+three demos. Small uses the committed synthetic samples (known answers, any laptop). Medium uses real recorded faults
+from the RCAEval benchmark, downloaded per case. Real-world runs live faults in the OpenTelemetry Demo shop, which
+`run.py up` fetches. We planned and scripted a hosted deployment but did not run it for the event:
 [docs/DEPLOYMENT_PLAN.md](docs/DEPLOYMENT_PLAN.md).
 
 What's where:
@@ -149,7 +160,7 @@ What's where:
 
 [Setup guide](docs/SETUP.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Implementation phases](docs/phases/) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [HLD](docs/HLD.md) · [LLD](docs/LLD.md) · [User flows](docs/USER_FLOW.md) ·
 [API](docs/API.md) · [Graph schema](docs/GRAPH_SCHEMA.md) · [Example runs](docs/EXAMPLE_RUNS.md) ·
-[Deployment plan](docs/DEPLOYMENT_PLAN.md) · [ADRs 0001–0014](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
+[Deployment plan](docs/DEPLOYMENT_PLAN.md) · [ADRs 0001–0015](docs/adr/) · [Competitors](docs/COMPETITORS.md) · [Technical research](docs/TECH_RESEARCH.md) ·
 [Planning notes](docs/planning/)
 
 ---
@@ -178,7 +189,7 @@ cp .env.example .env
 | `OPENCONNECTOR_API_KEY`, `SLACK_CHANNEL`, `LINEAR_TEAM_ID` | no | Slack / Linear delivery |
 | image tags (`FALKORDB_TAG`, …) | yes | keep the pinned values from `.env.example` |
 
-`.env` is git-ignored; never commit it.
+`.env` is git-ignored. Never commit it.
 
 ## 3. Start
 
@@ -194,9 +205,9 @@ docker compose up -d                                                    # falkor
 | http://localhost:8000/docs | API (Swagger) |
 | http://localhost:3002 | FalkorDB browser (connect to host `falkordb`, port 6379 from inside Docker, or `localhost:6380` from the host) |
 
-The API seeds indexes, owners and runbooks on startup. Every seed statement is idempotent.
+On startup the API seeds indexes, owners and runbooks. Every seed statement is idempotent.
 
-Web development (hot reload against the API on :8000; stop the `web` container first, it owns port 3001):
+For web development with hot reload against the API on :8000, stop the `web` container first, since it owns port 3001:
 
 ```bash
 docker compose stop web
@@ -207,7 +218,7 @@ npm test                   # reducer + layout unit tests (node:test)
 npm run lint && npm run build
 ```
 
-Landing illustrations are optional: drop `web/public/landing/<name>.webp` files in (hero-poster, where-you-are,
+Landing illustrations are optional. Drop `web/public/landing/<name>.webp` files in (hero-poster, where-you-are,
 philosophy, agent-triage, agent-investigator, agent-skeptic, agent-historian, what-it-does, science, run-it) and rebuild
 the `web` container. Missing images fall back to the built-in artwork.
 
@@ -229,23 +240,23 @@ docker compose exec falkordb redis-cli -a "$FALKORDB_PASSWORD" GRAPH.DELETE env:
 docker compose exec api python -m api.smoke_falkordb
 ```
 
-It checks the FalkorDB features the design depends on, on your pinned tag: variable-length paths with filters, the Q2
+It checks, on your pinned tag, the FalkorDB features the design depends on: variable-length paths with filters, the Q2
 query shape, `algo.pageRank`, vector index + `vecf32`, full-text index, and two parallel writers.
 If something fails, fix the query in [LLD §2](docs/LLD.md#2-graphpy) before building on it.
 
 ## 6. Run an example
 
-**Demo 1, synthetic (committed, nothing to download):** `/runs` → *Demo 1 · Synthetic*, or from the command line:
+Demo 1, synthetic (committed, nothing to download). Use `/runs` → *Demo 1 · Synthetic*, or the command line:
 ```bash
 docker compose exec api python -m api.ingest.rcaeval --case synth-small_mongodb_loud-victim_1 --env synthetic
 ```
 
-**Demo 2, RCAEval replay (real recorded faults, ~25 MB per case):**
+Demo 2, RCAEval replay (real recorded faults, ~25 MB per case):
 ```bash
 docker compose exec api python -m api.ingest.rcaeval --case re2tt_ts-auth-service_cpu_2 --env rcaeval-tt --download
 ```
 
-**Demo 3, OpenTelemetry Demo (live microservice shop, 8 CPU / 16 GB):** `python examples/otel-demo/run.py up`, which
+Demo 3, OpenTelemetry Demo (live microservice shop, 8 CPU / 16 GB). Run `python examples/otel-demo/run.py up`, which
 clones the pinned demo on first use. Let it warm up for 25 minutes, then start faults from `/runs`. See
 [examples/otel-demo/README.md](examples/otel-demo/README.md).
 
@@ -256,14 +267,14 @@ Then open http://localhost:3001/incidents and the new incident. Expected verdict
 ```bash
 docker compose exec api python -m api.eval --suite re2 --system tt
 ```
-Prints AC@1 / AC@3 and the ablations (no PageRank, no temporal rule, no mechanism rule, no Fault Simulator footprint).
-`--download` fetches missing cases (~1.9 GB for all 90); one run takes ~35 min. Results land in
+This prints AC@1 / AC@3 and the ablations (no PageRank, no temporal rule, no mechanism rule, no Fault Simulator
+footprint). `--download` fetches missing cases (~1.9 GB for all 90). One run takes ~35 min. Results land in
 `data/eval/<n>-re2-tt-<weights>-<rules>.json` (numbered, kept) and on the `/eval` page.
 
 ### Results (measured 2026-10-17)
 
 RCAEval RE2-TT, all 90 cases, frozen weights `2026-10-17.v5`, rules `2026-10-16`, engine only (no LLM). A hit means
-the verdict's root-cause operation is in the labelled service; `no_root_cause` counts as a miss.
+the verdict's root-cause operation is in the labelled service. `no_root_cause` counts as a miss.
 
 | | Cases | AC@1 | AC@3 |
 |---|---|---|---|
@@ -272,7 +283,7 @@ the verdict's root-cause operation is in the labelled service; `no_root_cause` c
 | All | 90 | 87.8% | 88.9% |
 | Before tuning (v3 weights), all / held-out | 90 / 30 | 61.1% / 66.7% | 87.8% / 90.0% |
 
-The ablations (all 90 cases, v5), losses included:
+Here are the ablations (all 90 cases, v5), losses included:
 
 | Variant | AC@1 | AC@3 | Reading |
 |---|---|---|---|
@@ -284,18 +295,19 @@ The ablations (all 90 cases, v5), losses included:
 
 By fault (AC@1): cpu 100%, delay 100%, socket 93.3%, disk 86.7%, loss 73.3%, mem 73.3%.
 
-Memory recall (leave-one-out precision@3, same service and fault): 12.2% (13.0% before the slow-burn fix, below). The signature describes the *shape* of an
-incident (kinds, hops, service kind), and many RE2-TT services fail in the same shape. Recall is a weak point.
+Memory recall (leave-one-out precision@3, same service and fault) is 12.2%, down from 13.0% before the slow-burn fix
+described below. The signature describes the *shape* of an incident (kinds, hops, service kind), and many RE2-TT
+services fail in the same shape. Recall is a weak point.
 
-Determinism: two full runs give byte-identical result files (`cmp`).
+Determinism holds. Two full runs give byte-identical result files (`cmp`).
 
-Re-measured after the slow-burn fix (run `0008`: the pass now fetches its own 6 h of metrics): AC@1 / AC@3 and every
-ablation unchanged; one verdict, already a miss, moved to another service.
+We re-measured after the slow-burn fix (run `0008`, where the pass now fetches its own 6 h of metrics). AC@1 / AC@3
+and every ablation stayed the same. One verdict, already a miss, moved to another service.
 
-Synthetic samples, reported apart (seed 1, `api.eval --suite synth`): small 8/8, medium 7/9, huge 5/9 AC@1; misses
-and their causes in [EXAMPLE_RUNS §4](docs/EXAMPLE_RUNS.md#4-synthetic-samples-self-made).
+We report the synthetic samples separately (seed 1, `api.eval --suite synth`): small 8/8, medium 7/9, huge 5/9 AC@1.
+The misses and their causes are in [EXAMPLE_RUNS §4](docs/EXAMPLE_RUNS.md#4-synthetic-samples-self-made).
 
-**Latency** (targets from [ARCHITECTURE §1.2](docs/ARCHITECTURE.md#12-non-functional)):
+Latency, against the targets from [ARCHITECTURE §1.2](docs/ARCHITECTURE.md#12-non-functional):
 
 | | Measured | Target |
 |---|---|---|
@@ -304,22 +316,22 @@ and their causes in [EXAMPLE_RUNS §4](docs/EXAMPLE_RUNS.md#4-synthetic-samples-
 | N1 diagnosis (agent flow), the 11 recorded live incidents (OTel Demo, flip-commerce) | 178–843 ms | < 60 s ✓ |
 | N2 p95 per query, live API (Q1, Q2, Q3, Q3b, Q4a / Q4_blame / Q4b, Q5) | 8.4, 10.0, 11.4, 7.7, 6.1 / 4.1 / 7.3, 52.0 ms | < 200 ms ✓ |
 
-For a live run, alert → verdict also includes the `settle_s` wait (by design, 60–90 s after the fault) and the ingest
+In a live run, alert → verdict also includes the `settle_s` wait (60–90 s after the fault, by design) and the ingest
 from Jaeger / Prometheus. The verdict lands within about a second of the ingest.
 
-How the weights were frozen:
+How we froze the weights:
 - v4 came from a grid on the dev split only.
-- v5 then raised `change_match`, which RCAEval can't tune because it has no change events, after v4 flipped one live
-  flip-commerce verdict. It scales the rest uniformly, so the RE2-TT numbers are identical to v4's.
+- After v4 flipped one live flip-commerce verdict, v5 raised `change_match`, which RCAEval can't tune because it has
+  no change events. v5 scales the rest uniformly, so the RE2-TT numbers are identical to v4's.
 
 The reasoning is in [LLD §6.3](docs/LLD.md#63-weightsjson).
 
 ## 7b. Test reports
 
 Every `pytest` run writes `data/reports/<n>-<utc>/findings.md` (what passed, failed, timings) and
-`agent-context.md` (a guide you can hand to Claude Code, Codex or Cursor: per failure, the spec section, the code under
-test and the exact rerun command). `cd web && npm test` appends the web results to the newest report. Reports are
-numbered and kept; `pytest --no-report` skips writing one.
+`agent-context.md`. That second file is a guide you can hand to Claude Code, Codex or Cursor. For each failure it gives
+the spec section, the code under test and the exact rerun command. `cd web && npm test` appends the web results to the
+newest report. Reports are numbered and kept. `pytest --no-report` skips writing one.
 
 ## 8. Troubleshooting
 
@@ -342,6 +354,6 @@ docker compose down -v      # removes containers and the FalkorDB volume (all gr
 
 ## License note
 
-FalkorDB is SSPLv1 (source available); this project uses it unmodified via the official Docker image. The
-OpenTelemetry Demo (Apache-2.0) is fetched at run time, not redistributed. RCAEval cases are downloaded from the
-benchmark's public dataset on demand. The synthetic samples in `examples/samples/` are generated by this repo.
+FalkorDB is SSPLv1 (source available). We use it unmodified through the official Docker image. The OpenTelemetry Demo
+(Apache-2.0) is fetched at run time, not redistributed. RCAEval cases download from the benchmark's public dataset on
+demand. This repo generates the synthetic samples in `examples/samples/`.

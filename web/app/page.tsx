@@ -72,7 +72,7 @@ export default function Landing() {
       {/* 1 · Hero */}
       <section className="p-2 sm:p-3">
         <div className="relative h-[calc(100vh-1rem)] overflow-hidden rounded-2xl border border-white/5 bg-void sm:h-[calc(100vh-1.5rem)]">
-          {/* ponytail: hotlinked from the user's CDN; copy it into web/public/ if that link may expire before the demo */}
+          {/* Limit: the hero video is hotlinked from a CDN; copy it into web/public/ if that link may expire before the demo */}
           <video
             src={HERO_VIDEO}
             autoPlay
@@ -105,7 +105,7 @@ export default function Landing() {
             <Link href="/incidents" className="ml-auto rounded-full bg-gold px-4 py-1.5 text-xs font-bold tracking-wide text-black transition-opacity hover:opacity-90 md:ml-0">
               Open app
             </Link>
-            {/* ponytail: native <details> for the phone menu; no state, closes on the next tap of the button */}
+            {/* Note: native <details> for the phone menu; no state, closes on the next tap of the button */}
             <details className="relative md:hidden">
               <summary className="grid size-8 cursor-pointer list-none place-items-center rounded-full border border-white/15 [&::-webkit-details-marker]:hidden" aria-label="Menu">
                 <Menu className="size-4" />

@@ -1,12 +1,12 @@
 /**
- * The UI's icon set: Phosphor, Light weight (design_reference: "minimal line-art SVGs in single-colour grey"; the
+ * The UI's icon set: Phosphor, Light weight (minimal single-colour line art; the
  * light stroke matches the 0.5px hairlines and 400–510 type weights). Every icon goes through this file, exported
  * under the names the markup already uses, so swapping the set or the weight is a change here only.
  *
  * `/ssr` entry: no React context, so the icons render in server and client components alike. Size comes from the
  * `size-*` class (CSS beats the SVG's width/height attributes), colour from `currentColor`.
  *
- * ponytail: each Phosphor icon carries all six weights' paths (~+33 kB first-load JS over lucide for these 55); if
+ * Limit: each Phosphor icon carries all six weights' paths (~+33 kB first-load JS over lucide for these 55); if
  * that matters, inline the light paths as local SVG components behind these same names.
  */
 import type { IconProps } from "@phosphor-icons/react";

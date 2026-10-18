@@ -4,8 +4,7 @@
 
 ## Context
 ADR 0013 put the event demo on one EC2 box behind Caddy, created before the event and destroyed after. The scripts for
-it are built (`deploy/`). Running it means a paid cloud account, credentials handled around the event, and a public
-box with fault buttons. The laptop already runs the whole topology (phase 9), including live faults.
+it are built (`deploy/`). Running it means a paid cloud account and a public box with fault buttons. The laptop already runs the whole topology (phase 9), including live faults.
 
 ## Decision
 - The event demo runs **locally** on the presenter's laptop: a synthetic case, an RCAEval incident recorded in
@@ -19,7 +18,7 @@ box with fault buttons. The laptop already runs the whole topology (phase 9), in
   EXAMPLE_RUNS as development environments, not in the demo set. HotROD and Train-Ticket live are dropped.
 
 ## Consequences
-- No cloud cost, no credentials, no public attack surface during the event.
+- No cloud cost and no public attack surface during the event.
 - Judges can't open a public URL; they run it from SETUP.md, which is what `syscheck.py` exists for.
 - Unverified until someone deploys: Let's Encrypt on `sslip.io`, the external port scan, `destroy` leaving nothing
   behind (listed in DEPLOYMENT_PLAN §4).

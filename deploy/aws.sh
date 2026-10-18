@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Demo box on AWS (phase 11, ADR 0013): create → rehearse → stop → start on demo day → destroy. AWS CLI v2.
 #   AWS_PROFILE=epicenter-demo AWS_REGION=ap-south-1 deploy/aws.sh create|start|stop|status|ssh|upload|allow-my-ip|destroy
-# Every resource is tagged Project=epicenter-demo; `destroy` finds them by tag. Credentials stay in your AWS profile.
+# Every resource is tagged Project=epicenter-demo; `destroy` finds them by tag.
 set -euo pipefail
 
 NAME=epicenter-demo

@@ -1,1 +1,2 @@
 *.parquet binary
+*.sh text eol=lf

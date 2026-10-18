@@ -111,7 +111,7 @@ Rules: [UI_SCREENS §1](../UI_SCREENS.md#1-visual-language). Web-only: no API or
   props).
 - **Receipts:** capped at 500 listed queries per run, with the rest counted. Recording is a context variable, so it
   costs nothing when no run is recording.
-- **`/graph/topology`:** a full scan of the env's `CALLS`, capped at 2000 (`ponytail:` in `graph.py`). Past that,
+- **`/graph/topology`:** a full scan of the env's `CALLS`, capped at 2000 (the limit is noted in `graph.py`). Past that,
   serve it from a per-service roll-up written by the topology tick.
 - **Footprints for "who explains":** one request per suspect (≤ ~50), cached per run. A batch endpoint is the upgrade
   if suspects grow.

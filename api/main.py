@@ -36,7 +36,7 @@ log = logging.getLogger("epicenter.api")
 class Diagnosis:
     """Runs the agent flow off the request path (endpoints return 202).
 
-    ponytail: the `running` set is per process, so a second POST while a run is in flight doesn't start a duplicate.
+    Limit: the `running` set is per process, so a second POST while a run is in flight doesn't start a duplicate.
     With more API replicas, take a Redis `SET NX` lock per incident instead.
     """
 
@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
         for env in sorted({s.env_name} | live.live_envs()):  # every live env gets its owners and runbooks
             seed_all(app.state.graph, env)
     except GraphUnavailable as e:
-        # ponytail: seed runs once per start; restart the api after FalkorDB is back to seed
+        # Limit: seed runs once per start; restart the api after FalkorDB is back to seed
         log.warning(json.dumps({"event": "seed_skipped", "reason": str(e)}))
     # A session manager runs once, so each startup builds a fresh /mcp app (tests start the app many times)
     mcp_app = mcp_server.asgi_app()
@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
 async def _live_ticks(graph: Graph, every_s: int) -> None:
     """Topology roll-up for the live envs, so blast radius and what-if work before any incident.
 
-    ponytail: one loop in the API process; give it its own ingest worker when a second live env runs at once."""
+    Limit: one loop in the API process; give it its own ingest worker when a second live env runs at once."""
     while True:
         for env in sorted(live.live_envs()):
             try:

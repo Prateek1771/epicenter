@@ -344,7 +344,7 @@ def resolve(incident_id: str, body: ResolveIn, env: Env) -> ResolveOut:
     if action:
         env.rw("action_resolve", inc=incident_id, id=action["id"])
         if action["runbook"] is not None:
-            # ponytail: read-modify-write of one JSON property; fine at human resolve rates
+            # Limit: read-modify-write of one JSON property; fine at human resolve rates
             success = json.loads(action["success"] or "{}")
             step = str(action["step"])
             success[step] = success.get(step, 0) + 1
@@ -380,7 +380,7 @@ async def stream(
             seq = e["seq"]
             yield _sse(e)
         while follow and not await request.is_disconnected():
-            # ponytail: a blocking read per subscriber in the threadpool; redis.asyncio if subscribers grow past it
+            # Limit: a blocking read per subscriber in the threadpool; redis.asyncio if subscribers grow past it
             fresh = await asyncio.to_thread(bus.history, env.key, incident_id, seq, TAIL_BLOCK_MS)
             if not fresh:
                 yield ": keepalive\n\n"
